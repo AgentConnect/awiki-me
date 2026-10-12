@@ -433,3 +433,13 @@ phone numbers or name-prefix scans.
 Web 创建失败时，driver 只输出闭合阶段/错误码/HTTP 状态；activation 超时还在保留的
 admin root 写入 `web-registration-diagnostic.json`，只含状态、枚举、布尔值及 pending phase，
 不包含手机号、OTP、DID、Token、私钥或消息正文。它用于诊断，不是成功 attestation。
+
+
+### 新加坡隔离测试目标
+
+`test-fix.anpclaw.com` 是本次专用 Linux UI 测试域，独立于 `anpclaw.com`。
+由 System runner 选择 `singapore-test-fix` 后，App operator mode 固定为
+`singapore-test-fix`，只在 Linux 服务主机执行；User/Message 操作均绑定
+`/opt/awiki/test-fix-20261012` 和 `/etc/awiki/test-fix-20261012`。
+预检继续核对受管脚本、配置、解释器与 sudo 权限，不允许回退到共享环境。
+场景清单只增加这个精确测试域，不开放任意主机；具备目标声明不代表 UI 已通过。

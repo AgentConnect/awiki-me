@@ -54,10 +54,29 @@ const List<String> reviewedSingaporeAccountStateOperatorCommand = <String>[
   '--apply',
 ];
 
+// Dedicated same-host authority for the isolated Singapore test instance.
+const List<String> reviewedTestFixAccountStateOperatorCommand = <String>[
+  'sudo',
+  '-n',
+  '/usr/bin/env',
+  'PYTHONDONTWRITEBYTECODE=1',
+  'PYTHONPATH=/opt/awiki/test-fix-20261012/services/user-service/current/src',
+  '/opt/awiki/test-fix-20261012/services/user-service/current/.venv/bin/python',
+  '/opt/awiki/test-fix-20261012/services/user-service/current/scripts/'
+      'run_account_state_sync_test_action.py',
+  '--env-file',
+  '/etc/awiki/test-fix-20261012/user-service.env',
+  '--apply',
+];
+
 ({String target, String domain}) reviewedOperatorTargetForMode(String mode) =>
     switch (mode) {
       'ali' || 'local' => (target: 'awiki-info-testing', domain: 'awiki.info'),
       'singapore' => (target: 'singapore-staging', domain: 'anpclaw.com'),
+      'singapore-test-fix' => (
+        target: 'singapore-test-fix',
+        domain: 'test-fix.anpclaw.com',
+      ),
       _ => throw const FormatException('The operator mode is not reviewed.'),
     };
 
@@ -91,6 +110,7 @@ List<String> reviewedAccountStateOperatorCommandForMode(String mode) =>
       'ali' => reviewedAccountStateOperatorCommand,
       'local' => reviewedLocalAccountStateOperatorCommand,
       'singapore' => reviewedSingaporeAccountStateOperatorCommand,
+      'singapore-test-fix' => reviewedTestFixAccountStateOperatorCommand,
       _ => throw const FormatException(
         'The App-pair Account State operator mode is not reviewed.',
       ),

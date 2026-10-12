@@ -5,6 +5,57 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/account_state_operator_contract.dart';
 
 void main() {
+  test('isolated Singapore mode cannot invoke either existing environment', () {
+    expect(
+      parseAccountStateOperatorCommand(
+        jsonEncode(reviewedTestFixAccountStateOperatorCommand),
+        mode: 'singapore-test-fix',
+      ),
+      reviewedTestFixAccountStateOperatorCommand,
+    );
+    validateReviewedOperatorServiceTarget(
+      mode: 'singapore-test-fix',
+      target: 'singapore-test-fix',
+      didDomain: 'test-fix.anpclaw.com',
+      serviceUrls: ['https://test-fix.anpclaw.com'],
+    );
+    for (final command in [
+      reviewedLocalAccountStateOperatorCommand,
+      reviewedSingaporeAccountStateOperatorCommand,
+    ]) {
+      expect(
+        () => parseAccountStateOperatorCommand(
+          jsonEncode(command),
+          mode: 'singapore-test-fix',
+        ),
+        throwsFormatException,
+      );
+    }
+    for (final url in [
+      'https://anpclaw.com',
+      'https://awiki.info',
+      'https://test-fix.anpclaw.com:443',
+    ]) {
+      expect(
+        () => validateReviewedOperatorServiceTarget(
+          mode: 'singapore-test-fix',
+          target: 'singapore-test-fix',
+          didDomain: 'test-fix.anpclaw.com',
+          serviceUrls: [url],
+        ),
+        throwsFormatException,
+      );
+    }
+    expect(
+      reviewedOperatorMatchesTarget('local', 'singapore-test-fix'),
+      isFalse,
+    );
+    expect(
+      reviewedOperatorMatchesTarget('singapore-test-fix', 'singapore-staging'),
+      isFalse,
+    );
+  });
+
   test('Singapore target is bound to its fixed operator and exact origin', () {
     expect(
       parseAccountStateOperatorCommand(

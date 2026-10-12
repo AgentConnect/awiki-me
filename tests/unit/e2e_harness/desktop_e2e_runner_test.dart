@@ -2365,6 +2365,32 @@ cliHandle: legacy-cli
   });
 
   group('Desktop E2E gate governance', () {
+    test(
+      'audited remote suites accept isolated Singapore but reject arbitrary hosts',
+      () {
+        final manifest = DesktopE2eSuiteManifest.load(Directory.current);
+        for (final e2eCase in DesktopE2eCase.values) {
+          final definition = manifest.definitionFor(e2eCase);
+          if (definition.allowedHosts.isEmpty) continue;
+          expect(
+            () => definition.validateRemoteTargetValues(
+              didDomain: 'test-fix.anpclaw.com',
+              serviceUrls: ['https://test-fix.anpclaw.com'],
+            ),
+            returnsNormally,
+            reason: e2eCase.name,
+          );
+          expect(
+            () => definition.validateRemoteTargetValues(
+              didDomain: 'test-fix.anpclaw.com',
+              serviceUrls: ['https://unreviewed.example'],
+            ),
+            throwsA(isA<E2eFailure>()),
+            reason: e2eCase.name,
+          );
+        }
+      },
+    );
     test('required prepared mode rejects Flutter build fallback', () {
       expect(
         () => validatePreparedArtifactExecutionPolicy(<String, String>{
