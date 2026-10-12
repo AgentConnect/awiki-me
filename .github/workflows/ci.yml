@@ -808,9 +808,9 @@ jobs:
           PACKAGE_RUN: ${{ inputs.package_smoke_run }}
         run: |
           test "$GITHUB_REF" = refs/heads/test/singapore-release-20261012
-          test "$PACKAGE_RUN" = 38222912854
+          test "$PACKAGE_RUN" = 38232175284
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN" > package-run.json
-          node -e 'const p=require("./package-run.json"); if(p.conclusion!=="success" || p.head_sha!=="66b398f434ef1ab49911eeffb5c6e147020f3517") process.exit(1)'
+          node -e 'const p=require("./package-run.json"); if(p.conclusion!=="success" || p.head_sha!=="db9122c4d93ef354c4a37e9c039f9d72c1ea8762") process.exit(1)'
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -825,6 +825,7 @@ jobs:
           node --input-type=module <<'JS'
           import fs from 'node:fs'; import crypto from 'node:crypto';
           const m=JSON.parse(fs.readFileSync('package-smoke-input/package-manifest.json'));
+          if(m.sourceRefs.app!=='66b398f434ef1ab49911eeffb5c6e147020f3517' || m.sourceRefs.imCore!=='3e760fb5d7dccda49a57d16a2fdf429737da7a1d') throw Error('Frozen product source mismatch');
           const a=m.artifacts[process.env.PACKAGE_TARGET];
           const b=fs.readFileSync('package-smoke-input/'+a.filename);
           if(b.length!==a.sizeBytes || crypto.createHash('sha256').update(b).digest('hex')!==a.sha256) throw Error('Package integrity mismatch');
