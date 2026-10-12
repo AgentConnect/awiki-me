@@ -354,3 +354,12 @@ AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
 dart run tests/e2e/runner.dart --case identity-deletion-recovery-guard \
   --config <protected-macos-or-linux-config.yaml>
 ```
+
+## 连续远程回归的 factor 兑换限流
+
+普通 Recovery UI 夹具仅在 `prepare` 返回 `service_error / HTTP 429`、且仍为同一
+operation 时，最多等待一次 301 秒（已审查服务的 300 秒兑换窗口），通过现有 UI 重新发码，
+以 purpose 和同一 operation 解析新验证码再验证。非 429、operation 改变、第二次失败均不重试；
+负例、正式 App 的用户操作策略及服务端限流不变。发码限流继续使用独立的 `retry_at` 回执。
+当前 Core REST 传输对该 HTTP 错误未透传结构化兑换错误码，因此本项仅按 prepare 阶段和 HTTP
+状态分类测试调度，不声称修复了正式 App 的错误提示；真实定向复验须单独记录。
