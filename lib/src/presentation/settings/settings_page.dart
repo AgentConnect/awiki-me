@@ -47,6 +47,13 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final session = ref.watch(sessionProvider).session;
+    final supportsHandleRecovery =
+        session != null &&
+        ref
+                .watch(identityMethodCapabilitiesProvider(session.did))
+                .valueOrNull
+                ?.handleRecovery ==
+            true;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final activeTenant = ref.watch(activeAppTenantProvider);
@@ -213,17 +220,21 @@ class SettingsPage extends ConsumerWidget {
       _SettingsSection(
         key: const Key('settings-session-section'),
         children: <Widget>[
-          AppListTile(
-            key: const Key('settings-recover-handle-did-row'),
-            title: l10n.settingsRecoverHandleDid,
-            leading: leading(
-              const _SettingsIcon(icon: CupertinoIcons.arrow_counterclockwise),
+          if (supportsHandleRecovery) ...[
+            AppListTile(
+              key: const Key('settings-recover-handle-did-row'),
+              title: l10n.settingsRecoverHandleDid,
+              leading: leading(
+                const _SettingsIcon(
+                  icon: CupertinoIcons.arrow_counterclockwise,
+                ),
+              ),
+              onTap: _canRecoverHandleDid(session)
+                  ? () => _openHandleRecovery(context, session)
+                  : null,
             ),
-            onTap: _canRecoverHandleDid(session)
-                ? () => _openHandleRecovery(context, session!)
-                : null,
-          ),
-          const AppSectionDivider(),
+            const AppSectionDivider(),
+          ],
           AppListTile(
             title: l10n.settingsExportCredential,
             leading: leading(
@@ -353,13 +364,14 @@ class SettingsPage extends ConsumerWidget {
           key: const Key('settings-session-section'),
           title: l10n.settingsSecuritySection,
           children: <Widget>[
-            _DesktopSettingsRow(
-              key: const Key('settings-recover-handle-did-row'),
-              title: l10n.settingsRecoverHandleDid,
-              onTap: _canRecoverHandleDid(session)
-                  ? () => _openHandleRecovery(context, session!)
-                  : null,
-            ),
+            if (supportsHandleRecovery)
+              _DesktopSettingsRow(
+                key: const Key('settings-recover-handle-did-row'),
+                title: l10n.settingsRecoverHandleDid,
+                onTap: _canRecoverHandleDid(session)
+                    ? () => _openHandleRecovery(context, session)
+                    : null,
+              ),
             _DesktopSettingsRow(
               key: const Key('settings-export-credential-row'),
               title: l10n.settingsExportCredential,
@@ -547,16 +559,17 @@ class SettingsPage extends ConsumerWidget {
             height: sectionTitleHeight,
           ),
           children: <Widget>[
-            _QuietSettingsRow(
-              key: const Key('settings-recover-handle-did-row'),
-              icon: CupertinoIcons.arrow_counterclockwise,
-              iconKey: const Key('settings-recover-handle-did-icon'),
-              title: l10n.settingsRecoverHandleDid,
-              height: optionRowHeight,
-              onTap: _canRecoverHandleDid(session)
-                  ? () => _openHandleRecovery(context, session!)
-                  : null,
-            ),
+            if (supportsHandleRecovery)
+              _QuietSettingsRow(
+                key: const Key('settings-recover-handle-did-row'),
+                icon: CupertinoIcons.arrow_counterclockwise,
+                iconKey: const Key('settings-recover-handle-did-icon'),
+                title: l10n.settingsRecoverHandleDid,
+                height: optionRowHeight,
+                onTap: _canRecoverHandleDid(session)
+                    ? () => _openHandleRecovery(context, session)
+                    : null,
+              ),
             _QuietSettingsRow(
               key: const Key('settings-export-credential-row'),
               icon: CupertinoIcons.arrow_down_to_line,

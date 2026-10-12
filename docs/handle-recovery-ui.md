@@ -22,7 +22,9 @@ UI 提示；仍存活的共享冷却控制器继续接收成功/限流回执的 
 销毁 Controller 则不发起请求，并释放发送占用。对应生命周期回归见
 `tests/unit/onboarding_otp_lifecycle_test.dart`。
 
-已登录用户也可从设置选择“恢复 Handle DID”。该入口要求重新输入手机号并完成同一专用
+已登录用户也可从设置选择“恢复 Handle DID”。所有设置布局都仅在 Core 对当前身份返回
+`handleRecovery == true` 时展示入口；能力仍在加载、查询失败或不支持时隐藏，不根据 DID
+前缀推断支持情况。该入口要求重新输入手机号并完成同一专用
 Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exact `localIdentityId` 交给
 Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
 归属于同一 stable owner。恢复完成后同样直接返回消息主界面。

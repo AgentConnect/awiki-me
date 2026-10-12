@@ -97,6 +97,10 @@ scale. Incoming bubbles use the neutral message surface; outgoing bubbles use
 ink in light mode and near-white in dark mode, with `onOutgoingMessage` text.
 Attachments retain their own content sizing and interaction boundaries.
 
+Mention highlights use the reference's semibold (`FontWeight.w600`), underlined
+ink style in `_mentionHighlightStyle`. This is the sole exception to the regular
+typography contract; other text retains the existing regular-weight rule.
+
 The phone composer keeps a 44-unit minimum touch height. Attachment, emoji
 and (in groups) mention tools share one glass capsule on the left; the input is
 a glass capsule that grows to four lines and draws a 2-unit accent ring on
