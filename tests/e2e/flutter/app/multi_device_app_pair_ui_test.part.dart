@@ -324,11 +324,10 @@ void appPairAdminMain() {
             find.byKey(const Key('device-approval-sas')).evaluate().length == 1,
         failure: 'The admin App did not render its local SAS.',
       );
-      final adminSas =
-          tester
-              .widget<Text>(find.byKey(const Key('device-approval-sas')))
-              .data ??
-          '';
+      final adminSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-approval-sas')),
+      );
       if (!_validSas(adminSas) ||
           !await coordinator.submitAndCompareSas(
             'admin',
@@ -342,10 +341,7 @@ void appPairAdminMain() {
       if (approveAction.evaluate().isNotEmpty) {
         fail('App-pair approval was enabled before SAS confirmation.');
       }
-      final sasSwitch = find.descendant(
-        of: find.byKey(const Key('device-sas-confirmation')),
-        matching: find.byType(CupertinoSwitch),
-      );
+      final sasSwitch = find.byKey(const Key('device-sas-confirmation'));
       await _tapOne(
         tester,
         sasSwitch,
@@ -706,9 +702,10 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 60),
         failure: 'The joining App did not derive its local SAS.',
       );
-      final joinerSas =
-          tester.widget<Text>(find.byKey(const Key('device-join-sas'))).data ??
-          '';
+      final joinerSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-join-sas')),
+      );
       if (!_validSas(joinerSas) ||
           !await coordinator.submitAndCompareSas(
             'joiner',
@@ -919,17 +916,14 @@ Future<void> _appPairAdminRejoin(
     timeout: const Duration(seconds: 90),
     failure: 'The original admin did not derive the second SAS.',
   );
-  final sas = tester.widget<Text>(sasView).data ?? '';
+  final sas = readRenderedSas(tester, sasView);
   if (!_validSas(sas) || !await coordinator.submitAndCompareSas('admin', sas)) {
     fail('Post-promotion App SAS values did not match.');
   }
   final beforePresence = presence.calls;
   await _tapOne(
     tester,
-    find.descendant(
-      of: find.byKey(const Key('device-sas-confirmation')),
-      matching: find.byType(CupertinoSwitch),
-    ),
+    find.byKey(const Key('device-sas-confirmation')),
     failure: 'The second SAS confirmation was unavailable.',
   );
   await _tapOne(
@@ -1066,7 +1060,7 @@ Future<void> _appPairJoinerRejoin(
     timeout: const Duration(seconds: 90),
     failure: 'Fresh Join did not derive the second SAS.',
   );
-  final sas = tester.widget<Text>(sasView).data ?? '';
+  final sas = readRenderedSas(tester, sasView);
   if (!_validSas(sas) ||
       !await coordinator.submitAndCompareSas('joiner', sas)) {
     fail('Fresh Join SAS values did not match.');

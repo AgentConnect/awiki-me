@@ -10,6 +10,7 @@
 import 'dart:async';
 
 import '../support/enter_existing_account.dart';
+import '../support/read_rendered_sas.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -373,9 +374,10 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'The App new device did not derive its Join SAS.',
       );
-      final appSas =
-          tester.widget<Text>(find.byKey(const Key('device-join-sas'))).data ??
-          '';
+      final appSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-join-sas')),
+      );
       if (!_validSas(appSas)) {
         fail('The App projected a malformed Join SAS.');
       }
@@ -769,11 +771,10 @@ void main() {
             find.byKey(const Key('device-approval-sas')).evaluate().length == 1,
         failure: 'The App did not render its locally derived SAS.',
       );
-      final appSas =
-          tester
-              .widget<Text>(find.byKey(const Key('device-approval-sas')))
-              .data ??
-          '';
+      final appSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-approval-sas')),
+      );
       if (!_validSas(appSas) ||
           !_constantTimeAsciiEquals(appSas, cliProgress.sas ?? '')) {
         fail('The independently derived App and CLI SAS values did not match.');
@@ -797,10 +798,7 @@ void main() {
       if (approveAction.evaluate().isNotEmpty) {
         fail('Approval was enabled before explicit SAS confirmation.');
       }
-      final sasSwitch = find.descendant(
-        of: find.byKey(const Key('device-sas-confirmation')),
-        matching: find.byType(CupertinoSwitch),
-      );
+      final sasSwitch = find.byKey(const Key('device-sas-confirmation'));
       await _tapOne(
         tester,
         sasSwitch,
