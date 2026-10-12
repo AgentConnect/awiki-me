@@ -350,6 +350,46 @@ void main() {
     );
   });
 
+  testWidgets('completed approval Done closes the actual dialog', (
+    tester,
+  ) async {
+    final request = _request(
+      state: DeviceJoinRemoteState.consumed,
+      claimedByCurrentDevice: true,
+      canStartVerification: false,
+    );
+    final core = FakeDeviceManagementCore()..joinRequests = [request];
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => CupertinoPageScaffold(
+            child: CupertinoButton(
+              onPressed: () => showDeviceJoinApproval(context, request),
+              child: const Text('Open approval'),
+            ),
+          ),
+        ),
+        core,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open approval'));
+    await tester.pumpAndSettle();
+    final approval = find.byType(DeviceJoinApprovalSheet);
+    expect(approval, findsOneWidget);
+    expect(
+      find.descendant(of: approval, matching: find.byType(TopBarActionButton)),
+      findsNothing,
+    );
+    final done = find.descendant(of: approval, matching: find.text('完成'));
+    expect(done.hitTestable(), findsOneWidget);
+    await tester.tap(done);
+    await tester.pumpAndSettle();
+    expect(approval, findsNothing);
+    expect(find.text('Open approval'), findsOneWidget);
+    expect(core.confirmCalls, 0);
+  });
+
   testWidgets('late inbox verification preserves approved Join with two admins', (
     tester,
   ) async {

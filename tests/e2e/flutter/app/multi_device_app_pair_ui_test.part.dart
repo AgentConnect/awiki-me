@@ -3448,14 +3448,20 @@ Future<void> _leaveCompletedAppPairApproval(WidgetTester tester) async {
     () => approval.evaluate().length == 1,
     failure: 'The completed admin approval page was unavailable.',
   );
-  final back = find.descendant(
+  final done = find.descendant(
     of: approval,
-    matching: find.byType(TopBarActionButton),
+    matching: find.text(tester.element(approval).l10n.commonDone),
+  );
+  await _pumpUntil(
+    tester,
+    () => done.hitTestable().evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The completed admin approval Done action was unavailable.',
   );
   await _tapOne(
     tester,
-    back,
-    failure: 'The completed admin approval Back action was unavailable.',
+    done,
+    failure: 'The completed admin approval Done action was unavailable.',
   );
   await _pumpUntil(
     tester,
