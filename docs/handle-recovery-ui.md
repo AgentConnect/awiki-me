@@ -22,7 +22,9 @@ UI 提示；仍存活的共享冷却控制器继续接收成功/限流回执的 
 销毁 Controller 则不发起请求，并释放发送占用。对应生命周期回归见
 `tests/unit/onboarding_otp_lifecycle_test.dart`。
 
-已登录用户也可从设置选择“恢复 Handle DID”。该入口要求重新输入手机号并完成同一专用
+已登录用户也可从设置选择“恢复 Handle DID”。所有设置布局都仅在 Core 对当前身份返回
+`handleRecovery == true` 时展示入口；能力仍在加载、查询失败或不支持时隐藏，不根据 DID
+前缀推断支持情况。该入口要求重新输入手机号并完成同一专用
 Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exact `localIdentityId` 交给
 Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
 归属于同一 stable owner。恢复完成后同样直接返回消息主界面。
@@ -299,6 +301,10 @@ fixture 失败被误记为 passed。
 
 `dart run tests/e2e/runner.dart --case handle-recovery-state-machine --config <受保护配置>` 复用现有单 App runner，登记 TARGET/RESUME/REPEAT 三项独立 attestation。两个隔离测试 Handle 通过真实 Settings/统一登录入口验证迟到 error/finally、B 在途 busy 和会话/反馈/路由保持、Core 同 Scope 重开后精确续跑、UI 删除后同进程第二次完整 Recovery。故障 seam 仅在 `tests/e2e/`：为同一已经准备并确认的 operation 用公开 native Core+相同测试 Vault 打开一次 Commit-only loopback proxy；Commit 的成功响应来自真实服务，之后故意阻断 WNS 本地收尾前检查，不合成业务结果。测试认证使用已有 E2E `UserPresencePort`，不代表真实 OS 认证通过。失败时保留可能未决的隔离恢复材料，不自动删除。
 
+该 Commit-only 代理仅接受已审查的 `awiki.info` 或隔离域 `test-fix.anpclaw.com`
+HTTPS 标准端口，拒绝其他域、混入凭据或查询参数；仍只转发同一 operation 的 Commit，
+不放宽请求路径、操作绑定或 Commit 后的故障切断。
+
 页面 scoped provider 销毁后，旧 E2E 观察器只能保存 Core 实际返回的完成投影供后续会话/导航断言，不能从根容器读取已不存在的全局 Recovery UI 状态；仍可见的阶段必须检查当前页面的实际 scoped state。
 
 ## 显式本地删除与恢复（2026-09-08）
@@ -348,3 +354,12 @@ AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
 dart run tests/e2e/runner.dart --case identity-deletion-recovery-guard \
   --config <protected-macos-or-linux-config.yaml>
 ```
+
+## 连续远程回归的 factor 兑换限流
+
+普通 Recovery UI 夹具仅在 `prepare` 返回 `service_error / HTTP 429`、且仍为同一
+operation 时，最多等待一次 301 秒（已审查服务的 300 秒兑换窗口），通过现有 UI 重新发码，
+以 purpose 和同一 operation 解析新验证码再验证。非 429、operation 改变、第二次失败均不重试；
+负例、正式 App 的用户操作策略及服务端限流不变。发码限流继续使用独立的 `retry_at` 回执。
+当前 Core REST 传输对该 HTTP 错误未透传结构化兑换错误码，因此本项仅按 prepare 阶段和 HTTP
+状态分类测试调度，不声称修复了正式 App 的错误提示；真实定向复验须单独记录。

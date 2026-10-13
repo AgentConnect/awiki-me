@@ -136,13 +136,10 @@ Future<void> _verifyProfileRefreshConvergence({
 
   await robot.openConversationRow(group.conversationId);
   await robot.expectSelectedConversationHeader(group.groupName);
-  final cliFullHandle = config.cliHandle.contains('.')
-      ? config.cliHandle
-      : '${config.cliHandle}.${config.environment.didDomain}';
   final refreshedMember = await _findGroupMember(
     groups: groups,
     groupDid: group.groupDid,
-    memberRef: cliFullHandle,
+    memberRef: group.cliMemberDid,
   );
   await robot.expectGroupMemberDisplayName(
     member: refreshedMember,

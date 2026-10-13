@@ -1,5 +1,9 @@
 part of 'multi_device_join_ui_test.dart';
 
+// Schema 45 reception precedes independent business processing. The 501-item
+// backlog needs its own bounded budget on the CPU-limited dual-App host.
+const _pagingProjectionTimeout = Duration(minutes: 5);
+
 Future<void> _prepareAppPairPagingPeer({
   required _AppPairRunConfig config,
   required _DedicatedAccount account,
@@ -111,6 +115,13 @@ Future<void> _runAppPairAdminPagingRecovery({
     to: adminDid,
     text: postRecoveryText,
   );
+  // Both Apps observe the same accepted message concurrently; one App's local
+  // processing backlog must not consume the other's coordinator wait budget.
+  await config.coordinator.publish(
+    'admin',
+    'paging_post_recovery_sent',
+    data: <String, Object?>{'messageId': postRecoveryId},
+  );
   await _waitForAppPairMessage(
     container: container,
     messaging: bootstrap.messagingService!,
@@ -120,16 +131,12 @@ Future<void> _runAppPairAdminPagingRecovery({
     senderDid: peerDid,
     receiverDid: adminDid,
     isMine: false,
-  );
-  await config.coordinator.publish(
-    'admin',
-    'paging_post_recovery_sent',
-    data: <String, Object?>{'messageId': postRecoveryId},
+    timeout: _pagingProjectionTimeout,
   );
   await config.coordinator.waitFor(
     'joiner',
     'paging_post_recovery_visible',
-    timeout: const Duration(minutes: 2),
+    timeout: _pagingProjectionTimeout,
   );
 }
 
@@ -243,6 +250,7 @@ Future<void> _runAppPairJoinerPagingRecovery({
     senderDid: peerDid,
     receiverDid: accountDid,
     isMine: false,
+    timeout: _pagingProjectionTimeout,
   );
   await config.coordinator.publish('joiner', 'paging_post_recovery_visible');
   await E2eCaseAttestationWriter.markPassed(

@@ -9,6 +9,31 @@ import '../../e2e/performance_contract.dart';
 
 void main() {
   test(
+    'avatar probe uses its independent cache path or standalone sibling',
+    () {
+      final cli = '${Directory.systemTemp.path}/cli-cache/awiki-cli';
+      final probe =
+          '${Directory.systemTemp.path}/probe-cache/awiki-system-test-probe';
+      expect(
+        desktopAvatarProbeBinary(cli, {
+          'AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY': ' $probe ',
+        }),
+        probe,
+      );
+      final suffix = Platform.isWindows ? '.exe' : '';
+      for (final environment in <Map<String, String>>[
+        {},
+        {'AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY': ' '},
+      ]) {
+        expect(
+          desktopAvatarProbeBinary(cli, environment),
+          '${File(cli).parent.path}/awiki-system-test-probe$suffix',
+        );
+      }
+    },
+  );
+
+  test(
     'registration diagnostics redact phone and email matrix credentials',
     () {
       final fixture = <String, dynamic>{
@@ -360,6 +385,14 @@ void main() {
   });
 
   group('DesktopE2eOptions', () {
+    test('foreground activation requires an explicit run option', () {
+      expect(DesktopE2eOptions.parse([]).macosForeground, isFalse);
+      expect(
+        DesktopE2eOptions.parse(['--macos-foreground']).macosForeground,
+        isTrue,
+      );
+    });
+
     test('parses run-control options only', () {
       final options = DesktopE2eOptions.parse(const <String>[
         '--dry-run',
@@ -2357,6 +2390,32 @@ cliHandle: legacy-cli
   });
 
   group('Desktop E2E gate governance', () {
+    test(
+      'audited remote suites accept isolated Singapore but reject arbitrary hosts',
+      () {
+        final manifest = DesktopE2eSuiteManifest.load(Directory.current);
+        for (final e2eCase in DesktopE2eCase.values) {
+          final definition = manifest.definitionFor(e2eCase);
+          if (definition.allowedHosts.isEmpty) continue;
+          expect(
+            () => definition.validateRemoteTargetValues(
+              didDomain: 'test-fix.anpclaw.com',
+              serviceUrls: ['https://test-fix.anpclaw.com'],
+            ),
+            returnsNormally,
+            reason: e2eCase.name,
+          );
+          expect(
+            () => definition.validateRemoteTargetValues(
+              didDomain: 'test-fix.anpclaw.com',
+              serviceUrls: ['https://unreviewed.example'],
+            ),
+            throwsA(isA<E2eFailure>()),
+            reason: e2eCase.name,
+          );
+        }
+      },
+    );
     test('required prepared mode rejects Flutter build fallback', () {
       expect(
         () => validatePreparedArtifactExecutionPolicy(<String, String>{

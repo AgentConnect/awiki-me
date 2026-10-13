@@ -286,9 +286,12 @@ void main() {
 
     expect(vertical, findsOneWidget);
     expect(daemonIcon, findsOneWidget);
+    final daemonAvatar = tester.widget<AvatarBadge>(daemonIcon);
+    expect(daemonAvatar.isAgent, isTrue);
+    expect(daemonAvatar.userId, daemonDid);
     expect(
-      find.descendant(of: daemonIcon, matching: find.byType(DecoratedBox)),
-      findsNothing,
+      daemonAvatar.size,
+      closeTo(36 * AwikiDisplayScale.layoutBaseline, 0.1),
     );
     // Phone: glass canvas, a divider-less header, and the Daemon tree
     // inside one glass card above the install row.

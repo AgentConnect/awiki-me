@@ -58,6 +58,46 @@ void main() {
     });
   });
 
+  group('Recovery prepare factor-exchange retry boundary', () {
+    test('allows one 429 retry on the exact existing operation', () {
+      expect(
+        remoteRecoveryPrepareRetryDelay(
+          code: 'service_error',
+          statusCode: 429,
+          retries: 0,
+          expectedOperationId: 'operation-a',
+          currentOperationId: 'operation-a',
+        ),
+        const Duration(seconds: 301),
+      );
+    });
+    test('rejects other failures, retries, and operation replacement', () {
+      for (final row in [
+        ('transport_error', 429, 0, 'operation-a', 'operation-a'),
+        ('service_error', 401, 0, 'operation-a', 'operation-a'),
+        ('service_error', 503, 0, 'operation-a', 'operation-a'),
+        ('service_error', null, 0, 'operation-a', 'operation-a'),
+        (null, 429, 0, 'operation-a', 'operation-a'),
+        ('service_error', 429, 1, 'operation-a', 'operation-a'),
+        ('service_error', 429, -1, 'operation-a', 'operation-a'),
+        ('service_error', 429, 0, '', ''),
+        ('service_error', 429, 0, 'operation-a', null),
+        ('service_error', 429, 0, 'operation-a', 'operation-b'),
+      ]) {
+        expect(
+          remoteRecoveryPrepareRetryDelay(
+            code: row.$1,
+            statusCode: row.$2,
+            retries: row.$3,
+            expectedOperationId: row.$4,
+            currentOperationId: row.$5,
+          ),
+          isNull,
+        );
+      }
+    });
+  });
+
   group('remote foreground CLI Join SAS prompts', () {
     test(
       'recognizes the joining-device poll prompt only at its TTY boundary',

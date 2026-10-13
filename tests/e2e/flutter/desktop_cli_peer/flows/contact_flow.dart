@@ -90,7 +90,7 @@ Future<void> _verifyContactRegression({
   await _waitForCliRelationshipList(
     config: config,
     command: 'following',
-    expectedDidOrHandle: config.appHandle,
+    expectedDid: ownerDid,
   );
   await robot.refreshRelationshipProjection(
     peerDid: cliDid,
@@ -138,7 +138,7 @@ Future<void> _verifyContactRegression({
   await _waitForCliRelationshipList(
     config: config,
     command: 'followers',
-    expectedDidOrHandle: config.appHandle,
+    expectedDid: ownerDid,
   );
   await _waitForCliRelationshipStatus(
     config: config,
@@ -209,7 +209,7 @@ Future<void> _verifyContactRegression({
   await _waitForCliRelationshipList(
     config: config,
     command: 'following',
-    expectedDidOrHandle: config.appHandle,
+    expectedDid: ownerDid,
   );
 
   await robot.openSelectedPeerInfo();
@@ -604,10 +604,10 @@ Future<void> _waitForAppRelationshipListAbsent({
 Future<void> _waitForCliRelationshipList({
   required _DesktopCliPeerSmokeConfig config,
   required String command,
-  required String expectedDidOrHandle,
+  required String expectedDid,
 }) async {
   await _poll(
-    description: 'CLI people $command contains exact "$expectedDidOrHandle"',
+    description: 'CLI people $command contains the exact registered owner DID',
     action: () async {
       final result = await _runCli(config, <String>[
         '--format',
@@ -621,9 +621,9 @@ Future<void> _waitForCliRelationshipList({
       if (result.exitCode != 0) {
         return false;
       }
-      return _cliRelationshipListExactCount(
+      return cliRelationshipListExactDidCount(
             result.stdout,
-            expectedDidOrHandle,
+            expectedDid: expectedDid,
           ) ==
           1;
     },
@@ -652,23 +652,6 @@ Future<void> _waitForCliRelationshipStatus({
           expectedRelationship.trim().toLowerCase();
     },
   );
-}
-
-int _cliRelationshipListExactCount(String output, String expectedRef) {
-  final expected = _normalizeIdentityRef(expectedRef);
-  if (expected.isEmpty) {
-    return 0;
-  }
-  final items = _jsonValueAt(output, const <Object>['data', 'items']);
-  if (items is! List) {
-    return 0;
-  }
-  return items.whereType<Map>().where((item) {
-    final map = _cliStringKeyMap(item);
-    final did = _normalizeIdentityRef(map['did']?.toString() ?? '');
-    final handle = _normalizeIdentityRef(map['handle']?.toString() ?? '');
-    return did == expected || handle == expected;
-  }).length;
 }
 
 Future<void> _tryIgnore(Future<Object?> Function() action) async {

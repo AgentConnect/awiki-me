@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:crypto/crypto.dart';
+import 'package:awiki_me/src/application/tenant/builtin_tenant_config.dart';
 
 import '../../e2e/app_artifact_spec.dart';
 
@@ -22,6 +24,88 @@ void main() {
           )
           as Map<String, dynamic>;
   final suites = (suitePayload['suites'] as Map).cast<String, dynamic>();
+
+  test(
+    'isolated artifacts embed the product tenant catalog and exact digest',
+    () {
+      final selected = E2eAppArtifactSpecManifest.load(
+        File('${root.path}/tests/e2e/app_artifact_specs.json'),
+        target: 'singapore-test-fix',
+      );
+      final normal = E2eAppArtifactSpecManifest.load(
+        File('${root.path}/tests/e2e/app_artifact_specs.json'),
+        target: 'awiki-info-testing',
+      );
+      for (final spec in selected.specs.values) {
+        final values = <String, String>{
+          for (final value in spec.dartDefines)
+            value.substring(0, value.indexOf('=')): value.substring(
+              value.indexOf('=') + 1,
+            ),
+        };
+        final bytes = base64Decode(values[builtinTenantsBase64EnvironmentKey]!);
+        expect(
+          values[builtinTenantsSha256EnvironmentKey],
+          sha256.convert(bytes).toString(),
+        );
+        expect(
+          bytes,
+          File(
+            '${root.path}/tests/e2e/configs/singapore-test-fix-tenants.json',
+          ).readAsBytesSync(),
+        );
+        final catalog = decodeBuiltinTenantCatalog(utf8.decode(bytes));
+        expect(catalog.primary.didHost, 'test-fix.anpclaw.com');
+        expect(catalog.secondary.didHost, 'test-fix-b.anpclaw.com');
+        expect(
+          spec.dartDefines,
+          isNot(normal.requireSpec(spec.name).dartDefines),
+        );
+        expect(
+          normal
+              .requireSpec(spec.name)
+              .dartDefines
+              .any((value) => value.startsWith('AWIKI_BUILTIN_TENANTS_')),
+          isFalse,
+        );
+      }
+    },
+  );
+
+  test(
+    'catalog content changes compile definitions and cannot use an external path',
+    () {
+      final temporary = Directory.systemTemp.createTempSync('app-tenant-spec-');
+      addTearDown(() => temporary.deleteSync(recursive: true));
+      final source = File('${root.path}/tests/e2e/app_artifact_specs.json');
+      final payload =
+          jsonDecode(source.readAsStringSync()) as Map<String, dynamic>;
+      final file = File('${temporary.path}/specs.json');
+      final config = File(
+        '${temporary.path}/configs/singapore-test-fix-tenants.json',
+      );
+      config.parent.createSync();
+      config.writeAsStringSync('{}');
+      file.writeAsStringSync(jsonEncode(payload));
+      final first = E2eAppArtifactSpecManifest.load(
+        file,
+        target: 'singapore-test-fix',
+      ).specs.values.first.dartDefines;
+      config.writeAsStringSync('{}\n');
+      final second = E2eAppArtifactSpecManifest.load(
+        file,
+        target: 'singapore-test-fix',
+      ).specs.values.first.dartDefines;
+      expect(second, isNot(first));
+      payload['targetTenantCatalogs'] = {'singapore-test-fix': '../other.json'};
+      file.writeAsStringSync(jsonEncode(payload));
+      expect(
+        () =>
+            E2eAppArtifactSpecManifest.load(file, target: 'singapore-test-fix'),
+        throwsFormatException,
+      );
+    },
+  );
 
   test('all non-native executable suites have an artifact closure', () {
     final consumers = <String>{
@@ -43,7 +127,6 @@ void main() {
       expect(File('${root.path}/${spec.target}').existsSync(), isTrue);
     }
   });
-
 
   test('compile-time defines are canonical and runtime fixtures stay out', () {
     for (final spec in specs.specs.values) {

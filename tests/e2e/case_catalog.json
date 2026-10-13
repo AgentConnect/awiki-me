@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-18.model-free-agent-tests-v1",
+  "sourceRevision": "2026-10-12.singapore-isolated-test-fix",
   "cases": [
     {
       "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",

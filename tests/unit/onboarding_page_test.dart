@@ -1393,6 +1393,40 @@ void main() {
     expect(gateway.importCalls, 0);
   });
 
+  testWidgets('desktop local identity login opens the identity tab first', (
+    tester,
+  ) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(1440, 900));
+    const identity = SessionIdentity(
+      did: 'did:test:local-b',
+      credentialName: 'local-b',
+      displayName: 'Local B',
+      handle: 'local-b',
+    );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const [identity]
+      ..loginResult = identity;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await _settleVerificationStep(tester);
+    final select = find.byKey(
+      const Key('onboarding-local-credential-select:local-b'),
+    );
+    expect(select, findsNothing);
+    await _tapVisible(
+      tester,
+      find.byKey(const Key('onboarding-identity-entry')),
+    );
+    await _settleVerificationStep(tester);
+    expect(select, findsOneWidget);
+    await _tapVisible(tester, select);
+    await _settleVerificationStep(tester);
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, 'local-b');
+  });
+
   testWidgets('移动端点击表单下方已保存身份卡片空白区域也能登录', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));
     _setTestViewSize(tester, const Size(390, 844));

@@ -228,7 +228,10 @@ Future<void> _uploadPeerAvatarFixture(_DesktopCliPeerSmokeConfig config) async {
       '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   final source = img.Image(width: 512, height: 512);
   img.fill(source, color: img.ColorRgb8(80, 140, 220));
-  final binary = '${File(config.cliBin).parent.path}/awiki-system-test-probe';
+  final binary = config.avatarProbeBin;
+  if (binary == null || !File(binary).existsSync()) {
+    fail('Avatar fixture requires its explicitly prepared probe binary.');
+  }
   final process = await Process.start(
     binary,
     const [],

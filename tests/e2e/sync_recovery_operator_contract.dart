@@ -48,11 +48,25 @@ const List<String> reviewedSingaporeSyncRecoveryOperatorCommand = <String>[
   '--apply',
 ];
 
+const List<String> reviewedTestFixSyncRecoveryOperatorCommand = <String>[
+  'sudo',
+  '-n',
+  '/usr/bin/env',
+  'PYTHONDONTWRITEBYTECODE=1',
+  '/opt/awiki/test-fix-20261012/backend-ops/venv/bin/python',
+  '/opt/awiki/test-fix-20261012/services/message-service/current/scripts/'
+      'prepare_sync_v2_recovery_test.py',
+  '--config',
+  '/etc/awiki/test-fix-20261012/message-service.toml',
+  '--apply',
+];
+
 List<String> reviewedSyncRecoveryOperatorCommandForMode(String mode) =>
     switch (mode) {
       'ali' => reviewedSyncRecoveryOperatorCommand,
       'local' => reviewedLocalSyncRecoveryOperatorCommand,
       'singapore' => reviewedSingaporeSyncRecoveryOperatorCommand,
+      'singapore-test-fix' => reviewedTestFixSyncRecoveryOperatorCommand,
       _ => throw ArgumentError.value(
         mode,
         'mode',
@@ -67,12 +81,13 @@ List<({String label, List<String> command})> reviewedOperatorPreflightChecks({
   required bool accountState,
 }) {
   reviewedSyncRecoveryOperatorCommandForMode(mode);
-  if (mode == 'local' && operatingSystem != 'linux') {
+  final local = mode == 'local' || mode == 'singapore-test-fix';
+  if (local && operatingSystem != 'linux') {
     throw const FormatException(
       'operator_preflight.local_requires_linux_service_host: select SSH mode ali',
     );
   }
-  final prefix = mode != 'local'
+  final prefix = !local
       ? <String>[
           'ssh',
           '-o',
@@ -87,17 +102,17 @@ List<({String label, List<String> command})> reviewedOperatorPreflightChecks({
   for (final entry in <(String, List<String>, String)>[
     (
       'recovery',
-      mode == 'singapore'
-          ? reviewedSingaporeSyncRecoveryOperatorCommand.sublist(3)
-          : reviewedLocalSyncRecoveryOperatorCommand,
+      local
+          ? reviewedSyncRecoveryOperatorCommandForMode(mode)
+          : reviewedSyncRecoveryOperatorCommandForMode(mode).sublist(3),
       '--config',
     ),
     if (accountState)
       (
         'account_state',
-        mode == 'singapore'
-            ? reviewedSingaporeAccountStateOperatorCommand.sublist(3)
-            : reviewedLocalAccountStateOperatorCommand,
+        local
+            ? reviewedAccountStateOperatorCommandForMode(mode)
+            : reviewedAccountStateOperatorCommandForMode(mode).sublist(3),
         '--env-file',
       ),
   ]) {
@@ -112,7 +127,10 @@ List<({String label, List<String> command})> reviewedOperatorPreflightChecks({
         label: '$label.${requirement.$1}',
         command: [
           ...prefix,
-          if (mode == 'singapore') ...['sudo', '-n'],
+          if (mode == 'singapore' || mode == 'singapore-test-fix') ...[
+            'sudo',
+            '-n',
+          ],
           '/usr/bin/test',
           requirement.$2,
           requirement.$3,

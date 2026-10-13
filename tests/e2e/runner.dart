@@ -121,6 +121,7 @@ const String _requiredPreparedAppArtifactsEnv =
     'AWIKI_E2E_REQUIRED_PREPARED_APP_ARTIFACTS';
 const String _preparedArtifactsModeEnv = 'AWIKI_E2E_PREPARED_ARTIFACTS_MODE';
 const String _e2eCliBinaryEnv = 'AWIKI_E2E_CLI_BINARY';
+const String _e2eAvatarProbeBinaryEnv = 'AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY';
 const String _e2eCliSourceRefEnv = 'AWIKI_E2E_CLI_SOURCE_REF';
 const String _e2eDaemonBinaryEnv = 'AWIKI_E2E_DAEMON_BINARY';
 const String _e2eDaemonStateRootEnv = 'AWIKI_E2E_DAEMON_STATE_ROOT';
@@ -496,6 +497,9 @@ class DesktopE2eRunner {
     _addRuntimeSecret(fileConfig.otpPhone ?? '');
     _addRuntimeSecret(fileConfig.otpCode ?? '');
     platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
+    if (options.macosForeground && platform != DesktopE2ePlatform.macos) {
+      throw E2eFailure('--macos-foreground requires a macOS target.');
+    }
     hostPlatform = await E2eHostPlatform.detect();
     suiteDefinition.validatePlatform(platform.name);
     validatePreparedArtifactExecutionPolicy(Platform.environment);
@@ -1013,6 +1017,7 @@ class DesktopE2eRunner {
       execution = await runPreparedIntegrationExecutable(
         executable: artifact.executable,
         operatingSystem: platform.name,
+        macosForeground: options.macosForeground,
         environment: <String, String>{
           'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
           e2eCaseAttestationPathDefine: caseAttestationFile.path,
@@ -1083,7 +1088,7 @@ class DesktopE2eRunner {
     final fixturePath = Platform
         .environment['AWIKI_REGISTRATION_DISCOVERY_FIXTURE']
         ?.trim();
-    if (!options.dryRun && !commands.dryRun) {
+    if (!options.dryRun && !commands.dryRun && !options.prepareOnly) {
       if (fixturePath == null || fixturePath.isEmpty) {
         throw E2eFailure(
           'AWIKI_REGISTRATION_DISCOVERY_FIXTURE must name the reviewed remote fixture.',
@@ -1098,8 +1103,23 @@ class DesktopE2eRunner {
         );
       }
     }
-    if (options.prepareOnly) {
-      await commands.requireExecutable('flutter');
+    await commands.requireExecutable('flutter');
+    if (options.prepareOnly ||
+        (!options.dryRun &&
+            !commands.dryRun &&
+            Platform.environment['AWIKI_E2E_USE_FLUTTER_TEST']?.trim() !=
+                '1')) {
+      final artifact = await _prepareIntegrationExecutable(
+        name: 'registration-domain-discovery',
+        stateRoot: appStateRootDir,
+      );
+      if (options.prepareOnly) return;
+      await _executePreparedIntegration(
+        artifact: artifact,
+        caseIds: options.e2eCase.caseIds,
+        stateRoot: appStateRootDir,
+        environment: {'AWIKI_REGISTRATION_DISCOVERY_FIXTURE': fixturePath!},
+      );
       return;
     }
     await _runFlutterArgs(

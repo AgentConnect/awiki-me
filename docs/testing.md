@@ -16,6 +16,13 @@ to root shims.
 
 ## Choosing The Right Test
 
+Routine desktop UI runs should use Linux/Xvfb; macOS-specific checks belong in
+an isolated desktop session or CI. The macOS runner no longer enables repeated
+window activation through `AWIKI_E2E_MACOS_FOREGROUND`. Use the explicit
+`--macos-foreground` option only for foreground debugging; it is off by default,
+is forwarded by `full`, and is rejected for Linux targets. Disabling activation
+does not guarantee that an occluded macOS App continues rendering frames.
+
 Use the smallest deterministic test that answers the question:
 
 | Directory | Answers | Uses real backend/devices? | Put these tests here |
@@ -940,6 +947,9 @@ Supported E2E cases:
 
 `group` / `messaging` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me messaging case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
 
+重启和昵称刷新场景仍用完整 Handle 执行邀请；后续群成员观察使用已核验的 CLI DID，
+不依赖成员列表返回短号还是完整 Handle，且继续要求仅有一个匹配成员。
+
 ### UI-driven full acceptance
 
 The required `direct`, `group`, `attachment`, `contacts`, and `messaging` cases are
@@ -970,6 +980,9 @@ The product oracle is fail-closed:
   follower -> none` state sequence; CLI status derives this combined state from
   all five directional booleans and separately validates that `relationship`
   remains the caller's outbound `following|none` projection; reused identities
+  are matched in CLI followers/following lists by the exact registered owner DID,
+  with exactly one row required, independent of short or domain-qualified Handle spelling;
+  they
   may enter the scenario only after both remote perspectives report `none` and
   the App `friendsProvider` projection has been refreshed to that baseline;
 - contact-message checks must click the exact DID-keyed visible contact row,
@@ -1631,3 +1644,8 @@ Host 不同。Linux 使用 runner 的 Xvfb 执行；结束删除本轮独立 App
 ### 头像与账号测试夹具
 
 头像展示通过 `avatarImageCacheProvider` 提供已解码图片，组件测试使用内存 fake，并断言安全 URI 与 `RawImage` 投影，不依赖网络、插件或磁盘完成时机。删除账号时的公开头像缓存清理由 composition 边界的 `avatarCacheCleanupProvider` 注入；测试需保留精确 owner 参数、清理失败不阻塞身份删除的断言。导航夹具必须同时提供受测 DID / Handle 的 Core canonical 会话映射，不能让 UI 猜测会话 ID。修改 case catalog 后运行 `dart run tool/validate_test_catalog.dart --write`，再运行不带 `--write` 的校验。
+
+头像 UI 的远程 peer 上传依赖 feature-gated `awiki-system-test-probe`。统一 prepare 按 App
+manifest 选择该工具并通过 `AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY` 传入独立缓存路径；独立
+App runner 构建仍使用 CLI 同目录的 probe。执行前检查存在性，再准备远程身份；native 测试
+只使用 run config 的显式 `cliPeer.avatarProbeBinary`，不推测缓存目录布局。

@@ -143,9 +143,10 @@ void _registerDshDeviceJoinInteropTest() {
         timeout: const Duration(seconds: 45),
         failure: 'The App did not derive its Join SAS.',
       );
-      final appSas =
-          tester.widget<Text>(find.byKey(const Key('device-join-sas'))).data ??
-          '';
+      final appSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-join-sas')),
+      );
       if (!_validSas(appSas)) {
         fail('The App produced a malformed SAS.');
       }
@@ -262,16 +263,13 @@ class _DshE2eDriver {
     if (!driver.existsSync() || !built.existsSync()) {
       fail('The DSH Device Join source and build are required.');
     }
-    for (final value in <String>[
-      config.userServiceUrl,
-      config.messageServiceUrl,
-      config.baseUrl,
-    ]) {
-      final uri = Uri.tryParse(value);
-      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
-        fail('DSH E2E writes require exact awiki.info endpoints.');
-      }
-    }
+    final target = dshDeviceJoinTargetConfig(
+      didDomain: config.didDomain,
+      serviceDid: config.anpServiceDid,
+      userServiceUrl: config.userServiceUrl,
+      messageServiceUrl: config.messageServiceUrl,
+      baseUrl: config.baseUrl,
+    );
     final process = await Process.start(
       'node',
       <String>[driver.path],
@@ -285,11 +283,7 @@ class _DshE2eDriver {
     final instance = _DshE2eDriver(process, lines, stderrDrain);
     instance._write(<String, Object?>{
       'stateRoot': stateRoot,
-      'didDomain': 'awiki.info',
-      'userServiceUrl': config.userServiceUrl,
-      'messageServiceUrl': config.messageServiceUrl,
-      'messageServicePublicUrl': config.messageServiceUrl,
-      'messageServiceDid': 'did:wba:awiki.info',
+      ...target,
       'realtimeEnabled': true,
       'listenerEnabled': false,
       'listenerAllowedPeers': <String>[],

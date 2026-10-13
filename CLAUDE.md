@@ -44,6 +44,9 @@
 | `ios/` | iOS 13+ Runner；使用 `UIScene`、CocoaPods Debug/Profile/Release 配置，并承载 App 自定义 platform channels |
 | `android/`, `macos/`, `web/` | 其他平台 runners |
 
+Native bootstrap smoke 显式初始化构建注入的租户目录，并使用其中的 primary 后端和
+DID 域；原生打开、私钥保留、HTTP 迁移和缺失密钥拒绝断言均保留，不绕回固定公共环境。
+
 ## 权威入口
 
 - [README.md](README.md)：产品定位、架构、运行、测试、打包与安全边界。

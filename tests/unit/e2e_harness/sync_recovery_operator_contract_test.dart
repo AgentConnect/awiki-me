@@ -6,6 +6,47 @@ import '../../e2e/sync_recovery_operator_contract.dart';
 
 void main() {
   test(
+    'isolated preflight is Linux-only and never probes shared service assets',
+    () {
+      final checks = reviewedOperatorPreflightChecks(
+        mode: 'singapore-test-fix',
+        operatingSystem: 'linux',
+        accountState: true,
+      );
+      expect(checks, hasLength(8));
+      for (final check in checks) {
+        expect(check.command, isNot(contains('ssh')));
+        expect(check.command.join(' '), contains('test-fix-20261012'));
+        expect(
+          check.command.join(' '),
+          isNot(contains('/opt/awiki/services/')),
+        );
+        expect(
+          check.command.join(' '),
+          isNot(contains('/etc/awiki/user-service.env')),
+        );
+        if (!check.label.endsWith('sudo_permission')) {
+          expect(check.command, isNot(contains('--apply')));
+        }
+      }
+      expect(
+        reviewedSyncRecoveryOperatorCommandForMode('singapore-test-fix'),
+        reviewedTestFixSyncRecoveryOperatorCommand,
+      );
+      for (final platform in ['macos', 'windows']) {
+        expect(
+          () => reviewedOperatorPreflightChecks(
+            mode: 'singapore-test-fix',
+            operatingSystem: platform,
+            accountState: true,
+          ),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  test(
     'Singapore preflight and mutation use the same fixed service assets',
     () {
       final checks = reviewedOperatorPreflightChecks(

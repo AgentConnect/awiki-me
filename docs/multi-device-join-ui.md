@@ -172,13 +172,25 @@ split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为�
 两个 Join 方向必须由真实 listener/system-notification 入口推进：CLI 管理端以专用
 `im.device.join.requested` host event 唤醒，App 管理端等待 AppShell 全局审批入口；测试
 不得直接调用 Message Inbox hydration、`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。
-实现存在不等于远端已通过，仍需独立的 `awiki.info` pass attestation。
+实现存在不等于远端已通过，仍需所选已审查目标的独立 pass attestation。
+原生 Join 和 App-pair 配置加载复用 `tests/e2e/remote_target.dart` 的目标检查：
+均支持 `awiki.info` 与隔离域 `test-fix.anpclaw.com`，App-pair 另保留已有的
+`anpclaw.com` 支持。URL 必须是同一 DID 域、同一 HTTPS origin 和标准端口，不接受
+混用主环境、第二隔离域、凭据或重定向参数。受保护 OTP、独立状态目录、测试专用
+user-presence 以及服务端操作器的额外目标绑定继续生效；域名检查不授予操作器权限。
+
+所有 App／CLI／DSH 互操作测试均从当前 SAS 控件实际渲染的六个数字读取验证码，
+不把外层定位节点当作 `Text`，也不改为从内部状态直接取值；比较仍仅在内存中完成。
 
 `DEVICE-JOIN-E2E-006` 追加真实 DSH→AWiki Me 互操作：DSH 创建 Handle 并证明 bootstrap
 `admin_ready`，AWiki Me 通过可见 onboarding 发起 ordinary Join，DSH 只用 reliable sync/Core
 local inbox 和 opaque refs 完成 SAS + `APPROVE` member 审批，再以 `REVOKE` 撤销测试 App 并
 通过公开 Handle revoke 回收 quota。该 case 只在 Node v10 `0.1.8` 已发布、DSH 已构建且受保护
 revoke factor fixture 可用时执行；任何 `awiki.ai` 或混合 endpoint 在创建账号前失败。
+App 传给 DSH 驱动的 stdin 配置沿用当前已审查的 `awiki.info` 或
+`test-fix.anpclaw.com`，不再写死旧域；三个服务入口须为对应 HTTPS 根路径，
+service DID 必须精确匹配 `did:wba:<域名>`。DSH 自身的驱动目标门禁也必须支持该域，
+不能通过改写成旧域或跳过门禁继续运行。
 
 App↔App 验证使用独立的 `multi-device-app-pair` suite 和
 `DEVICE-JOIN-E2E-004`。它在同一台 macOS 上运行两个 bundle/build/state 均隔离的真实

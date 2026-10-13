@@ -114,3 +114,17 @@ Future<VersionedCliArtifact> prepareVersionedCliArtifact({
     version: version,
   );
 }
+
+/// The orchestrator caches the CLI and probe independently. Standalone builds
+/// still produce both in the same Cargo output directory.
+String desktopAvatarProbeBinary(
+  String cliBinary,
+  Map<String, String> environment,
+) {
+  final explicit = environment[_e2eAvatarProbeBinaryEnv]?.trim();
+  if (explicit != null && explicit.isNotEmpty) return explicit;
+  final name = Platform.isWindows
+      ? 'awiki-system-test-probe.exe'
+      : 'awiki-system-test-probe';
+  return '${File(cliBinary).parent.path}/$name';
+}

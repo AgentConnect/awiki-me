@@ -415,6 +415,11 @@ unlocked run. These are Debug platform results, not a completed IM feature.
 
 Settings are stored on this installation, separately for each opaque receiving DID. Master defaults on, urgent defaults off. They load/save without HTTP or a User Service update. Account switch/logout stops the active reminder; another account cannot inherit consent. Switching back restores that account's local choices. No preferences, mute set, capability or version is uploaded with installation registration. Old server-authority preference storage is not imported as local consent.
 
+Signed-in Android users reach these existing local controls through the Settings
+“任务通知” row in compact, standalone and embedded layouts. Other platforms, Web
+and signed-out sessions do not expose this native Android entry. The entry does
+not enable urgent alerts or change stored consent by itself.
+
 The native receiver reads current local controls and mirrored Direct mutes while Dart is absent. Turning urgent off downgrades future urgent requests to ordinary presentation; turning master off suppresses all typed Notify alerts while messages remain available. The canonical mute remains the App ProductLocalStore overlay. On Android session activation, the App reads all muted canonical conversation IDs and resolves Direct peers through Core registry pages, including hidden conversations. It atomically replaces the native opaque-identity snapshot before enabling presentation. Missing/unresolved routes fail closed instead of guessing a DID from a thread ID. Older installations without the readiness marker suppress typed Notify until this first hydration completes.
 
 Mute edits invalidate the native snapshot before saving the canonical overlay, then replace the complete snapshot. Account and monotonically increasing sync-revision checks reject stale writes; the App serializes hydration and edits. Failed mirror writes retain the canonical change and keep alerts paused. Foreground resume retries incomplete hydration; Settings shows the paused state and offers an explicit retry. No mute or consent data is sent to User Service.

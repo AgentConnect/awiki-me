@@ -434,4 +434,6 @@ System Test 现有 exact ID、唯一字段、严格数字递增和 stability-win
 
 ### macOS 前台实机验证
 
-设置 `AWIKI_E2E_MACOS_FOREGROUND=1` 时，prepared integration 拥有方 runner 只持续激活其启动的测试 App PID，结束时停止辅助进程。适用于窗口遮挡导致 Flutter `hidden`、帧停止的桌面环境；会占用前台，不建议同时操作其他窗口。未设置时不改变前台。UI 帧等待有独立时限，不能用伪造 resumed 生命周期或放宽业务断言掩盖停帧。后台/重启专门用例继续使用各自明确的生命周期操作。
+仅在本次命令显式指定 `--macos-foreground` 时，prepared integration 拥有方 runner 才持续激活其启动的测试 App PID，结束时停止辅助进程；`full` 会将该选项传给子场景。默认关闭，旧环境变量 `AWIKI_E2E_MACOS_FOREGROUND` 不再启用它，Linux 目标拒绝此选项。
+
+此调试模式适用于窗口遮挡导致 Flutter `hidden`、帧停止的桌面环境，会占用前台。日常通用 UI 测试使用 Linux＋Xvfb；macOS 专属验证使用独立测试会话或 CI。默认关闭持续激活不等于 macOS App 不会首次显示窗口，也不保证被遮挡时仍能正常产帧。UI 帧等待有独立时限，不能用伪造 resumed 生命周期或放宽业务断言掩盖停帧。后台/重启专门用例继续使用各自明确的生命周期操作。

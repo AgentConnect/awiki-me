@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-18.model-free-agent-tests-v1",
+  "sourceRevision": "2026-10-12.singapore-isolated-test-fix",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -78,10 +78,12 @@
       "timeoutMinutes": 60,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -115,10 +117,12 @@
       "timeoutMinutes": 45,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -157,11 +161,13 @@
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -231,10 +237,12 @@
       "timeoutMinutes": 45,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -274,10 +282,12 @@
       "timeoutMinutes": 25,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -310,10 +320,12 @@
       "timeoutMinutes": 30,
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -412,11 +424,13 @@
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -452,11 +466,13 @@
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -511,11 +527,13 @@
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -554,11 +572,13 @@
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "dedicated_test_identity",
@@ -625,10 +645,12 @@
       "timeoutMinutes": 30,
       "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "requiredTargetCapabilities": [
         "lanes.p5_device.v1"
@@ -694,11 +716,13 @@
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
         "awiki.info",
-        "agentwiki.info"
+        "agentwiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "agentwiki.info"
+        "agentwiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -758,10 +782,12 @@
       "timeoutMinutes": 16,
       "cleanupPolicy": "isolated_root_transfer_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "requiredTargetCapabilities": [
         "lanes.p5_device.v1"
@@ -799,12 +825,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -840,12 +868,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "groups",
@@ -883,12 +913,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "attachments",
@@ -923,12 +955,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "relationships",
@@ -964,12 +998,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "relationships",
@@ -1001,12 +1037,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -1035,10 +1073,12 @@
       "timeoutMinutes": 12,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "local_identities",
@@ -1069,12 +1109,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -1109,12 +1151,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -1147,12 +1191,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -1195,12 +1241,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "personal_agent_bindings",
@@ -1233,11 +1281,13 @@
       "cleanupPolicy": "child_suite_ledgers",
       "allowedHosts": [
         "awiki.info",
-        "agentwiki.info"
+        "agentwiki.info",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
-        "agentwiki.info"
+        "agentwiki.info",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -1432,7 +1482,8 @@
       ],
       "requiredTools": [
         "flutter",
-        "awiki-cli"
+        "awiki-cli",
+        "awiki-system-test-probe"
       ],
       "requiredFor": [
         "nightly",
@@ -1445,12 +1496,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "profiles"
@@ -1480,12 +1533,14 @@
       "allowedHosts": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
-        "anpclaw.com"
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
         "profiles",
