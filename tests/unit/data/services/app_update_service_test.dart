@@ -113,9 +113,9 @@ void main() {
     final baseUrl = primaryTenantBaseUrl;
     expect(
       kDefaultUpdateManifestUrl,
-      '$baseUrl/downloads/singapore-release-20261012/app-policy.json',
+      '$baseUrl/user-service/v1/server-info?client_platform=app',
     );
-    expect(kDefaultReleasesUrl, '$baseUrl/downloads/singapore-release-20261012');
+    expect(kDefaultReleasesUrl, '$baseUrl/#download');
   });
 
   test('checkForUpdates fetches manifest and caches it', () async {
@@ -348,7 +348,7 @@ void main() {
         storage: storage,
         httpClient: _QueueHttpClient(<_HttpFixture>[
           _HttpFixture.json(
-            'https://awiki.ai/downloads/singapore-release-20261012/app-policy.json',
+            'https://awiki.ai/user-service/v1/server-info?client_platform=app',
             _serverInfoJson(
               origin: 'https://awiki.ai',
               minimumVersion: '2.0.0',
@@ -375,7 +375,7 @@ void main() {
     final storage = _MemoryKeyValueStore();
     final client = _QueueHttpClient(<_HttpFixture>[
       _HttpFixture.json(
-        'https://updates.example/downloads/singapore-release-20261012/app-policy.json',
+        'https://updates.example/user-service/v1/server-info?client_platform=app',
         _serverInfoJson(),
       ),
     ]);

@@ -8,10 +8,6 @@ on:
         description: Unique package request UUID
         required: true
         type: string
-      reuse_repair_packages:
-        description: Rebuild only repair Intel DMG and reuse three verified frozen platform packages
-        type: boolean
-        default: false
       app_ref:
         description: Exact 40-character awiki-me commit SHA
         required: true
@@ -60,17 +56,12 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: awiki-me-package-${{ inputs.request_id }}
   cancel-in-progress: false
 
 env:
-  AWIKI_TEST_SOURCE_BUILD: singapore-release-20261012
-  AWIKI_RELEASE_REGISTRY: '0'
-  AWIKI_APPLE_SOURCE_INTEGRATION: '1'
-  AWIKI_SOURCE_INTEGRATION: '1'
   FLUTTER_VERSION: 3.44.0
   RUST_VERSION: 1.88.0
   PYTHON_VERSION: 3.13.7
@@ -95,7 +86,7 @@ jobs:
           CONTROL_BRANCH: ${{ github.ref_name }}
           CONTROL_REF: ${{ github.ref }}
           WORKFLOW_REF: ${{ github.workflow_ref }}
-          DEFAULT_BRANCH: test/singapore-release-20261012
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           python3 - <<'PY'
           import json, os, re
@@ -140,8 +131,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', 'test/singapore-release-20261012') &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', 'test/singapore-release-20261012')) &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -281,12 +272,9 @@ jobs:
         id: targets
         env:
           TARGETS: ${{ inputs.targets }}
-          REUSE_REPAIR: ${{ inputs.reuse_repair_packages }}
-          APP_REF: ${{ inputs.app_ref }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os, re, subprocess
+          import json, os, re
 
           definitions = {
               "android-arm64": {"target": "android-arm64", "runner": "ubuntu-24.04"},
@@ -302,18 +290,6 @@ jobs:
               raise SystemExit(f"unsupported targets: {', '.join(unknown)}")
           ordered = [target for target in definitions if target in requested]
           matrix = {"include": [definitions[target] for target in ordered]}
-          if os.environ['REUSE_REPAIR'] == 'true':
-              assert os.environ['APP_REF'] == '66b398f434ef1ab49911eeffb5c6e147020f3517'
-              assert set(ordered) == set(definitions)
-              api = 'repos/AgentConnect/awiki-me/actions/runs/38222912854'
-              run = json.loads(subprocess.check_output(['gh', 'api', api]))
-              assert run['head_sha'] == os.environ['APP_REF']
-              jobs = json.loads(subprocess.check_output(['gh', 'api', api + '/jobs?filter=all&per_page=100']))['jobs']
-              for target in ['android-arm64', 'macos-arm64', 'windows-x64']:
-                  assert any(j['name'] == 'Build ' + target and j['conclusion'] == 'success' for j in jobs)
-              # The x64 product is cross-built and architecture checked; native
-              # installation/startup is still verified on an Intel runner.
-              matrix = {'include': [{'target': 'macos-x64', 'runner': 'macos-14'}]}
           print("matrix=" + json.dumps(matrix, separators=(",", ":")))
           print("normalized_targets=" + ",".join(ordered))
           PY
@@ -323,8 +299,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', 'test/singapore-release-20261012') &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', 'test/singapore-release-20261012')) &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -333,7 +309,6 @@ jobs:
     environment: app-packaging
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
     steps:
       - name: Checkout exact AWiki Me source
@@ -525,29 +500,6 @@ jobs:
         shell: pwsh
         run: choco install innosetup --version=6.3.2 --allow-downgrade --no-progress --yes
 
-      - name: Retry transient Apple ticket transport failures for this repair
-        if: inputs.reuse_repair_packages
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/repair-tools"
-          cat > "$RUNNER_TEMP/repair-tools/xcrun" <<'SH'
-          #!/bin/bash
-          if [[ "${1:-}" != stapler ]]; then exec /usr/bin/xcrun "$@"; fi
-          log="$(mktemp)"
-          trap 'rm -f "$log"' EXIT
-          for attempt in 1 2 3 4 5; do
-            /usr/bin/xcrun "$@" > "$log" 2>&1
-            status=$?
-            cat "$log"
-            [[ "$status" == 0 ]] && exit 0
-            grep -Eq 'NSURLErrorDomain|network connection was lost|Error 68' "$log" || exit "$status"
-            [[ "$attempt" == 5 ]] && exit "$status"
-            sleep 10
-          done
-          SH
-          chmod +x "$RUNNER_TEMP/repair-tools/xcrun"
-          echo "$RUNNER_TEMP/repair-tools" >> "$GITHUB_PATH"
-
       - name: Build Android or macOS package
         if: matrix.target != 'windows-x64'
         working-directory: awiki-me
@@ -616,17 +568,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Preserve unverified repair DMG for ticket-service diagnosis
-        if: failure() && inputs.reuse_repair_packages
-        uses: actions/upload-artifact@v7
-        with:
-          name: unverified-macos-candidate-${{ inputs.request_id }}
-          path: |
-            awiki-me/build/package/dmg-macos-x64/*.dmg
-            awiki-me/build/package/notary-macos-x64/*.json
-          if-no-files-found: ignore
-          retention-days: 14
-
       - name: Upload verified platform package
         uses: actions/upload-artifact@v7
         with:
@@ -640,8 +581,8 @@ jobs:
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' &&
-        github.ref == format('refs/heads/{0}', 'test/singapore-release-20261012') &&
-        endsWith(github.workflow_ref, format('@refs/heads/{0}', 'test/singapore-release-20261012')) &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
         contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
       }}
@@ -682,31 +623,6 @@ jobs:
         with:
           pattern: awiki-me-*-${{ inputs.request_id }}
           path: package-input
-
-      - name: Reuse verified repair Android package
-        if: inputs.reuse_repair_packages
-        uses: actions/download-artifact@v7
-        with:
-          github-token: ${{ github.token }}
-          run-id: 38222912854
-          name: awiki-me-android-arm64-438a9573-ab70-43d5-acfa-95e872ab6425
-          path: package-input/reused-android
-      - name: Reuse verified repair arm64 macOS package
-        if: inputs.reuse_repair_packages
-        uses: actions/download-artifact@v7
-        with:
-          github-token: ${{ github.token }}
-          run-id: 38222912854
-          name: awiki-me-macos-arm64-438a9573-ab70-43d5-acfa-95e872ab6425
-          path: package-input/reused-macos-arm64
-      - name: Reuse verified repair Windows package
-        if: inputs.reuse_repair_packages
-        uses: actions/download-artifact@v7
-        with:
-          github-token: ${{ github.token }}
-          run-id: 38222912854
-          name: awiki-me-windows-x64-438a9573-ab70-43d5-acfa-95e872ab6425
-          path: package-input/reused-windows
 
       - name: Recompute checksums and generate manifests
         working-directory: awiki-me

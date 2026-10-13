@@ -15,12 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($env:AWIKI_TEST_SOURCE_BUILD -eq 'singapore-release-20261012') {
-    $env:AWIKI_RELEASE_REGISTRY = '0'
-    $env:AWIKI_SOURCE_INTEGRATION = '1'
-} else {
-    $env:AWIKI_RELEASE_REGISTRY = '1'
-}
+$env:AWIKI_RELEASE_REGISTRY = "1"
 
 Set-StrictMode -Version Latest
 

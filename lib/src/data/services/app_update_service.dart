@@ -78,7 +78,7 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     final originHash = sha256.convert(utf8.encode(policyOrigin)).toString();
     final tenantHash = sha256.convert(utf8.encode(_tenantId)).toString();
     return 'awiki_me_update_${tenantHash}_'
-        '${originHash}_awiki-me_stable_singapore-release-20261012';
+        '${originHash}_awiki-me_stable';
   }
 
   String get _lastCheckAtKey => '${_cacheNamespace}_checked_at';
@@ -623,7 +623,7 @@ Uri _buildPolicyUri(String backendBaseUrl, String? override) {
   if (override != null) return Uri.parse(override);
   final base = Uri.parse(backendBaseUrl);
   return Uri.parse(
-    '${_origin(base)}/downloads/singapore-release-20261012/app-policy.json',
+    '${_origin(base)}/user-service/v1/server-info?client_platform=app',
   );
 }
 

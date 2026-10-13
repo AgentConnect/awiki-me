@@ -64,10 +64,13 @@ Invite at least three to five people who do not know the current architecture an
 - [ ] Within five minutes, they complete a meaningful first success.
 - [ ] They can accurately state the maturity, platform status, and security boundaries.
 
-## Singapore 20261012 source test batch
+## Explicit installed-package smoke
 
-The dedicated `test/singapore-release-20261012` controller retains the release actor
-checks and exact consumer/dependency SHA inputs. Its normal product packaging workers
-explicitly select source SDKs. The batch defaults to Singapore and reads only the batch
-App policy and Daemon installer paths under `/downloads/singapore-release-20261012/`.
-No public SDK or default download channel is published by this workflow.
+The manually selected CI `package_smoke_run` lane installs existing normal product
+packages without rebuilding. Supply the exact aggregate `package_smoke_artifact`
+name and full `package_smoke_app_sha` / `package_smoke_core_sha` pins. The lane
+requires a successful manual `package-app.yml` run in this repository and verifies
+manifest source identities, target, size and SHA256 before installation. It checks
+native macOS architecture/signatures, the existing Windows native smoke, or an
+Android emulator whose advertised ABI actually supports the arm64 APK. Emulator
+startup does not attest physical-device behavior or full product acceptance.

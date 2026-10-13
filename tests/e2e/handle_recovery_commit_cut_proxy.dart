@@ -38,7 +38,11 @@ class HandleRecoveryCommitCutProxy {
     http.Client? client,
   }) async {
     if (upstream.scheme != 'https' ||
-        !const {'awiki.info', 'anpclaw.com', 'test-fix.anpclaw.com'}.contains(upstream.host) ||
+        !const {
+          'awiki.info',
+          'anpclaw.com',
+          'test-fix.anpclaw.com',
+        }.contains(upstream.host) ||
         upstream.port != 443 ||
         upstream.userInfo.isNotEmpty ||
         (upstream.path.isNotEmpty && upstream.path != '/') ||

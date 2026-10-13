@@ -27,12 +27,12 @@ void main() {
     expect(config.didDomain, domain);
     expect(config.anpServiceUrl, '$baseUrl/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:$domain');
-    expect(config.daemonDownloadBaseUrl, '$baseUrl/downloads/singapore-release-20261012/daemon');
+    expect(config.daemonDownloadBaseUrl, '$baseUrl/daemon');
     expect(
       config.updateManifestUrl,
-      '$baseUrl/downloads/singapore-release-20261012/app-policy.json',
+      '$baseUrl/user-service/v1/server-info?client_platform=app',
     );
-    expect(config.releasesUrl, '$baseUrl/downloads/singapore-release-20261012');
+    expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
@@ -48,7 +48,7 @@ void main() {
       final config = AwikiEnvironmentConfig(baseUrl: 'https://$domain');
 
       expect(config.didDomain, domain);
-      expect(config.daemonDownloadBaseUrl, 'https://$domain/downloads/singapore-release-20261012/daemon');
+      expect(config.daemonDownloadBaseUrl, 'https://$domain/daemon');
       expect(config.agentImEnabled, isTrue, reason: domain);
     }
   });
@@ -98,12 +98,12 @@ void main() {
     expect(config.didDomain, 'anpclaw.com');
     expect(config.anpServiceUrl, 'https://anpclaw.com/anp-im/rpc');
     expect(config.anpServiceDid, 'did:wba:anpclaw.com');
-    expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/downloads/singapore-release-20261012/daemon');
+    expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/daemon');
     expect(
       config.updateManifestUrl,
-      'https://anpclaw.com/downloads/singapore-release-20261012/app-policy.json',
+      'https://anpclaw.com/user-service/v1/server-info?client_platform=app',
     );
-    expect(config.releasesUrl, 'https://anpclaw.com/downloads/singapore-release-20261012');
+    expect(config.releasesUrl, 'https://anpclaw.com/#download');
   });
 
   test('explicit Personal Agent flag override can disable IM agent', () {

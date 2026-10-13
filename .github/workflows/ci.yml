@@ -12,7 +12,22 @@ on:
         type: choice
         options: [all, desktop, android-arm64]
       package_smoke_run:
-        description: Passed Singapore package-app run to install and start without rebuilding
+        description: Passed package-app run to install and start without rebuilding
+        required: false
+        default: ''
+        type: string
+      package_smoke_artifact:
+        description: Exact aggregate artifact name from the package-app run
+        required: false
+        default: ''
+        type: string
+      package_smoke_app_sha:
+        description: Expected full App source SHA from the package manifest
+        required: false
+        default: ''
+        type: string
+      package_smoke_core_sha:
+        description: Expected full Core source SHA from the package manifest
         required: false
         default: ''
         type: string
@@ -790,6 +805,10 @@ jobs:
   package-smoke:
     if: ${{ inputs.package_smoke_run != '' }}
     name: Installed package smoke (${{ matrix.target }})
+    env:
+      PACKAGE_RUN: ${{ inputs.package_smoke_run }}
+      PACKAGE_APP_SHA: ${{ inputs.package_smoke_app_sha }}
+      PACKAGE_CORE_SHA: ${{ inputs.package_smoke_core_sha }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -801,43 +820,37 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Require the frozen passed package run
+      - name: Validate explicitly selected package run
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PACKAGE_RUN: ${{ inputs.package_smoke_run }}
+          PACKAGE_ARTIFACT: ${{ inputs.package_smoke_artifact }}
         run: |
-          test "$GITHUB_REF" = refs/heads/test/singapore-release-20261012
-          test "$PACKAGE_RUN" = 38248348693
+          set -euo pipefail
+          [[ "$PACKAGE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PACKAGE_ARTIFACT" =~ ^awiki-me-packages-[A-Za-z0-9._-]+$ ]]
+          node --test scripts/verify-package-smoke-input.test.mjs
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN" > package-run.json
-          node -e 'const p=require("./package-run.json"); if(p.conclusion!=="success" || p.head_sha!=="6e4a6b48572ec2b391269b4488dd3779ec7c5be1") process.exit(1)'
+          node scripts/verify-package-smoke-input.mjs --run-only
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.package_smoke_run }}
-          name: awiki-me-packages-42aa1613-8043-40c9-a0bd-ff5f01e5071a
+          name: ${{ inputs.package_smoke_artifact }}
           path: package-smoke-input
       - name: Verify exact packaged bytes
         shell: bash
         env:
           PACKAGE_TARGET: ${{ matrix.target }}
         run: |
-          node --input-type=module <<'JS'
-          import fs from 'node:fs'; import crypto from 'node:crypto';
-          const m=JSON.parse(fs.readFileSync('package-smoke-input/package-manifest.json'));
-          if(m.sourceRefs.app!=='6e4a6b48572ec2b391269b4488dd3779ec7c5be1' || m.sourceRefs.imCore!=='4eb92b65db270afcaff176a3885daa24c073a9fe') throw Error('Frozen product source mismatch');
-          const a=m.artifacts[process.env.PACKAGE_TARGET];
-          const b=fs.readFileSync('package-smoke-input/'+a.filename);
-          if(b.length!==a.sizeBytes || crypto.createHash('sha256').update(b).digest('hex')!==a.sha256) throw Error('Package integrity mismatch');
-          console.log(JSON.stringify({target:process.env.PACKAGE_TARGET,sha256:a.sha256,sizeBytes:a.sizeBytes}));
-          JS
+          node scripts/verify-package-smoke-input.mjs
       - name: Mount, install and start normal macOS App
         if: startsWith(matrix.target, 'macos-')
         shell: bash
         run: |
           set -euo pipefail
-          mount="$RUNNER_TEMP/singapore-app-mount"
-          app_copy="$RUNNER_TEMP/singapore-app-installed"
+          mount="$RUNNER_TEMP/package-app-mount"
+          app_copy="$RUNNER_TEMP/package-app-installed"
           mkdir -p "$mount" "$app_copy"
           # The manifest owns the filename; do not infer product naming.
           dmg="package-smoke-input/$(node -p 'require("./package-smoke-input/package-manifest.json").artifacts["${{ matrix.target }}"].filename')"
@@ -866,7 +879,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $manifest = Get-Content package-smoke-input/package-manifest.json | ConvertFrom-Json
           $installer = (Resolve-Path (Join-Path package-smoke-input $manifest.artifacts.'windows-x64'.filename)).Path
-          $installDir = Join-Path $env:RUNNER_TEMP 'singapore-normal-app'
+          $installDir = Join-Path $env:RUNNER_TEMP 'package-normal-app'
           try {
             $p = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"')) -PassThru -Wait
             if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
@@ -896,13 +909,13 @@ jobs:
           sudo apt-get install -y libpulse0
           sudo chmod 666 /dev/kvm
           sdkmanager 'system-images;android-30;google_apis;x86_64' 'emulator'
-          export ANDROID_AVD_HOME="$RUNNER_TEMP/singapore-avd"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/package-smoke-avd"
           mkdir -p "$ANDROID_AVD_HOME"
-          echo no | avdmanager create avd --force --name singapore-arm64-apk --package 'system-images;android-30;google_apis;x86_64' --path "$ANDROID_AVD_HOME/device.avd"
-          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx singapore-arm64-apk
+          echo no | avdmanager create avd --force --name package-smoke-arm64-apk --package 'system-images;android-30;google_apis;x86_64' --path "$ANDROID_AVD_HOME/device.avd"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx package-smoke-arm64-apk
           "$ANDROID_HOME/emulator/emulator" -version
           "$ANDROID_HOME/emulator/emulator" -accel-check
-          "$ANDROID_HOME/emulator/emulator" -avd singapore-arm64-apk -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          "$ANDROID_HOME/emulator/emulator" -avd package-smoke-arm64-apk -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
           emulator_pid=$!
           trap 'adb emu kill || true; kill "$emulator_pid" 2>/dev/null || true' EXIT
           sleep 3
@@ -933,7 +946,7 @@ jobs:
         if: failure() && matrix.target == 'android-arm64'
         uses: actions/upload-artifact@v4
         with:
-          name: singapore-android-startup-diagnostics
+          name: package-android-startup-diagnostics
           path: |
             ${{ runner.temp }}/emulator.log
             ${{ runner.temp }}/app-startup.log
