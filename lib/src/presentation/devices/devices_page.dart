@@ -23,7 +23,9 @@ import 'devices_provider.dart';
 import 'identity_services_page.dart';
 
 class DevicesPage extends ConsumerStatefulWidget {
-  const DevicesPage({super.key});
+  const DevicesPage({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<DevicesPage> createState() => _DevicesPageState();
@@ -70,7 +72,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     final refreshPending = _isRefreshing || state.isLoading;
     final phone = context.awikiResponsive.isPhone;
     final page = AwikiAdaptiveScaffold(
-      maxWidth: 820,
+      maxWidth: widget.embedded ? 560 : 820,
       includeBottomSafeArea: true,
       child: ListView(
         key: const Key('devices-page'),
@@ -79,12 +81,14 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
           AwikiMeTopBar(
             title: context.l10n.devicesTitle,
             padding: EdgeInsets.zero,
-            titleFontSize: phone ? 16 : null,
-            leading: AwikiBackButton(
-              key: const Key('devices-back-button'),
-              onTap: () => Navigator.of(context).maybePop(),
-              semanticsLabel: context.l10n.commonBack,
-            ),
+            titleFontSize: widget.embedded ? 14 : (phone ? 16 : null),
+            leading: widget.embedded
+                ? const SizedBox.shrink()
+                : AwikiBackButton(
+                    key: const Key('devices-back-button'),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    semanticsLabel: context.l10n.commonBack,
+                  ),
             trailing: TopBarActionButton(
               key: const Key('devices-refresh'),
               onTap: refreshPending ? null : _refresh,
@@ -139,6 +143,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                 onPressed: () => AppNavigator.push<void>(
                   context,
                   (_) => IdentityServicesPage(selector: registry!.did),
+                  applyWindowChromeInset: !widget.embedded,
                 ),
                 child: Text(context.l10n.identityServicesTitle),
               ),

@@ -647,6 +647,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   }
 
   Future<void> _resolve() async {
+    if (_isResolving || _isSubmitting) {
+      return;
+    }
     final query = normalizeDidOrHandleInput(_queryController.text);
     if (query.isEmpty) {
       setState(() => _errorText = context.l10n.identityQueryRequired);
@@ -770,35 +773,80 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
     return epoch != null && _isSessionEpochCurrent(ref, epoch);
   }
 
+  void _queryChanged(String _) {
+    if (_profile == null && _errorText == null) {
+      return;
+    }
+    setState(() {
+      _profile = null;
+      _conversationId = null;
+      _relationship = null;
+      _errorText = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _config;
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    // Reference `.dlg`: a title, one search field with the match listed
-    // below it, and right-aligned cancel / primary actions.
+    final desktop = !responsive.isPhone;
     return AppDialogScaffold(
-      maxWidth: 420,
+      maxWidth: 440,
       maxHeightFraction: 0.9,
       horizontalPadding: responsive.isPhone ? 14 : 16,
       verticalPadding: 24,
       avoidViewInsets: true,
       compactCentered: true,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      borderRadius: desktop ? BorderRadius.circular(16) : null,
+      padding: desktop
+          ? const EdgeInsets.all(24)
+          : const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(
-            config.title,
-            style: TextStyle(
-              color: theme.title,
-              fontSize: 19,
-              height: 1.25,
-              fontWeight: FontWeight.w400,
-            ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  config.title,
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: desktop ? 18 : 19,
+                    height: 1.25,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (desktop)
+                AppIconButton(
+                  key: const Key('identity-lookup-close-button'),
+                  size: 28,
+                  semanticLabel: context.l10n.commonClose,
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: Icon(
+                    CupertinoIcons.xmark,
+                    size: 14,
+                    color: theme.secondaryText,
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 14),
+          if (desktop) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              config.subtitle,
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ],
+          SizedBox(height: desktop ? 20 : 14),
           Flexible(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -813,6 +861,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                     semanticsLabel: config.inputSemanticsLabel,
                     placeholder: config.inputPlaceholder,
                     onSubmitted: _resolve,
+                    onChanged: _queryChanged,
                     searchButton: _IdentitySearchButton(
                       key: config.searchButtonKey,
                       label: _isResolving
@@ -850,19 +899,24 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          AwikiDialogActionRow(
-            cancelLabel: context.l10n.commonCancel,
-            onCancel: _isSubmitting ? null : () => Navigator.of(context).pop(),
-            primaryKey: config.actionButtonKey,
-            primaryLabel: _isSubmitting
-                ? config.submittingLabel
-                : config.actionLabel,
-            primarySemanticsIdentifier: config.actionSemanticsIdentifier,
-            onPrimary: _profile == null || _isResolving || _isSubmitting
-                ? null
-                : _submit,
-          ),
+          if (!desktop || _profile != null) ...<Widget>[
+            const SizedBox(height: 20),
+            AwikiDialogActionRow(
+              cancelLabel: context.l10n.commonCancel,
+              onCancel: _isSubmitting
+                  ? null
+                  : () => Navigator.of(context).pop(),
+              primaryKey: config.actionButtonKey,
+              primaryLabel: _isSubmitting
+                  ? config.submittingLabel
+                  : config.actionLabel,
+              primarySemanticsIdentifier: config.actionSemanticsIdentifier,
+              primaryBusy: _isSubmitting,
+              onPrimary: _profile == null || _isResolving || _isSubmitting
+                  ? null
+                  : _submit,
+            ),
+          ],
         ],
       ),
     );
@@ -899,6 +953,7 @@ class _IdentitySearchInput extends StatelessWidget {
     required this.semanticsLabel,
     required this.placeholder,
     required this.onSubmitted,
+    required this.onChanged,
     required this.searchButton,
   });
 
@@ -909,6 +964,7 @@ class _IdentitySearchInput extends StatelessWidget {
   final String semanticsLabel;
   final String placeholder;
   final Future<void> Function() onSubmitted;
+  final ValueChanged<String> onChanged;
   final Widget searchButton;
 
   @override
@@ -916,13 +972,18 @@ class _IdentitySearchInput extends StatelessWidget {
     final theme = context.awikiTheme;
     final phone = context.awikiResponsive.isPhone;
     return Container(
-      height: phone ? 48 : 38,
-      padding: EdgeInsets.fromLTRB(phone ? 14 : 10, 0, phone ? 5 : 4, 0),
+      height: phone ? 48 : 44,
+      padding: EdgeInsets.fromLTRB(phone ? 14 : 12, 0, phone ? 5 : 6, 0),
       decoration: BoxDecoration(
-        color: phone ? theme.glass : theme.surface,
-        borderRadius: BorderRadius.circular(phone ? 16 : 6),
+        color: phone
+            ? theme.glass
+            : Color.alphaBlend(
+                theme.title.withValues(alpha: 0.035),
+                theme.dialogSurface,
+              ),
+        borderRadius: BorderRadius.circular(phone ? 16 : 10),
         border: Border.all(
-          color: phone ? theme.glassEdge : theme.border,
+          color: phone ? theme.glassEdge : theme.dialogBorder,
           width: phone ? 0.5 : 1,
         ),
       ),
@@ -946,6 +1007,7 @@ class _IdentitySearchInput extends StatelessWidget {
                 autofocus: true,
                 placeholder: placeholder,
                 textInputAction: TextInputAction.search,
+                onChanged: onChanged,
                 onSubmitted: (_) async {
                   if (enabled) {
                     await onSubmitted();
@@ -986,7 +1048,7 @@ class _IdentitySearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final phone = context.awikiResponsive.isPhone;
-    final radius = BorderRadius.circular(phone ? 18 : 5);
+    final radius = BorderRadius.circular(phone ? 18 : 6);
     return AppPressable(
       onTap: onTap,
       enabled: onTap != null,
@@ -996,7 +1058,7 @@ class _IdentitySearchButton extends StatelessWidget {
       borderRadius: radius,
       builder: (context, state, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        height: phone ? 38 : 28,
+        height: phone ? 38 : 32,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -1051,7 +1113,7 @@ class _IdentityPreviewCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: phone ? theme.glass : theme.surface,
+        color: phone ? theme.glass : theme.title.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(phone ? 14 : 8),
         border: Border.all(
           color: phone ? theme.glassEdge : theme.border,

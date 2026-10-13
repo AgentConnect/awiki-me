@@ -94,8 +94,9 @@ class AppDialogScaffold extends StatelessWidget {
                   )
                 : DecoratedBox(
                     decoration: BoxDecoration(
-                      color: surfaceColor ?? theme.surface,
+                      color: surfaceColor ?? theme.dialogSurface,
                       borderRadius: effectiveBorderRadius,
+                      border: Border.all(color: theme.dialogBorder),
                       boxShadow: theme.overlayShadow,
                     ),
                     child: ClipRRect(

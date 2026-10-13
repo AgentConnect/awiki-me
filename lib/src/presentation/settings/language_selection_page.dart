@@ -10,7 +10,9 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/awiki_glass.dart';
 
 class LanguageSelectionPage extends ConsumerWidget {
-  const LanguageSelectionPage({super.key, this.onBack});
+  const LanguageSelectionPage({super.key, this.onBack, this.embedded = false});
+
+  final bool embedded;
 
   final VoidCallback? onBack;
 
@@ -34,23 +36,32 @@ class LanguageSelectionPage extends ConsumerWidget {
                 child: AwikiMeTopBar(
                   title: l10n.settingsLanguage,
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  titleFontSize: awikiMeCompactTopBarTitleFontSize,
+                  titleFontSize: embedded
+                      ? 14
+                      : awikiMeCompactTopBarTitleFontSize,
                   titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
                   titleHeight: awikiMeCompactTopBarTitleHeight,
-                  leading: AwikiBackButton(
-                    key: const Key('language-selection-back-button'),
-                    onTap: onBack ?? () => Navigator.of(context).pop(),
-                    semanticsLabel: l10n.commonBack,
-                  ),
+                  leading: embedded
+                      ? const SizedBox.shrink()
+                      : AwikiBackButton(
+                          key: const Key('language-selection-back-button'),
+                          onTap: onBack ?? () => Navigator.of(context).pop(),
+                          semanticsLabel: l10n.commonBack,
+                        ),
                 ),
               ),
               Expanded(
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
+                    constraints: BoxConstraints(maxWidth: embedded ? 460 : 560),
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        embedded ? 14 : 24,
+                        16,
+                        24,
+                      ),
                       children: <Widget>[
                         DecoratedBox(
                           key: const Key('language-selection-options'),
@@ -63,12 +74,13 @@ class LanguageSelectionPage extends ConsumerWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
                                 _LanguageOptionRow(
+                                  dense: embedded,
                                   key: const Key('language-option-system'),
                                   title: l10n.settingsLanguageSystem,
                                   subtitle: l10n.settingsLanguageSystemSubtitle,
                                   selected:
                                       selectedMode == AppLocaleMode.system,
-                                  height: 78,
+                                  height: embedded ? 58 : 78,
                                   onTap: () => setAppLocaleMode(
                                     ref,
                                     AppLocaleMode.system,
@@ -76,11 +88,12 @@ class LanguageSelectionPage extends ConsumerWidget {
                                 ),
                                 const _LanguageDivider(),
                                 _LanguageOptionRow(
+                                  dense: embedded,
                                   key: const Key('language-option-zh-hans'),
                                   title: l10n.settingsLanguageZhHans,
                                   selected:
                                       selectedMode == AppLocaleMode.zhHans,
-                                  height: 64,
+                                  height: embedded ? 44 : 64,
                                   onTap: () => setAppLocaleMode(
                                     ref,
                                     AppLocaleMode.zhHans,
@@ -88,11 +101,12 @@ class LanguageSelectionPage extends ConsumerWidget {
                                 ),
                                 const _LanguageDivider(),
                                 _LanguageOptionRow(
+                                  dense: embedded,
                                   key: const Key('language-option-english'),
                                   title: l10n.settingsLanguageEnglish,
                                   selected:
                                       selectedMode == AppLocaleMode.english,
-                                  height: 64,
+                                  height: embedded ? 44 : 64,
                                   onTap: () => setAppLocaleMode(
                                     ref,
                                     AppLocaleMode.english,
@@ -118,6 +132,7 @@ class LanguageSelectionPage extends ConsumerWidget {
 class _LanguageOptionRow extends StatelessWidget {
   const _LanguageOptionRow({
     super.key,
+    this.dense = false,
     required this.title,
     this.subtitle,
     required this.selected,
@@ -126,6 +141,7 @@ class _LanguageOptionRow extends StatelessWidget {
   });
 
   final String title;
+  final bool dense;
   final String? subtitle;
   final bool selected;
   final double height;
@@ -150,7 +166,7 @@ class _LanguageOptionRow extends StatelessWidget {
           child: SizedBox(
             height: effectiveHeight,
             child: Padding(
-              padding: const EdgeInsets.only(left: 20, right: 16),
+              padding: EdgeInsets.only(left: dense ? 14 : 20, right: 16),
               child: Row(
                 children: <Widget>[
                   Expanded(
@@ -164,7 +180,7 @@ class _LanguageOptionRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: theme.title,
-                            fontSize: 17,
+                            fontSize: dense ? 13 : 17,
                             fontWeight: selected
                                 ? FontWeight.w400
                                 : FontWeight.w400,
@@ -179,7 +195,7 @@ class _LanguageOptionRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: theme.secondaryText,
-                              fontSize: 14,
+                              fontSize: dense ? 11 : 14,
                               height: 20 / 14,
                             ),
                           ),
@@ -194,7 +210,7 @@ class _LanguageOptionRow extends StatelessWidget {
                         ? Icon(
                             CupertinoIcons.check_mark,
                             key: const Key('language-option-selected-check'),
-                            size: 23,
+                            size: dense ? 16 : 23,
                             color: theme.title,
                           )
                         : null,

@@ -1888,7 +1888,7 @@ class _SkillOnboardingDialogState
                 ),
               ),
             ),
-          if (instruction != null) ...<Widget>[
+          if (instruction != null && responsive.isPhone) ...<Widget>[
             SizedBox(height: responsive.spacing(14)),
             CupertinoButton.filled(
               key: const Key('agent-skill-copy-button'),
@@ -1906,20 +1906,70 @@ class _SkillOnboardingDialogState
             ),
           ],
           SizedBox(height: responsive.spacing(14)),
-          CupertinoButton(
-            key: const Key('agent-skill-regenerate-button'),
-            onPressed: state.isLoading
-                ? null
-                : () => ref
-                      .read(skillOnboardingProvider.notifier)
-                      .generate(displayName: _displayNameController.text),
-            padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
-            child: Text(
-              instruction == null
-                  ? context.l10n.agentSkillGenerate
-                  : context.l10n.agentSkillRegenerate,
+          if (!responsive.isPhone)
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                if (instruction == null)
+                  AppPrimaryButton(
+                    key: const Key('agent-skill-regenerate-button'),
+                    compact: true,
+                    label: context.l10n.agentSkillGenerate,
+                    onPressed: state.isLoading
+                        ? null
+                        : () => ref
+                              .read(skillOnboardingProvider.notifier)
+                              .generate(
+                                displayName: _displayNameController.text,
+                              ),
+                  )
+                else ...<Widget>[
+                  AppSecondaryButton(
+                    key: const Key('agent-skill-regenerate-button'),
+                    compact: true,
+                    label: context.l10n.agentSkillRegenerate,
+                    onPressed: state.isLoading
+                        ? null
+                        : () => ref
+                              .read(skillOnboardingProvider.notifier)
+                              .generate(
+                                displayName: _displayNameController.text,
+                              ),
+                  ),
+                  AppPrimaryButton(
+                    key: const Key('agent-skill-copy-button'),
+                    compact: true,
+                    label: context.l10n.agentSkillCopyInstruction,
+                    onPressed: () => _copySkillOnboardingInstruction(
+                      context,
+                      instruction.prompt,
+                    ),
+                  ),
+                ],
+              ],
+            )
+          else if (instruction == null)
+            AppPrimaryButton(
+              key: const Key('agent-skill-regenerate-button'),
+              label: context.l10n.agentSkillGenerate,
+              onPressed: state.isLoading
+                  ? null
+                  : () => ref
+                        .read(skillOnboardingProvider.notifier)
+                        .generate(displayName: _displayNameController.text),
+            )
+          else
+            AppSecondaryButton(
+              key: const Key('agent-skill-regenerate-button'),
+              label: context.l10n.agentSkillRegenerate,
+              onPressed: state.isLoading
+                  ? null
+                  : () => ref
+                        .read(skillOnboardingProvider.notifier)
+                        .generate(displayName: _displayNameController.text),
             ),
-          ),
         ],
       ),
     );

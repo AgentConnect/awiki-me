@@ -595,6 +595,11 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 由 Core 按该 DID 重新确定 canonical route，不能用展示 Profile 的 Handle 改换聊天对象。
 刷新后的资料必须仍属于同一 DID，且提交受 SessionEpoch 围栏保护。
 
+桌面身份查找采用分步操作：初始仅展示搜索和关闭入口，解析成功后才显示身份确认
+与提交操作；修改查询立即清除旧结果、canonical route 和旧错误，必须重新解析后
+才能提交。搜索期间禁止重复解析，关闭窗口后的完成不得恢复该窗口或触发导航。
+
+
 
 如果 DID-only profile 先于 verified Persona route 到达，后续 Core
 conversation/profile bundle 必须在发布会话行前把该投影迁入 Persona-keyed store。
@@ -855,3 +860,35 @@ Web 仍沿用既有无原生缓存的占位实现；本轮不宣称 Web native C
 联合产品验收：在两端拥有方 runner 同时设置同一个新建目录 `AWIKI_E2E_PRODUCT_PAIR_DIR`，APP 另设 `AWIKI_E2E_ENCRYPTED_GROUP=1` 运行 group；DSH 运行 ENCRYPTED-001。桥接仅交换公开测试 DID/Handle、群 ID、固定消息标记及完成标志；账号凭据和数据库不共享。APP UI 建群邀请已有 DSH，双向文本/附件下载验证明文，CLI 作为第三成员作确定性脚本回复（不调用真实模型），DSH 重启并反向建群邀请 APP。桥接目录必须按运行新建，不能复用旧完成标志。联合结果仅在两端 runner、桥接完成和各自清理记录均核验后计为通过。
 
 群消息的原始 realtime arrival 若尚无 Core canonical `conversationId`，adapter 只产生 message-domain dirty hint，等待 committed sync 投影；不得按群 DID/thread 补造路由，亦不得创建空 conversation 的系统通知。合法 canonical arrival 的通知语义保持不变。
+
+### 弹窗与连接状态点的可见边界（2026-10-12）
+
+桌面群聊标题栏的“添加群成员”按钮固定靠右，保留随显示缩放调整的 12 单位边距；
+群名在剩余空间内左对齐并按需省略，名称点击区域不扩展到中间留白。
+桌面和平板的 `AppDialogScaffold` 使用独立的 `dialogSurface` 和 `dialogBorder`；
+深色弹窗需与页面底色分离，浅色弹窗同样保留描边。手机继续使用既有磨砂面板。
+Skill Agent 首次“生成安装指令”使用实心主按钮，已有指令后的“重新生成”使用带边框的次按钮，
+保持复制操作为主要动作；加载期间沿用禁用语义。
+桌面 Skill Agent 操作按内容宽度靠右排列，使用 34 高、13 字号的紧凑按钮；
+生成后“重新生成”和“复制安装指令”共享底部操作行，窄空间可换行。
+手机保留全宽按钮，其他页面按钮的默认尺寸不变。
+桌面本人头像的绿色圆点只表达当前 realtime 连接已建立，不代表对外在线状态；
+圆点必须完整绘制，外层点击控件不能按头像圆角裁剪它。
+`theme_surface_regression_test.dart` 对两种主题检查实际绘制的弹窗底色/边缘和圆点四象限，
+并验证断线隐藏、重连恢复及头像点击入口；Skill onboarding 的 owning widget 测试覆盖两种主题和生成/复制/重新生成流程。
+
+### 桌面设置主从面板（2026-10-12）
+
+桌面设置采用左侧分类、右侧内容的主从布局，默认显示“显示与窗口”。设备、语言和显示
+在右侧独立 Navigator 中切换，选中项持续高亮；一级详情不显示返回按钮，设备内部子页
+的返回仍限制在右栏。切换类别或 session epoch 销毁旧的右栏导航栈，避免跨账号保留详情。
+Handle Recovery 使用根 Navigator 的独立恢复页面，绑定点击时的 exact localIdentityId，
+打开时不自动请求 OTP。恢复会主动暂停旧会话并建立替换会话，页面/controller 的存活围栏
+必须独立于会话所属的设置容器，避免旧会话清理或 epoch 变化提前销毁恢复流程；完成后
+再进入消息并弹出恢复页。恢复不属于持久选中的详情类别。退出/删除确认、凭证导出、检查更新沿用既有行为。
+嵌入设备页打开身份服务时仍在右栏 push，但不再添加全窗口 macOS 交通灯安全区；独立设备页保留原顶距。
+手机与紧凑布局继续使用原页面导航。侧栏长状态文本限宽省略，避免英文和缩放时溢出。
+
+桌面设置右侧的嵌入页面采用紧凑排版：显示与语言内容限宽 460，正文 13、页面标题
+14，操作行高 42、语言选项行高 44；缩放滑块使用较小的桌面滑块手柄。独立页面
+保留原尺寸；嵌入页面仍接受全局文字缩放，不使用整体缩放变换压缩点击区域。

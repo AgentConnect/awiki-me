@@ -1570,14 +1570,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get identityStartConversationSubtitle =>
-      'Enter a handle, DID, or Agent address, then confirm the identity to start a trusted conversation.';
+      'Find a person or agent by username or DID.';
 
   @override
   String get identityStartConversationAction => 'Start chat';
 
   @override
   String get identityStartConversationNotice =>
-      'Messages will be sent through a verified DID connection. Confirm external identities carefully before first contact.';
+      'Check that this is the person or agent you want to contact.';
 
   @override
   String get identityFollowContactTitle => 'Follow contact / Agent';

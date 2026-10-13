@@ -870,113 +870,159 @@ void main() {
     expect(core.lastPhone, isNull);
   });
 
-  testWidgets('completed Recovery opens the authenticated message workspace', (
-    tester,
-  ) async {
-    const previousSession = SessionIdentity(
-      did: 'did:wba:awiki.info:users:alice-old',
-      localIdentityId: 'identity-alice',
-      credentialName: 'identity-alice',
-      displayName: 'Alice',
-      handle: 'alice.awiki.info',
-    );
-    const recoveredDid = 'did:wba:awiki.info:users:alice-new';
-    late ProviderContainer container;
-    var oldSessionWasQuiesced = false;
-    final core = _FakeHandleRecoveryCore(
-      activateResult: _operation(
-        lifecycleClass: HandleRecoveryLifecycleClass.applied,
-        commitAttempted: true,
-      ),
-      beforeActivate: () {
-        oldSessionWasQuiesced = container.read(sessionProvider).session == null;
-      },
-    );
-    final gateway = FakeAwikiGateway()
-      ..localCredentials = const <SessionIdentity>[
-        SessionIdentity(
-          did: recoveredDid,
+  for (final fromSettings in [false, true]) {
+    testWidgets(
+      'completed Recovery opens the authenticated message workspace from ${fromSettings ? 'desktop settings' : 'root route'}',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1280, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        const previousSession = SessionIdentity(
+          did: 'did:wba:awiki.info:users:alice-old',
           localIdentityId: 'identity-alice',
           credentialName: 'identity-alice',
           displayName: 'Alice',
           handle: 'alice.awiki.info',
-        ),
-      ]
-      ..loginResult = const SessionIdentity(
-        did: recoveredDid,
-        localIdentityId: 'identity-alice',
-        credentialName: 'identity-alice',
-        displayName: 'Alice',
-        handle: 'alice.awiki.info',
-      );
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const AppShell(),
-        gateway: gateway,
-        session: previousSession,
-        providerOverrides: <Override>[
-          handleRecoveryCorePortProvider.overrideWithValue(core),
-          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    container = ProviderScope.containerOf(
-      tester.element(find.byType(AppShell)),
-    );
-    container
-        .read(shellDestinationProvider.notifier)
-        .select(ShellDestination.settings);
-    unawaited(
-      Navigator.of(tester.element(find.byType(AppShell))).push<void>(
-        CupertinoPageRoute<void>(
-          builder: (_) => const HandleRecoveryPage(
-            initialHandle: 'alice.awiki.info',
-            initialPhone: '+8613800138000',
+        );
+        const recoveredDid = 'did:wba:awiki.info:users:alice-new';
+        late ProviderContainer container;
+        var oldSessionWasQuiesced = false;
+        final activation = Completer<HandleRecoveryProgress>();
+        final core = _FakeHandleRecoveryCore(
+          activateCompleter: activation,
+          beforeActivate: () {
+            oldSessionWasQuiesced =
+                container.read(sessionProvider).session == null;
+          },
+        );
+        final gateway = FakeAwikiGateway()
+          ..localCredentials = const <SessionIdentity>[
+            SessionIdentity(
+              did: recoveredDid,
+              localIdentityId: 'identity-alice',
+              credentialName: 'identity-alice',
+              displayName: 'Alice',
+              handle: 'alice.awiki.info',
+            ),
+          ]
+          ..loginResult = const SessionIdentity(
+            did: recoveredDid,
+            localIdentityId: 'identity-alice',
+            credentialName: 'identity-alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.info',
+          );
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const AppShell(),
+            gateway: gateway,
+            session: previousSession,
+            providerOverrides: <Override>[
+              handleRecoveryCorePortProvider.overrideWithValue(core),
+              userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+            ],
           ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.descendant(
-        of: find.byKey(const Key('handle-recovery-otp')),
-        matching: find.byType(CupertinoTextField),
-      ),
-      '123456',
-    );
-    await tester.tap(find.byKey(const Key('handle-recovery-verify')));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const Key('handle-recovery-risk-confirmation')),
-    );
-    await tester.drag(
-      find.descendant(
-        of: find.byType(HandleRecoveryPage),
-        matching: find.byType(ListView),
-      ),
-      const Offset(0, -180),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('handle-recovery-risk-confirmation')),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const Key('handle-recovery-activate')),
-    );
-    await tester.tap(find.byKey(const Key('handle-recovery-activate')));
-    await tester.pumpAndSettle();
+        container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        container
+            .read(shellDestinationProvider.notifier)
+            .select(ShellDestination.settings);
+        if (fromSettings) {
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const Key('settings-recover-handle-did-row')),
+          );
+          await tester.pumpAndSettle();
+          final recovery = tester.widget<HandleRecoveryPage>(
+            find.byType(HandleRecoveryPage),
+          );
+          expect(recovery.localIdentityId, previousSession.localIdentityId);
+          expect(recovery.autoRequestOtp, isFalse);
+          await tester.enterText(
+            find.descendant(
+              of: find.byKey(const Key('handle-recovery-phone-input')),
+              matching: find.byType(CupertinoTextField),
+            ),
+            '+8613800138000',
+          );
+          await tester.tap(find.byKey(const Key('handle-recovery-send-otp')));
+        } else {
+          unawaited(
+            Navigator.of(tester.element(find.byType(AppShell))).push<void>(
+              CupertinoPageRoute<void>(
+                builder: (_) => const HandleRecoveryPage(
+                  initialHandle: 'alice.awiki.info',
+                  initialPhone: '+8613800138000',
+                ),
+              ),
+            ),
+          );
+        }
+        await tester.pumpAndSettle();
 
-    expect(find.byType(HandleRecoveryPage), findsNothing);
-    expect(find.byType(ConversationWorkspacePage), findsOneWidget);
-    expect(container.read(shellDestinationProvider), ShellDestination.messages);
-    expect(container.read(sessionProvider).session?.did, recoveredDid);
-    expect(gateway.loginCalls, 1);
-    expect(oldSessionWasQuiesced, isTrue);
-  });
+        await tester.enterText(
+          find.descendant(
+            of: find.byKey(const Key('handle-recovery-otp')),
+            matching: find.byType(CupertinoTextField),
+          ),
+          '123456',
+        );
+        await tester.tap(find.byKey(const Key('handle-recovery-verify')));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const Key('handle-recovery-risk-confirmation')),
+        );
+        await tester.drag(
+          find.descendant(
+            of: find.byType(HandleRecoveryPage),
+            matching: find.byType(ListView),
+          ),
+          const Offset(0, -180),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const Key('handle-recovery-risk-confirmation')),
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(
+          find.byKey(const Key('handle-recovery-activate')),
+        );
+        await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        final visibleDuringCommit = find
+            .byType(HandleRecoveryPage)
+            .evaluate()
+            .isNotEmpty;
+        activation.complete(
+          _operation(
+            lifecycleClass: HandleRecoveryLifecycleClass.applied,
+            commitAttempted: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          visibleDuringCommit,
+          isTrue,
+          reason:
+              'Recovery must survive pausing the old session while Core commits',
+        );
+
+        expect(find.byType(HandleRecoveryPage), findsNothing);
+        expect(find.byType(ConversationWorkspacePage), findsOneWidget);
+        expect(
+          container.read(shellDestinationProvider),
+          ShellDestination.messages,
+        );
+        expect(container.read(sessionProvider).session?.did, recoveredDid);
+        expect(gateway.loginCalls, 1);
+        expect(oldSessionWasQuiesced, isTrue);
+      },
+    );
+  }
 
   testWidgets(
     'completed Recovery stays visible until local session activation succeeds',
