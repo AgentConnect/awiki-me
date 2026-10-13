@@ -5118,6 +5118,7 @@ Future<ChatMessage> _waitForAppPairMessage({
   required String senderDid,
   required String receiverDid,
   required bool isMine,
+  Duration timeout = const Duration(seconds: 90),
 }) async {
   if (messaging is! ConversationTimelineMessagingService) {
     fail('The App-pair messaging service lacks conversation timeline reads.');
@@ -5126,32 +5127,17 @@ Future<ChatMessage> _waitForAppPairMessage({
   final conversation = AppConversationReadRef.fromConversationId(
     conversationId,
   );
-  final deadline = DateTime.now().add(const Duration(seconds: 90));
-  var lastMessages = const <ChatMessage>[];
-  while (DateTime.now().isBefore(deadline)) {
-    final messages = await timeline.loadConversationTimeline(
-      conversation,
-      limit: 20,
-    );
-    lastMessages = messages;
-    final matches = messages
-        .where((message) => message.content == content)
-        .toList(growable: false);
-    if (matches.length > 1) {
-      fail('The App-pair history projected a duplicate exact message.');
-    }
-    if (matches.length == 1) {
-      final message = matches.single;
-      if (message.remoteId == messageId &&
-          message.senderDid == senderDid &&
-          message.receiverDid == receiverDid &&
-          message.isMine == isMine &&
-          message.sendState == MessageSendState.sent) {
-        return message;
-      }
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 750));
-  }
+  final observation = await waitForAppPairMessage(
+    read: () => timeline.loadConversationTimeline(conversation, limit: 20),
+    content: content,
+    messageId: messageId,
+    senderDid: senderDid,
+    receiverDid: receiverDid,
+    isMine: isMine,
+    timeout: timeout,
+  );
+  if (observation.match case final message?) return message;
+  final lastMessages = observation.messages;
   final contentMatches = lastMessages
       .where((message) => message.content == content)
       .toList(growable: false);

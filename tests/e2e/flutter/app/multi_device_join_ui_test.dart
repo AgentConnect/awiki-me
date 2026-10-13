@@ -11,6 +11,7 @@ import 'dart:async';
 
 import '../support/enter_existing_account.dart';
 import '../support/read_rendered_sas.dart';
+import '../support/wait_for_app_pair_message.dart';
 import 'dart:convert';
 import 'dart:io';
 

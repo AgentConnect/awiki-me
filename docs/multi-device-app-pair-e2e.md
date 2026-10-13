@@ -17,6 +17,12 @@ recovery suites:
 - `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
   `messages_501` Schema 3 recovery case.
 
+分页恢复的接收完成不代表 501 条输入已经完成业务投影。两端取得同一个恢复后
+新消息 ID 后并行只读观察各自历史，批量场景最多等待 5 分钟，普通消息仍为
+90 秒；保持 ID、发送方、接收方、内容、方向、已提交状态及唯一性断言。
+不调用同步或处理重试来促成通过。隔离双 App 的 CPU 配额下，已观察到接收队列
+持续正常下降但超过 90 秒，故该预算只适用于这个批量场景；未在期限内投影仍失败。
+
 The management-grant case authorizes the exact joining device once through SAS
 and local user presence. Core then delivers the root automatically, without a
 second transfer confirmation. It observes accepted delivery, Registry management
