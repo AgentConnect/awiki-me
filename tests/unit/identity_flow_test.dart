@@ -16,9 +16,11 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -41,6 +43,130 @@ void main() {
     profileMarkdown: '',
     handle: 'cgw.awiki.ai',
   );
+
+  for (final brightness in Brightness.values) {
+    for (final locale in <String>['zh', 'en']) {
+      testWidgets(
+        'desktop lookup stages and stale result reset $brightness $locale',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(960, 720));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          final gateway = FakeAwikiGateway()
+            ..publicProfilesByQuery = {'cgw.awiki.ai': peerProfile};
+          await tester.pumpWidget(
+            Theme(
+              data: AwikiMeTheme.forPlatform(
+                TargetPlatform.macOS,
+                brightness: brightness,
+              ).materialTheme,
+              child: buildLocalizedTestApp(
+                locale: Locale(locale),
+                home: const _StartIdentityFlowHarness(),
+                gateway: gateway,
+                session: session,
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('start-conversation-button')));
+          await tester.pumpAndSettle();
+          final input = find.byKey(const Key('identity-lookup-input'));
+          final action = find.byKey(const Key('identity-start-chat-button'));
+          expect(action, findsNothing);
+          expect(
+            find.byKey(const Key('identity-lookup-close-button')).hitTestable(),
+            findsOneWidget,
+          );
+
+          // Invalid input stays in the search step, and editing clears the error.
+          await tester.enterText(input, '   ');
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await tester.pumpAndSettle();
+          final requiredText = locale == 'zh'
+              ? '请输入 handle 或 DID。'
+              : 'Enter a handle or DID.';
+          expect(find.text(requiredText), findsOneWidget);
+          await tester.enterText(input, 'cgw.awiki.ai');
+          await tester.pumpAndSettle();
+          expect(find.text(requiredText), findsNothing);
+
+          // Enter performs the same real lookup path as clicking Search.
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('identity-preview-display-name')),
+            findsOneWidget,
+          );
+          expect(action.hitTestable(), findsOneWidget);
+          expect(
+            tester.getRect(action).top,
+            greaterThan(tester.getRect(input).bottom),
+          );
+
+          // A changed query cannot confirm the previously resolved identity.
+          await tester.enterText(input, 'someone-else.awiki.ai');
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('identity-preview-display-name')),
+            findsNothing,
+          );
+          expect(action, findsNothing);
+          await tester.tap(
+            find.byKey(const Key('identity-lookup-close-button')),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(IdentityLookupDialog), findsNothing);
+          expect(find.byType(ChatPage), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  testWidgets('closing desktop lookup discards an in-flight result', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(960, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final gateway = FakeAwikiGateway();
+    final directory = _BlockingIdentityDirectoryService(gateway);
+    addTearDown(directory.completeIfPending);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _StartIdentityFlowHarness(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: [
+          directoryApplicationServiceProvider.overrideWithValue(directory),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('start-conversation-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      'peer.awiki.test',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pump();
+    expect(directory.started.isCompleted, isTrue);
+    expect(
+      tester
+          .widget<CupertinoTextField>(
+            find.byKey(const Key('identity-lookup-input')),
+          )
+          .enabled,
+      isFalse,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-close-button')));
+    await tester.pumpAndSettle();
+    directory.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(IdentityLookupDialog), findsNothing);
+    expect(find.byType(ChatPage), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   test('目录身份优先于缺失或冲突的展示资料', () {
     const peerDid = 'did:test:peer';

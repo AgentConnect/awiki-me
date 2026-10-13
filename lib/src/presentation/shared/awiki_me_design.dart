@@ -480,6 +480,10 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
 
   Color get background => semanticColors.canvas;
   Color get surface => semanticColors.surface;
+
+  /// Raised desktop/tablet overlays need separation from the page in dark mode.
+  Color get dialogSurface => isDark ? const Color(0xFF1C1C1E) : surface;
+  Color get dialogBorder => isDark ? const Color(0xFF48484A) : border;
   Color get subtleSurface => semanticColors.subtleSurface;
   Color get mutedSurface => semanticColors.mutedSurface;
   Color get navigationSurface => semanticColors.navigationSurface;

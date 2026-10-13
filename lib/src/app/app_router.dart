@@ -29,11 +29,14 @@ class AppNavigator {
     BuildContext context,
     WidgetBuilder builder, {
     bool rootNavigator = false,
+    // Embedded pane routes already sit outside the native traffic lights.
+    bool applyWindowChromeInset = true,
   }) {
     return Navigator.of(context, rootNavigator: rootNavigator).push<T>(
       CupertinoPageRoute<T>(
-        builder: (routeContext) =>
-            _pageBelowMacWindowChrome(routeContext, builder),
+        builder: (routeContext) => applyWindowChromeInset
+            ? _pageBelowMacWindowChrome(routeContext, builder)
+            : builder(routeContext),
       ),
     );
   }

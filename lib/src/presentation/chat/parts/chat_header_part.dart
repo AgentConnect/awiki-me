@@ -67,18 +67,20 @@ class _ChatHeader extends StatelessWidget {
           builder: (context, constraints) {
             return Row(
               children: <Widget>[
-                Flexible(
-                  child: _MacHeaderIdentityText(
-                    compactName: compactName,
-                    encryptedGroup: encryptedGroup,
-                    agentBadgeLabel: agentBadgeLabel,
-                    isDeletedAgentConversation: isDeletedAgentConversation,
-                    showAgentBadge: constraints.maxWidth >= 320,
-                    semanticLabel: openInfoLabel,
-                    onNameTap: onPeerInfoTap,
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _MacHeaderIdentityText(
+                      compactName: compactName,
+                      encryptedGroup: encryptedGroup,
+                      agentBadgeLabel: agentBadgeLabel,
+                      isDeletedAgentConversation: isDeletedAgentConversation,
+                      showAgentBadge: constraints.maxWidth >= 320,
+                      semanticLabel: openInfoLabel,
+                      onNameTap: onPeerInfoTap,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 if (showAddGroupMemberButton) ...<Widget>[
                   SizedBox(width: responsive.displayScaled(12)),
                   _ChatHeaderAddGroupMemberButton(

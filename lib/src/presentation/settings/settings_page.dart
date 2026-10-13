@@ -32,14 +32,20 @@ import 'notify_settings.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
+enum SettingsDetail { devices, language, display }
+
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
     super.key,
     this.embedded = false,
     this.onBack,
     this.onProfileTap,
+    this.selectedDetail,
+    this.onDetailSelected,
   });
 
+  final SettingsDetail? selectedDetail;
+  final ValueChanged<SettingsDetail>? onDetailSelected;
   final bool embedded;
   final VoidCallback? onBack;
   final VoidCallback? onProfileTap;
@@ -302,9 +308,11 @@ class SettingsPage extends ConsumerWidget {
               _DesktopSettingsProfileRow(session: session, onTap: onProfileTap),
               _DesktopSettingsRow(
                 key: const Key('settings-devices-row'),
+                selected: selectedDetail == SettingsDetail.devices,
                 title: l10n.settingsDevices,
-                onTap: () => AppNavigator.push<void>(
+                onTap: () => _openDetail(
                   context,
+                  SettingsDetail.devices,
                   (_) => const DevicesPage(),
                 ),
               ),
@@ -356,10 +364,12 @@ class SettingsPage extends ConsumerWidget {
             ],
             _DesktopSettingsRow(
               key: const Key('settings-language-row'),
+              selected: selectedDetail == SettingsDetail.language,
               title: l10n.settingsLanguage,
               trailingText: appLocaleModeLabel(context, localeMode),
-              onTap: () => AppNavigator.push<void>(
+              onTap: () => _openDetail(
                 context,
+                SettingsDetail.language,
                 (_) => const LanguageSelectionPage(),
               ),
             ),
@@ -374,13 +384,15 @@ class SettingsPage extends ConsumerWidget {
               ),
             _DesktopSettingsRow(
               key: const Key('settings-display-row'),
+              selected: selectedDetail == SettingsDetail.display,
               title: isDesktopPlatform
                   ? l10n.settingsDisplayAndWindow
                   : l10n.settingsAppearance,
               trailingText: '${(displayScale * 100).round()}%',
               trailingTextKey: const Key('settings-display-value'),
-              onTap: () => AppNavigator.push<void>(
+              onTap: () => _openDetail(
                 context,
+                SettingsDetail.display,
                 (_) => const DisplaySettingsPage(),
               ),
             ),
@@ -800,7 +812,21 @@ class SettingsPage extends ConsumerWidget {
         (identity.localIdentityId?.trim().isNotEmpty ?? false);
   }
 
+  void _openDetail(
+    BuildContext context,
+    SettingsDetail detail,
+    WidgetBuilder builder,
+  ) {
+    if (onDetailSelected != null) {
+      onDetailSelected!(detail);
+    } else {
+      AppNavigator.push<void>(context, builder);
+    }
+  }
+
   void _openHandleRecovery(BuildContext context, SessionIdentity identity) {
+    // Recovery pauses/replaces the authenticated shell. Its controller and
+    // activation fence must survive that shell being disposed.
     AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
@@ -811,6 +837,7 @@ class SettingsPage extends ConsumerWidget {
         localIdentityId: identity.localIdentityId!.trim(),
         allowPhoneInput: true,
       ),
+      rootNavigator: true,
     );
   }
 }
@@ -1181,8 +1208,10 @@ class _DesktopSettingsRow extends StatelessWidget {
     this.trailingTextKey,
     this.destructive = false,
     this.onTap,
+    this.selected = false,
   });
 
+  final bool selected;
   final String title;
   final String? trailingText;
   final Key? trailingTextKey;
@@ -1197,12 +1226,15 @@ class _DesktopSettingsRow extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       enabled: onTap != null,
+      selected: selected,
       semanticLabel: title,
       borderRadius: radius,
       builder: (context, state, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         decoration: BoxDecoration(
-          color: onTap != null && (state.hovered || state.pressed)
+          color:
+              state.selected ||
+                  (onTap != null && (state.hovered || state.pressed))
               ? awikiDesktopHoverFill(context)
               : awikiDesktopHoverFill(context).withValues(alpha: 0),
           borderRadius: radius,
