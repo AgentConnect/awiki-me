@@ -13,7 +13,7 @@
     },
     "awiki-im-core": {
       "repository": "https://github.com/AgentConnect/awiki-cli-rs2.git",
-      "commit": "eaf1a3ef1ec644cae4e784c881a177d6760b93d0",
+      "commit": "bc4480666a41c2931366de7fd8f208d3c4cb95dd",
       "pull_request": "https://github.com/AgentConnect/awiki-cli-rs2/pull/58"
     }
   }
