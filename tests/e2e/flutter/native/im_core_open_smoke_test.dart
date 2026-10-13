@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/tenant/builtin_tenant_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_secret_storage.dart';
 import 'package:awiki_me/src/data/storage/scope_secret_repository.dart';
 import 'package:awiki_me/src/data/storage/scope_secret_repository_factory.dart';
@@ -17,6 +18,7 @@ import '../../case_attestation.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(initializeBuiltinTenantCatalog);
   tearDownAll(
     () => E2eInvocationCompletionWriter.markFinished(
       failedTestCount: binding.failureMethodsDetails.length,
@@ -56,8 +58,8 @@ void main() {
       await expectLater(
         AppBootstrap.create(
           environment: AwikiEnvironmentConfig(
-            baseUrl: 'https://awiki.info',
-            didDomain: 'awiki.info',
+            baseUrl: builtinTenantCatalog.primary.backendOrigin,
+            didDomain: builtinTenantCatalog.primary.didHost,
           ),
           appStateRoot: root.path,
         ),
@@ -85,8 +87,8 @@ void main() {
         if (await root.exists()) await root.delete(recursive: true);
       });
       final environment = AwikiEnvironmentConfig(
-        baseUrl: 'https://awiki.info',
-        didDomain: 'awiki.info',
+        baseUrl: builtinTenantCatalog.primary.backendOrigin,
+        didDomain: builtinTenantCatalog.primary.didHost,
       );
       final first = await AppBootstrap.create(
         environment: environment,
@@ -99,8 +101,8 @@ void main() {
       );
       final registry = await store.loadRegistry();
       final tenant = registry.activeTenant;
-      expect(tenant.backendBaseUrl, 'https://awiki.info');
-      expect(tenant.didHost, 'awiki.info');
+      expect(tenant.backendBaseUrl, environment.baseUrl);
+      expect(tenant.didHost, environment.didDomain);
       final firstRecord = await repository.readExisting(tenant.storageScopeId);
       expect(firstRecord.status, ScopeSecretReadStatus.present);
       expect(first.storageScopeLayout?.scopeId, tenant.storageScopeId);
@@ -126,7 +128,9 @@ void main() {
       final legacyTenant = legacyTenants.singleWhere(
         (item) => item['tenant_profile_id'] == activeTenantProfileId,
       );
-      legacyTenant['backend_base_url'] = 'http://awiki.info';
+      legacyTenant['backend_base_url'] = Uri.parse(
+        environment.baseUrl,
+      ).replace(scheme: 'http').toString();
       await registryFile.writeAsString(jsonEncode(legacyRegistry), flush: true);
 
       final second = await AppBootstrap.create(
@@ -134,10 +138,7 @@ void main() {
         appStateRoot: root.path,
       );
       final migratedRegistry = await store.loadRegistry();
-      expect(
-        migratedRegistry.activeTenant.backendBaseUrl,
-        'https://awiki.info',
-      );
+      expect(migratedRegistry.activeTenant.backendBaseUrl, environment.baseUrl);
       expect(
         migratedRegistry.activeTenant.storageScopeId,
         tenant.storageScopeId,

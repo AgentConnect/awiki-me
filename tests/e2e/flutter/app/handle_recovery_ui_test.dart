@@ -16,6 +16,7 @@ import 'dart:async';
 import '../../delete_isolated_directory.dart';
 
 import '../support/enter_existing_account.dart';
+import '../support/confirm_local_credential_deletion.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -797,41 +798,94 @@ void main() {
         fail('Recovery OTP omitted its structured retry boundary.');
       }
       latestOtpRetryAt = recoveryOtpRetryAt;
-      final recoveryOtp = await _resolveOtp(
-        account: account,
-        purpose: _recoveryPurpose,
-        handle: bareHandle,
-        didDomain: config.didDomain,
-        operationId: operationId,
-      );
-      await _enterTextByKey(
-        tester,
-        const Key('handle-recovery-otp'),
-        recoveryOtp,
-      );
-      await _tapOne(
-        tester,
-        find.bySemanticsIdentifier('handle-recovery-verify'),
-        failure: 'The Handle Recovery verification action was unavailable.',
-      );
-      await _pumpUntil(
-        tester,
-        () {
-          final state = _recoveryUiContainer(
-            tester,
-          ).read(handleRecoveryProvider);
-          _failOnRecoveryError(
-            state,
-            'OTP verification',
-            coreDiagnostic: recordingRecoveryCore.lastSafeFailure,
-          );
-          return state.progress?.phase ==
-                  HandleRecoveryProgressPhase.prepared &&
-              !state.isBusy;
-        },
-        timeout: const Duration(minutes: 2),
-        failure: 'The UI did not reach the prepared Recovery phase.',
-      );
+      for (var factorRetries = 0; ; factorRetries += 1) {
+        // Resolve a fresh factor after every accepted OTP request. Never reuse
+        // the expired factor after waiting through an exchange rate limit.
+        final recoveryOtp = await _resolveOtp(
+          account: account,
+          purpose: _recoveryPurpose,
+          handle: bareHandle,
+          didDomain: config.didDomain,
+          operationId: operationId,
+        );
+        await _enterTextByKey(
+          tester,
+          const Key('handle-recovery-otp'),
+          recoveryOtp,
+        );
+        await _tapOne(
+          tester,
+          find.bySemanticsIdentifier('handle-recovery-verify'),
+          failure: 'The Handle Recovery verification action was unavailable.',
+        );
+        Duration? retryDelay;
+        await _pumpUntil(
+          tester,
+          () {
+            final state = _recoveryUiContainer(
+              tester,
+            ).read(handleRecoveryProvider);
+            if (!state.isBusy && state.error != null) {
+              final error = recordingRecoveryCore.prepareFailure;
+              retryDelay = remoteRecoveryPrepareRetryDelay(
+                code: error?.code,
+                statusCode: error?.statusCode,
+                retries: factorRetries,
+                expectedOperationId: operationId,
+                currentOperationId: state.otpOperationId,
+              );
+              if (retryDelay != null) return true;
+            }
+            _failOnRecoveryError(
+              state,
+              'OTP verification',
+              coreDiagnostic: recordingRecoveryCore.lastSafeFailure,
+            );
+            return state.progress?.phase ==
+                    HandleRecoveryProgressPhase.prepared &&
+                !state.isBusy;
+          },
+          timeout: const Duration(minutes: 2),
+          failure: 'The UI did not reach the prepared Recovery phase.',
+        );
+        if (retryDelay == null) break;
+        await Future<void>.delayed(retryDelay!);
+        // The successful request's boundary is retained above. The UI clears
+        // its expired cooldown while we wait for the factor-exchange window.
+        await _sendRecoveryOtpAfterBoundary(
+          tester,
+          container,
+          latestOtpRetryAt,
+        );
+        await _pumpUntil(
+          tester,
+          () {
+            final state = _recoveryUiContainer(
+              tester,
+            ).read(handleRecoveryProvider);
+            if (state.isBusy) return false;
+            _failOnRecoveryError(
+              state,
+              'Recovery factor refresh',
+              coreDiagnostic: recordingRecoveryCore.lastSafeFailure,
+            );
+            if (state.otpOperationId != operationId) {
+              fail('Recovery factor retry replaced the existing operation.');
+            }
+            return state.otpRequested;
+          },
+          timeout: const Duration(seconds: 45),
+          failure: 'Recovery factor refresh did not accept a fresh OTP.',
+        );
+        if (recordingRecoveryCore.requestOtpCalls !=
+                2 + recoveryOtpRateLimitRetries ||
+            recordingRecoveryCore.requestedHandle != fullHandle ||
+            recordingRecoveryCore.requestedPhone != account.phone ||
+            recordingRecoveryCore.requestedRetryAt == null) {
+          fail('Recovery factor refresh changed its exact identity context.');
+        }
+        latestOtpRetryAt = recordingRecoveryCore.requestedRetryAt!;
+      }
       if (recordingRecoveryCore.requestedLocalIdentityId !=
           expectedRecoveryLocalIdentityId) {
         fail('Recovery changed its exact local identity selector.');
@@ -6243,7 +6297,18 @@ Future<void> _waitForCompletedRecovery(
     }
     final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
     final progress = state.progress;
-    if (progress?.isCompleted ?? false) return;
+    if (progress?.isCompleted ?? false) {
+      if (!const bool.fromEnvironment(
+        'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET',
+      )) {
+        await _tapOne(
+          tester,
+          find.byKey(const Key('handle-recovery-enter-messages')),
+          failure: 'Completed Recovery must wait for explicit session entry.',
+        );
+      }
+      return;
+    }
     final error = state.error;
     if (error != null &&
         !(error.action == HandleRecoveryUiAction.exactResume &&
@@ -6369,10 +6434,15 @@ String _safeCoreFailureDetail(String message) {
 }
 
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() =>
+      _delegate.listPendingOperations();
+
   _RecordingHandleRecoveryCorePort(this._delegate);
 
   final HandleRecoveryCorePort _delegate;
   String? lastSafeFailure;
+  core.AwikiImCoreException? prepareFailure;
   HandleRecoveryProgress? lastProgress;
   int requestOtpCalls = 0;
   String? requestedHandle;
@@ -6463,9 +6533,18 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
     required String operationId,
     required String phone,
     required String otp,
-  }) => _recordProgress(
-    () => _delegate.prepare(operationId: operationId, phone: phone, otp: otp),
-  );
+  }) async {
+    prepareFailure = null;
+    try {
+      return await _recordProgress(
+        () =>
+            _delegate.prepare(operationId: operationId, phone: phone, otp: otp),
+      );
+    } on core.AwikiImCoreException catch (error) {
+      prepareFailure = error;
+      rethrow;
+    }
+  }
 
   @override
   Future<List<HandleRecoveryProgress>> listOperations(
@@ -7034,6 +7113,14 @@ Future<void> _retryRecoveryOtpAfterRateLimit(
   if (retryAt == null) {
     fail('The Recovery OTP rate limit omitted its retry receipt.');
   }
+  await _sendRecoveryOtpAfterBoundary(tester, container, retryAt);
+}
+
+Future<void> _sendRecoveryOtpAfterBoundary(
+  WidgetTester tester,
+  ProviderContainer container,
+  DateTime retryAt,
+) async {
   final delay = remoteHandleRecoveryPhoneCooldownDelay(
     retryAt: retryAt,
     now: DateTime.now().toUtc(),

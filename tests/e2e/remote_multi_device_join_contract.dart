@@ -35,6 +35,26 @@ Duration remoteHandleRecoveryPhoneCooldownDelay({
   return remaining + const Duration(seconds: 1);
 }
 
+/// Normal Recovery fixture preparation only: the reviewed service exchange
+/// window is 300 seconds. Never retry another error, operation, or a second 429.
+/// This is E2E scheduling, not an App/Core automatic retry policy.
+Duration? remoteRecoveryPrepareRetryDelay({
+  required String? code,
+  required int? statusCode,
+  required int retries,
+  required String expectedOperationId,
+  required String? currentOperationId,
+}) {
+  if (code != 'service_error' ||
+      statusCode != 429 ||
+      retries != 0 ||
+      expectedOperationId.isEmpty ||
+      currentOperationId != expectedOperationId) {
+    return null;
+  }
+  return const Duration(seconds: 301);
+}
+
 bool isSixDigitAsciiOtp(String value) {
   if (value.length != 6) {
     return false;

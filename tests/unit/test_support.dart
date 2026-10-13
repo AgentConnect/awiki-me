@@ -4859,6 +4859,9 @@ PersonalAgentBinding _personalAgentBinding({
 
 class _EmptyRecoveryContext implements HandleRecoveryCorePort {
   @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async => [];
+
+  @override
   Future<HandleRecoveryContext> inspectContext({
     required String handle,
     String? localIdentityId,

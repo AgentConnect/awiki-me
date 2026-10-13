@@ -97,6 +97,10 @@ scale. Incoming bubbles use the neutral message surface; outgoing bubbles use
 ink in light mode and near-white in dark mode, with `onOutgoingMessage` text.
 Attachments retain their own content sizing and interaction boundaries.
 
+Mention highlights use the reference's semibold (`FontWeight.w600`), underlined
+ink style in `_mentionHighlightStyle`. This is the sole exception to the regular
+typography contract; other text retains the existing regular-weight rule.
+
 The phone composer keeps a 44-unit minimum touch height. Attachment, emoji
 and (in groups) mention tools share one glass capsule on the left; the input is
 a glass capsule that grows to four lines and draws a 2-unit accent ring on
@@ -167,13 +171,20 @@ the title bar.
 - **Device management:** a full page with pending requests before authorized
   devices, glass cards on phones and theme surfaces elsewhere.
 - **Agents:** the Daemon tree sits in one glass card under a divider-free header
-  whose install action uses the circled "+".
+  whose install action uses the circled "+". Daemon and runtime nodes both use
+  the shared Agent `AvatarBadge`, including its generated fallback decoration;
+  the tree's geometry remains independent of the avatar's internal widgets.
 - **Desktop rail:** Messages, Agents, Contacts and Tasks, with Settings at the
   foot. The avatar shows a small dot while the realtime connection is up; it is
   not a presence claim to peers. The workbench destination remains routable but
   has no rail entry.
 
 ## Desktop (macOS) shell: flat
+
+Embedded Settings rows bound both the label and trailing value to the available
+sidebar width. Long localized update status or test version strings truncate
+visually with an ellipsis while retaining their full text for semantics; neither
+may overflow into the neighboring panel.
 
 The desktop layout follows the reference's flat window, not the phone glass.
 

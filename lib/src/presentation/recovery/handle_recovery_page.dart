@@ -313,10 +313,13 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     Text(
-                      _phaseLabel(context, progress.phase),
+                      state.error == null
+                          ? _phaseLabel(context, progress.phase)
+                          : _errorLabel(context, state.error!, otpCooldown),
                       key: const Key('handle-recovery-progress'),
                     ),
-                    if (progress.isStillConfirming) ...<Widget>[
+                    if (progress.isStillConfirming &&
+                        state.error == null) ...<Widget>[
                       const SizedBox(height: 10),
                       Text(
                         context.l10n.handleRecoveryStillConfirming,
@@ -402,11 +405,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                           'handle-recovery-start-after-quarantine',
                         ),
                         label: context.l10n.handleRecoveryStartNew,
-                        onPressed: state.isBusy
-                            ? null
-                            : () => ref
-                                  .read(handleRecoveryProvider.notifier)
-                                  .startAfterQuarantine(),
+                        onPressed: state.isBusy ? null : _confirmStartNew,
                       ),
                     ],
                   ],
@@ -424,23 +423,21 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                       localIdentityId: widget.localIdentityId,
                     ),
               ),
-            if (state.error != null) ...<Widget>[
+            if (state.error != null && progress == null) ...<Widget>[
               const SizedBox(height: 12),
               Text(
                 _errorLabel(context, state.error!, otpCooldown),
                 style: TextStyle(color: context.awikiTheme.danger),
               ),
-              if (state.error == HandleRecoveryUiError.localRegistryConflict &&
-                  Navigator.of(context).canPop()) ...<Widget>[
-                const SizedBox(height: 10),
-                AppSecondaryButton(
-                  key: const Key('handle-recovery-other-pending'),
-                  label: context.l10n.handleRecoveryOtherPending,
-                  onPressed: state.isBusy
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                ),
-              ],
+            ],
+            if (Navigator.of(context).canPop()) ...<Widget>[
+              const SizedBox(height: 12),
+              AppPressableText(
+                key: const Key('handle-recovery-use-other-account'),
+                semanticLabel: context.l10n.handleRecoveryUseOtherAccount,
+                onTap: state.isBusy ? null : () => Navigator.of(context).pop(),
+                child: Text(context.l10n.handleRecoveryUseOtherAccount),
+              ),
             ],
           ],
         ),
@@ -457,6 +454,32 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
   void _handlePhoneInputChanged() {
     if (_phoneInputRequired && _phoneController.text.trim().isNotEmpty) {
       setState(() => _phoneInputRequired = false);
+    }
+  }
+
+  Future<void> _confirmStartNew() async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(context.l10n.handleRecoveryStartNew),
+        content: Text(context.l10n.handleRecoveryRestartWarning),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.l10n.handleRecoveryStartNew),
+          ),
+        ],
+      ),
+    );
+    if (mounted && confirmed == true) {
+      _otpController.clear();
+      _phoneController.clear();
+      ref.read(handleRecoveryProvider.notifier).startAfterQuarantine();
     }
   }
 
@@ -493,7 +516,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     final epoch = controller.epoch;
     await activation;
     if (!mounted || !controller.isCurrent(epoch)) return;
-    await _activateRecoveredIdentityIfCompleted();
+    // Recovery completion is not login; the user chooses Enter Messages.
   }
 
   Future<void> _resume() async {
@@ -502,7 +525,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     final epoch = controller.epoch;
     await resuming;
     if (!mounted || !controller.isCurrent(epoch)) return;
-    await _activateRecoveredIdentityIfCompleted();
+    // Recovery completion is not login; the user chooses Enter Messages.
   }
 
   Future<void> _activateRecoveredIdentityIfCompleted() async {

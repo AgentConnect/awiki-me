@@ -69,7 +69,6 @@ void _registerStateMachineRecoveryE2e() {
       }
 
       final identityA = await register(handleA);
-      final identityB = await register(handleB);
       await bootstrap.appSessionService!.loginWithIdentity(
         identityA.identityId,
       );
@@ -138,12 +137,56 @@ void _registerStateMachineRecoveryE2e() {
           'The native local cut did not follow one confirmed real Commit (${proxy.safeDiagnostic},native=${held.lastSafeFailure}).',
         );
       }
-      await tester.pageBack();
+      await _smTap(
+        tester,
+        find.byKey(const Key('handle-recovery-back-button')),
+      );
       await _pumpUntil(
         tester,
         () => find.byType(OnboardingPage).evaluate().isNotEmpty,
         failure: 'Leaving pending Recovery did not return to onboarding.',
       );
+      // A has committed remotely and its local continuation is still held.
+      // Register a genuinely new Handle through the normal visible form before
+      // exercising its existing-identity login path.
+      await _smSubmitHandle(
+        tester,
+        appContainer,
+        account,
+        handleB,
+        config.didDomain,
+      );
+      await _pumpUntil(
+        tester,
+        () {
+          final session = appContainer.read(sessionProvider).session;
+          return session?.handle == '$handleB.${config.didDomain}' &&
+              appContainer.read(appRuntimeProvider).activatedDid ==
+                  session?.did &&
+              find.byType(OnboardingPage).evaluate().isEmpty;
+        },
+        timeout: const Duration(minutes: 2),
+        failure:
+            'The new Handle did not register and activate while A was pending.',
+        safeDiagnostic: () {
+          final session = appContainer.read(sessionProvider).session;
+          return 'session=${session != null},target=${session?.handle == '$handleB.${config.didDomain}'},'
+              'activated=${appContainer.read(appRuntimeProvider).activatedDid == session?.did},'
+              'onboarding=${find.byType(OnboardingPage).evaluate().isNotEmpty}';
+        },
+      );
+      // Ordinary registration retains the current shell destination. Navigate
+      // to messages explicitly; only Recovery promises a message-page reset.
+      appContainer
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.messages);
+      await _smWaitMessages(
+        tester,
+        appContainer,
+        '$handleB.${config.didDomain}',
+      );
+      final identityB = appContainer.read(sessionProvider).session!;
+      await _smLogout(tester, appContainer, delete: false);
       final bCredentials = appContainer
           .read(sessionProvider)
           .localCredentials
@@ -152,6 +195,7 @@ void _registerStateMachineRecoveryE2e() {
       if (bCredentials.length != 1) {
         fail('The independent B login credential is missing.');
       }
+      await _smTap(tester, find.byKey(const Key('onboarding-identity-entry')));
       await _smTap(
         tester,
         find.byKey(
@@ -206,7 +250,7 @@ void _registerStateMachineRecoveryE2e() {
         startedAt: startedAt,
         phases: const [
           'real_a_commit_held_after_local_cut',
-          'visible_b_login_and_recovery',
+          'visible_b_registration_login_and_recovery',
           'late_a_error_finally_preserved_b_busy_target',
           'b_session_feedback_navigation_unchanged',
         ],
@@ -222,7 +266,10 @@ void _registerStateMachineRecoveryE2e() {
                 null,
         failure: 'B pre-attempt operation was not explicitly discarded.',
       );
-      await tester.pageBack();
+      await _smTap(
+        tester,
+        find.byKey(const Key('handle-recovery-back-button')),
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
       await bootstrap.dispose();
@@ -288,7 +335,10 @@ void _registerStateMachineRecoveryE2e() {
       );
       expect(find.byKey(const Key('handle-recovery-activate')), findsNothing);
       expect(find.byKey(const Key('handle-recovery-busy')), findsNothing);
-      await tester.pageBack();
+      await _smTap(
+        tester,
+        find.byKey(const Key('handle-recovery-back-button')),
+      );
       await _pumpUntil(
         tester,
         () => find.byType(OnboardingPage).evaluate().isNotEmpty,
@@ -751,18 +801,22 @@ Future<void> _smLogout(
     () => find.byType(AppConfirmationDialog).evaluate().length == 1,
     failure: 'The destructive-action confirmation is missing.',
   );
-  final dialog = tester.widget<AppConfirmationDialog>(
-    find.byType(AppConfirmationDialog),
-  );
-  await _smTap(
-    tester,
-    find
-        .descendant(
-          of: find.byType(AppConfirmationDialog),
-          matching: find.text(dialog.confirmLabel),
-        )
-        .last,
-  );
+  if (delete) {
+    await confirmLocalCredentialDeletion(tester);
+  } else {
+    final dialog = tester.widget<AppConfirmationDialog>(
+      find.byType(AppConfirmationDialog),
+    );
+    await _smTap(
+      tester,
+      find
+          .descendant(
+            of: find.byType(AppConfirmationDialog),
+            matching: find.text(dialog.confirmLabel),
+          )
+          .last,
+    );
+  }
   await _pumpUntil(
     tester,
     () =>

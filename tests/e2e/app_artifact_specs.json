@@ -1,7 +1,25 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-28.avatar-artifact-v1",
+  "sourceRevision": "2026-10-12.isolated-tenant-config-v1",
+  "targetTenantCatalogs": {
+    "singapore-test-fix": "configs/singapore-test-fix-tenants.json"
+  },
   "artifacts": [
+    {
+      "name": "registration-domain-discovery",
+      "target": "integration_test/registration_domain_discovery_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.regdiscovery",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true"
+      ],
+      "consumerSuites": [
+        "registration-domain-discovery"
+      ]
+    },
     {
       "name": "agent-avatars",
       "target": "integration_test/desktop_agent_avatar_test.dart",

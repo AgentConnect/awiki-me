@@ -14,6 +14,8 @@ import '../shared/awiki_me_design.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'group_encryption_provider.dart';
 import '../devices/devices_provider.dart';
+import '../devices/device_capability_provider.dart';
+import '../../application/ports/device_capability_upgrade_port.dart';
 
 class GroupEncryptionStatusCard extends ConsumerStatefulWidget {
   const GroupEncryptionStatusCard({super.key, required this.groupDid});
@@ -53,6 +55,12 @@ class _GroupEncryptionStatusCardState
   @override
   Widget build(BuildContext context) {
     if (!ref.watch(multiDeviceGroupE2eeEnabledProvider)) {
+      return const SizedBox.shrink();
+    }
+    final capability = ref.watch(deviceCapabilityProvider(null));
+    if (capability.hasError ||
+        (capability.valueOrNull != null &&
+            capability.valueOrNull!.state != DeviceCapabilityState.ready)) {
       return const SizedBox.shrink();
     }
     ref.listen<int>(deviceSecurityFactsRevisionProvider, (previous, next) {

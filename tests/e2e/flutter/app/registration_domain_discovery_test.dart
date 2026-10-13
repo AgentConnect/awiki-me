@@ -28,9 +28,9 @@ void main() {
   testWidgets(
     'real tenant registration discovery selects the visible contact method',
     (tester) async {
-      const path = String.fromEnvironment(
-        'AWIKI_REGISTRATION_DISCOVERY_FIXTURE',
-      );
+      final path =
+          Platform.environment['AWIKI_REGISTRATION_DISCOVERY_FIXTURE'] ??
+          const String.fromEnvironment('AWIKI_REGISTRATION_DISCOVERY_FIXTURE');
       expect(
         path,
         isNotEmpty,

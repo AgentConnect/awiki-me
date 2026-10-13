@@ -20,6 +20,8 @@ import '../shared/widgets/awiki_glass_controls.dart';
 import 'device_join_approval_sheet.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
+import 'device_capability_card.dart';
+import 'device_capability_provider.dart';
 import 'identity_services_page.dart';
 
 class DevicesPage extends ConsumerStatefulWidget {
@@ -111,6 +113,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
             ),
           ),
           const SizedBox(height: 16),
+          const DeviceCapabilityCard(),
           if (state.error != null) ...<Widget>[
             AppSurface(
               color: context.awikiTheme.dangerContainer,
@@ -240,6 +243,11 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                               ? () => _grantManagement(registry.devices[index])
                               : null,
                         ),
+                        if (canManage && !registry.devices[index].isCurrent)
+                          DeviceCapabilityCard(
+                            targetDeviceId:
+                                registry.devices[index].protocolDeviceId,
+                          ),
                         if (index != registry.devices.length - 1)
                           const AppSectionDivider(),
                       ],
@@ -418,6 +426,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _refresh() async {
+    ref.invalidate(deviceCapabilityProvider);
     final state = ref.read(devicesProvider);
     if (_isRefreshing || state.isLoading) return;
     setState(() => _isRefreshing = true);

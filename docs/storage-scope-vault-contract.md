@@ -296,6 +296,8 @@ ActiveSyncAccountBinding.ownerIdentityId
 
 新设备和已有设备的恢复语义不同：
 
+- 登录页通过 Core 的 scope-wide pending operation 列表显示旧任务，不依赖输入 Handle，不自动续办或发送验证码。身份枚举冲突映射为明确的本地状态提示；用户可随时返回。恢复完成后显示显式进入消息按钮，不自动登录。Core 允许开始新恢复时另行确认手机号验证、设备重新加入和历史迁移限制；结果未知的任务仍续办原 operation。
+
 - Handle Recovery 已由服务端提交但本机仍在 `identity_switched` 时，App 从 Core
   的精确 operation 上下文显示“继续恢复”，不重新申请短信验证码。只有 Core 验证
   旧版重复 Handle 投影可安全收敛后才能退役旧活跃投影；App 不直接修改 Registry、
@@ -308,8 +310,8 @@ ActiveSyncAccountBinding.ownerIdentityId
   Vault/open、其他枚举错误及逐身份 custody 校验失败仍阻断启动；实际身份修复仍由
   Core 验证和完成，App 不修改权威索引。
 
-- 本次修复的跨仓源码联调由 `dependencies.source.json` 固定 Core PR #48 的完整提交；
-  主 CI 的 release/0910 wrapper 引用使用同一提交，其 Core 清单与 Cargo 锁再固定
+- 跨仓源码联调由 `dependencies.source.json` 固定当前 Core PR 的完整消费端提交；
+  显式 source CI 的 `cli_ref` 使用该提交，其 Core 清单与 Cargo 锁再固定
   实际 Rust SDK / ANP / Identity 来源。正式 SDK 发布和客户端打包仍遵循各自门禁。
 
 - 新 replica 使用 tail-only bootstrap，从服务端当前流尾开始，不导入加入前的普通消息。
@@ -443,6 +445,8 @@ Store。schema 1 到 26 的归档是明确的预发布兼容退场策略，不�
 
 ## 8. Route、switch 与删除规则
 
+显式切换租户必须先持久化退出原会话，并在目标 runtime 启动前清除目标的 active identity 选择。切换成功、失败回滚以及随后重启都停留登录页；已有身份仅供用户主动选择，不自动进入。普通已登录会话的重启仍可恢复。切换不删除身份、密钥、历史或未完成的 Recovery。
+
 - display name可原位修改，不改变scope。
 - backend URL只有在server证明相同`remote_realm_id`/service identity时可原位修改。
 - 公网backend URL必须使用HTTPS；只有`localhost`、`127.0.0.1`、`::1`等loopback地址
@@ -562,6 +566,10 @@ Production不读取或迁移：
 - `awiki-harness/features/multi-tenant-federated-identity.md`
 
 ### Recovery 在途调用的 runtime 与会话边界
+
+未完成的 Recovery 是可选的次要入口。用户名为空时只显示当前 scope 的入口；填写用户名后只查询该精确 Handle，不重复展示其他 Handle 的恢复文案，不自动恢复或弹启动错误。另一用户名可正常登录或注册，旧任务和密钥保留。恢复失败只在状态区域显示一次，并保留返回登录的路径；重新验证、重新开始及隔离仅使用 Core 授权的动作，未知远端提交结果不得直接丢弃。
+
+登录后独立检查设备群能力。当前 ready admin 可自动追加兼容能力；其他设备需管理设备确认其客户端已升级。群与设备页面提供局部状态和刷新，不阻塞账号会话，不重复触发登录错误。租户或身份切换后，迟到查询不得发起升级，旧操作结果不得覆盖当前页面。原群与历史数据保持不变，不能兼容的旧群通过保留历史、另建新群处理。
 
 已 dispose 的 `AwikiImCoreRuntime` 不可再次 open；在途 open 完成时关闭其新实例，不重新发布到旧租户。Recovery 会话激活复用现有 `AppSessionTransition` 的临时 caller-validity 检查，在每个既有 transition 检查点拒绝失效页面。完成后解除该临时检查，正常会话不依赖 Recovery 页存活；失败清理仍按 exact transition，不清除新页面的会话。
 

@@ -11,8 +11,6 @@ void main() {
   testWidgets(
     'Android Notify settings save and reopen locally without a server, and report write failure',
     (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -106,7 +104,52 @@ void main() {
       expect(find.text('会话免打扰尚未同步，任务提醒已暂停。'), findsOneWidget);
       expect(find.text('同步设置'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      debugDefaultTargetPlatformOverride = null;
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
+
+  for (final layout in [
+    (name: 'compact', size: const Size(390, 844), embedded: false),
+    (name: 'standalone', size: const Size(900, 1000), embedded: false),
+    (name: 'embedded', size: const Size(1200, 900), embedded: true),
+  ]) {
+    for (final signedIn in [true, false]) {
+      testWidgets(
+        'task notification entry on ${layout.name}, signedIn=$signedIn',
+        (tester) async {
+          tester.view.physicalSize = layout.size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            buildLocalizedTestApp(
+              home: SettingsPage(embedded: layout.embedded),
+              session: signedIn
+                  ? const SessionIdentity(
+                      did: 'did:test:notify-entry',
+                      credentialName: 'notify-entry',
+                      displayName: 'Notify',
+                    )
+                  : null,
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(const Key('settings-notify-row')),
+            signedIn && defaultTargetPlatform == TargetPlatform.android
+                ? findsOneWidget
+                : findsNothing,
+          );
+          expect(tester.takeException(), isNull);
+        },
+        variant: const TargetPlatformVariant({
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+          TargetPlatform.linux,
+          TargetPlatform.macOS,
+          TargetPlatform.windows,
+        }),
+      );
+    }
+  }
 }

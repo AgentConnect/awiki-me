@@ -33,6 +33,7 @@ import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
 import 'group_encryption_status_card.dart';
+import '../devices/device_capability_card.dart';
 import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
@@ -416,6 +417,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                 ),
                 if (ref.watch(multiDeviceGroupE2eeEnabledProvider)) ...<Widget>[
                   const SizedBox(height: 16),
+                  const DeviceCapabilityCard(),
                   GroupEncryptionStatusCard(groupDid: _group.groupId),
                 ],
                 const SizedBox(height: 16),

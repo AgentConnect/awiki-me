@@ -249,10 +249,11 @@ void appPairAdminMain() {
       );
       final startButton = find.ancestor(
         of: startVerification,
-        matching: find.byType(AppPrimaryButton),
+        matching: find.byType(AwikiPillButton),
       );
       if (startButton.evaluate().length != 1 ||
-          tester.widget<AppPrimaryButton>(startButton).onPressed == null) {
+          tester.widget<AwikiPillButton>(startButton).onPressed == null ||
+          tester.widget<AwikiPillButton>(startButton).busy) {
         fail('The App-pair verification action was not enabled.');
       }
       await _tapOne(
@@ -324,11 +325,10 @@ void appPairAdminMain() {
             find.byKey(const Key('device-approval-sas')).evaluate().length == 1,
         failure: 'The admin App did not render its local SAS.',
       );
-      final adminSas =
-          tester
-              .widget<Text>(find.byKey(const Key('device-approval-sas')))
-              .data ??
-          '';
+      final adminSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-approval-sas')),
+      );
       if (!_validSas(adminSas) ||
           !await coordinator.submitAndCompareSas(
             'admin',
@@ -342,10 +342,7 @@ void appPairAdminMain() {
       if (approveAction.evaluate().isNotEmpty) {
         fail('App-pair approval was enabled before SAS confirmation.');
       }
-      final sasSwitch = find.descendant(
-        of: find.byKey(const Key('device-sas-confirmation')),
-        matching: find.byType(CupertinoSwitch),
-      );
+      final sasSwitch = find.byKey(const Key('device-sas-confirmation'));
       await _tapOne(
         tester,
         sasSwitch,
@@ -706,9 +703,10 @@ void appPairJoinerMain() {
         timeout: const Duration(seconds: 60),
         failure: 'The joining App did not derive its local SAS.',
       );
-      final joinerSas =
-          tester.widget<Text>(find.byKey(const Key('device-join-sas'))).data ??
-          '';
+      final joinerSas = readRenderedSas(
+        tester,
+        find.byKey(const Key('device-join-sas')),
+      );
       if (!_validSas(joinerSas) ||
           !await coordinator.submitAndCompareSas(
             'joiner',
@@ -874,18 +872,36 @@ Future<void> _appPairAdminRejoin(
           .joinRequests
           .where((request) => request.joinSessionId == sessionId)
           .toList();
-      return requests.length == 1 && requests.single.canStartVerification;
+      return requests.length == 1 &&
+          requests.single.protocolDeviceId == deviceId &&
+          requests.single.canStartVerification;
     },
     timeout: const Duration(minutes: 2),
     failure: 'The original admin did not receive the post-promotion Join.',
   );
-  final requestRow = find.text(deviceId);
-  await tester.ensureVisible(requestRow);
+  final requestEntry = find.bySemanticsIdentifier('device-join-request-entry');
+  await _pumpUntil(
+    tester,
+    () => requestEntry.hitTestable().evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The post-promotion global Join review entry was unavailable.',
+  );
   await _tapOne(
     tester,
-    requestRow,
-    failure: 'The post-promotion Join review row was unavailable.',
+    requestEntry,
+    failure: 'The post-promotion global Join review entry was unavailable.',
   );
+  final approval = find.byType(DeviceJoinApprovalSheet);
+  await _pumpUntil(
+    tester,
+    () => approval.evaluate().length == 1,
+    failure: 'The post-promotion Join approval sheet did not open.',
+  );
+  final selected = tester.widget<DeviceJoinApprovalSheet>(approval).request;
+  if (selected.joinSessionId != sessionId ||
+      selected.protocolDeviceId != deviceId) {
+    fail('The post-promotion review selected a different Join request.');
+  }
   final verify = find.bySemanticsIdentifier('multi-device-start-verification');
   await _pumpUntil(
     tester,
@@ -919,17 +935,14 @@ Future<void> _appPairAdminRejoin(
     timeout: const Duration(seconds: 90),
     failure: 'The original admin did not derive the second SAS.',
   );
-  final sas = tester.widget<Text>(sasView).data ?? '';
+  final sas = readRenderedSas(tester, sasView);
   if (!_validSas(sas) || !await coordinator.submitAndCompareSas('admin', sas)) {
     fail('Post-promotion App SAS values did not match.');
   }
   final beforePresence = presence.calls;
   await _tapOne(
     tester,
-    find.descendant(
-      of: find.byKey(const Key('device-sas-confirmation')),
-      matching: find.byType(CupertinoSwitch),
-    ),
+    find.byKey(const Key('device-sas-confirmation')),
     failure: 'The second SAS confirmation was unavailable.',
   );
   await _tapOne(
@@ -1066,7 +1079,7 @@ Future<void> _appPairJoinerRejoin(
     timeout: const Duration(seconds: 90),
     failure: 'Fresh Join did not derive the second SAS.',
   );
-  final sas = tester.widget<Text>(sasView).data ?? '';
+  final sas = readRenderedSas(tester, sasView);
   if (!_validSas(sas) ||
       !await coordinator.submitAndCompareSas('joiner', sas)) {
     fail('Fresh Join SAS values did not match.');
@@ -3453,14 +3466,20 @@ Future<void> _leaveCompletedAppPairApproval(WidgetTester tester) async {
     () => approval.evaluate().length == 1,
     failure: 'The completed admin approval page was unavailable.',
   );
-  final back = find.descendant(
+  final done = find.descendant(
     of: approval,
-    matching: find.byType(TopBarActionButton),
+    matching: find.text(tester.element(approval).l10n.commonDone),
+  );
+  await _pumpUntil(
+    tester,
+    () => done.hitTestable().evaluate().length == 1,
+    timeout: const Duration(seconds: 30),
+    failure: 'The completed admin approval Done action was unavailable.',
   );
   await _tapOne(
     tester,
-    back,
-    failure: 'The completed admin approval Back action was unavailable.',
+    done,
+    failure: 'The completed admin approval Done action was unavailable.',
   );
   await _pumpUntil(
     tester,
@@ -5099,6 +5118,7 @@ Future<ChatMessage> _waitForAppPairMessage({
   required String senderDid,
   required String receiverDid,
   required bool isMine,
+  Duration timeout = const Duration(seconds: 90),
 }) async {
   if (messaging is! ConversationTimelineMessagingService) {
     fail('The App-pair messaging service lacks conversation timeline reads.');
@@ -5107,37 +5127,31 @@ Future<ChatMessage> _waitForAppPairMessage({
   final conversation = AppConversationReadRef.fromConversationId(
     conversationId,
   );
-  final deadline = DateTime.now().add(const Duration(seconds: 90));
-  var lastMessages = const <ChatMessage>[];
-  while (DateTime.now().isBefore(deadline)) {
-    final messages = await timeline.loadConversationTimeline(
-      conversation,
-      limit: 20,
-    );
-    lastMessages = messages;
-    final matches = messages
-        .where((message) => message.content == content)
-        .toList(growable: false);
-    if (matches.length > 1) {
-      fail('The App-pair history projected a duplicate exact message.');
-    }
-    if (matches.length == 1) {
-      final message = matches.single;
-      if (message.remoteId == messageId &&
-          message.senderDid == senderDid &&
-          message.receiverDid == receiverDid &&
-          message.isMine == isMine &&
-          message.sendState == MessageSendState.sent) {
-        return message;
-      }
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 750));
-  }
+  final observation = await waitForAppPairMessage(
+    read: () => timeline.loadConversationTimeline(conversation, limit: 20),
+    content: content,
+    messageId: messageId,
+    senderDid: senderDid,
+    receiverDid: receiverDid,
+    isMine: isMine,
+    timeout: timeout,
+  );
+  if (observation.match case final message?) return message;
+  final lastMessages = observation.messages;
   final contentMatches = lastMessages
       .where((message) => message.content == content)
       .toList(growable: false);
   final exact = contentMatches.length == 1 ? contentMatches.single : null;
   final sync = container.read(messageSyncCoordinatorProvider);
+  final historyDiagnostic = await _appPairHistoryDiagnostic(
+    container: container,
+    conversationId: conversationId,
+    preview: content,
+  );
+  final syncDiagnostic = await _appPairUnreadDiagnostic(
+    container,
+    conversationId,
+  );
   fail(
     'The App-pair history did not converge the exact Direct message '
     '(messages=${lastMessages.length}, contentMatches=${contentMatches.length}, '
@@ -5148,7 +5162,8 @@ Future<ChatMessage> _waitForAppPairMessage({
     'mine=${exact?.isMine == isMine}, state=${exact?.sendState.name ?? 'none'}, '
     'lastSync=${sync.lastReason ?? 'none'}, '
     'syncError=${_appPairErrorDiagnostic(sync.lastError)}, '
-    'syncing=${sync.isSyncing}).',
+    'syncing=${sync.isSyncing}, '
+    '$historyDiagnostic, syncDiagnostic=$syncDiagnostic).',
   );
 }
 

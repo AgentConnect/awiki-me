@@ -63,3 +63,18 @@ Invite at least three to five people who do not know the current architecture an
 - [ ] After 60 seconds, they can decide whether they are a target user.
 - [ ] Within five minutes, they complete a meaningful first success.
 - [ ] They can accurately state the maturity, platform status, and security boundaries.
+
+## Explicit installed-package smoke
+
+The manually selected CI `package_smoke_run` lane installs existing normal product
+packages without rebuilding. Supply the exact aggregate `package_smoke_artifact`
+name and full `package_smoke_app_sha` / `package_smoke_core_sha` pins. The lane
+requires a successful manual `package-app.yml` run in this repository and verifies
+manifest source identities, target, size and SHA256 before installation. It checks
+native macOS architecture/signatures, the existing Windows native smoke, or an
+Android emulator whose advertised ABI actually supports the arm64 APK. Emulator
+startup does not attest physical-device behavior or full product acceptance.
+
+## 2026-10-13 合并依赖状态
+
+本批临时源码清单已撤除。CI 默认 Core checkout 固定到 `92576021650fb587203bdd856286f62a73bc71b2`，由该提交的 registry manifest/lock 使用 ANP `1.0.6`、Identity `0.2.5`、Core `0.1.7`。Dart facade 继续来自对应 Core checkout 的仓内 package，未改成不存在的 pub.dev 发布。历史源码联调结果不代表正式组合 E2E；产品 E2E、安装包和跨平台人工验收待后续执行。

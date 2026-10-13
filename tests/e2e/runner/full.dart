@@ -35,6 +35,9 @@ Future<void> runDesktopFull({
     commands.redactor.addSecret(secret);
   }
   final platform = config.platform ?? DesktopE2ePlatform.fromHost();
+  if (options.macosForeground && platform != DesktopE2ePlatform.macos) {
+    throw E2eFailure('--macos-foreground requires a macOS target.');
+  }
   if (!options.dryRun) {
     (await E2eHostPlatform.detect()).requireOperatingSystem(platform.name);
   }
@@ -73,6 +76,7 @@ Future<void> runDesktopFull({
       'mode': options.dryRun ? 'dry-run' : 'real',
       'dryRun': options.dryRun,
       'prepareOnly': options.prepareOnly,
+      'macosForeground': options.macosForeground,
       'platform': platform.name,
       'startedAt': startedAt,
       'totalMs': timer.elapsedMilliseconds,
@@ -163,6 +167,7 @@ Future<void> runDesktopFull({
             '--run-id',
             childId,
             if (options.prepareOnly) '--prepare-only',
+            if (options.macosForeground) '--macos-foreground',
           ];
     child['command'] = commands.redactor.redact(
       '${native ? 'bash' : 'dart'} ${args.join(' ')}',

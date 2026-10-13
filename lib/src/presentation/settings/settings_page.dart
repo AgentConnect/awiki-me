@@ -28,6 +28,7 @@ import '../shared/widgets/awiki_desktop.dart';
 import '../shared/widgets/awiki_glass.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
+import 'notify_settings.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
@@ -53,11 +54,22 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final session = ref.watch(sessionProvider).session;
+    final supportsHandleRecovery =
+        session != null &&
+        ref
+                .watch(identityMethodCapabilitiesProvider(session.did))
+                .valueOrNull
+                ?.handleRecovery ==
+            true;
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final activeTenant = ref.watch(activeAppTenantProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
+    final supportsTaskNotifications =
+        session != null &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android;
     final isDesktopPlatform =
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.windows;
@@ -188,6 +200,18 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
+          if (supportsTaskNotifications) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-notify-row'),
+              title: '任务通知',
+              leading: leading(const _SettingsIcon(icon: CupertinoIcons.bell)),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const NotifySettingsPage(),
+              ),
+            ),
+          ],
           ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
@@ -219,17 +243,21 @@ class SettingsPage extends ConsumerWidget {
       _SettingsSection(
         key: const Key('settings-session-section'),
         children: <Widget>[
-          AppListTile(
-            key: const Key('settings-recover-handle-did-row'),
-            title: l10n.settingsRecoverHandleDid,
-            leading: leading(
-              const _SettingsIcon(icon: CupertinoIcons.arrow_counterclockwise),
+          if (supportsHandleRecovery) ...[
+            AppListTile(
+              key: const Key('settings-recover-handle-did-row'),
+              title: l10n.settingsRecoverHandleDid,
+              leading: leading(
+                const _SettingsIcon(
+                  icon: CupertinoIcons.arrow_counterclockwise,
+                ),
+              ),
+              onTap: _canRecoverHandleDid(session)
+                  ? () => _openHandleRecovery(context, session)
+                  : null,
             ),
-            onTap: _canRecoverHandleDid(session)
-                ? () => _openHandleRecovery(context, session!)
-                : null,
-          ),
-          const AppSectionDivider(),
+            const AppSectionDivider(),
+          ],
           AppListTile(
             title: l10n.settingsExportCredential,
             leading: leading(
@@ -345,6 +373,15 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (supportsTaskNotifications)
+              _DesktopSettingsRow(
+                key: const Key('settings-notify-row'),
+                title: '任务通知',
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const NotifySettingsPage(),
+                ),
+              ),
             _DesktopSettingsRow(
               key: const Key('settings-display-row'),
               selected: selectedDetail == SettingsDetail.display,
@@ -365,13 +402,14 @@ class SettingsPage extends ConsumerWidget {
           key: const Key('settings-session-section'),
           title: l10n.settingsSecuritySection,
           children: <Widget>[
-            _DesktopSettingsRow(
-              key: const Key('settings-recover-handle-did-row'),
-              title: l10n.settingsRecoverHandleDid,
-              onTap: _canRecoverHandleDid(session)
-                  ? () => _openHandleRecovery(context, session!)
-                  : null,
-            ),
+            if (supportsHandleRecovery)
+              _DesktopSettingsRow(
+                key: const Key('settings-recover-handle-did-row'),
+                title: l10n.settingsRecoverHandleDid,
+                onTap: _canRecoverHandleDid(session)
+                    ? () => _openHandleRecovery(context, session)
+                    : null,
+              ),
             _DesktopSettingsRow(
               key: const Key('settings-export-credential-row'),
               title: l10n.settingsExportCredential,
@@ -535,6 +573,17 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (supportsTaskNotifications)
+              _QuietSettingsRow(
+                key: const Key('settings-notify-row'),
+                icon: CupertinoIcons.bell,
+                title: '任务通知',
+                height: optionRowHeight,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const NotifySettingsPage(),
+                ),
+              ),
             _QuietSettingsRow(
               key: const Key('settings-display-row'),
               icon: CupertinoIcons.textformat_size,
@@ -559,16 +608,17 @@ class SettingsPage extends ConsumerWidget {
             height: sectionTitleHeight,
           ),
           children: <Widget>[
-            _QuietSettingsRow(
-              key: const Key('settings-recover-handle-did-row'),
-              icon: CupertinoIcons.arrow_counterclockwise,
-              iconKey: const Key('settings-recover-handle-did-icon'),
-              title: l10n.settingsRecoverHandleDid,
-              height: optionRowHeight,
-              onTap: _canRecoverHandleDid(session)
-                  ? () => _openHandleRecovery(context, session!)
-                  : null,
-            ),
+            if (supportsHandleRecovery)
+              _QuietSettingsRow(
+                key: const Key('settings-recover-handle-did-row'),
+                icon: CupertinoIcons.arrow_counterclockwise,
+                iconKey: const Key('settings-recover-handle-did-icon'),
+                title: l10n.settingsRecoverHandleDid,
+                height: optionRowHeight,
+                onTap: _canRecoverHandleDid(session)
+                    ? () => _openHandleRecovery(context, session)
+                    : null,
+              ),
             _QuietSettingsRow(
               key: const Key('settings-export-credential-row'),
               icon: CupertinoIcons.arrow_down_to_line,
@@ -1199,6 +1249,7 @@ class _DesktopSettingsRow extends StatelessWidget {
         child: Row(
           children: <Widget>[
             Expanded(
+              flex: 3,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1217,7 +1268,8 @@ class _DesktopSettingsRow extends StatelessWidget {
             ),
             if (trailingText != null) ...<Widget>[
               SizedBox(width: responsive.displayScaled(8)),
-              Flexible(
+              Expanded(
+                flex: 2,
                 child: Text(
                   trailingText!,
                   key: trailingTextKey,

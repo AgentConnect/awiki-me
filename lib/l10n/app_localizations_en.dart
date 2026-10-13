@@ -3776,7 +3776,41 @@ class AppLocalizationsEn extends AppLocalizations {
       'Confirm that you understand the recovery effects first.';
 
   @override
-  String get handleRecoveryFailed => 'Recovery failed. Try again later.';
+  String get handleRecoveryFailed =>
+      'Local setup could not finish. You can retry or go back to use another account.';
+
+  @override
+  String get handleRecoveryCheckRecords => 'Check recovery records';
+
+  @override
+  String get deviceCapabilityRetry =>
+      'Group setup is not complete yet. You can retry later; sign-in is unaffected.';
+
+  @override
+  String get deviceCapabilityApproval =>
+      'On an updated management device, open Devices and approve current group support for this device, then refresh here. Your identity and data are preserved.';
+
+  @override
+  String get deviceCapabilityUnsupported =>
+      'This device uses an older group protocol. Existing data is preserved; ask the group manager to create a new group where compatibility is unavailable.';
+
+  @override
+  String get deviceCapabilityBlocked =>
+      'This device has pending identity setup. Complete it in Devices first.';
+
+  @override
+  String get deviceCapabilityAvailable =>
+      'Current group support is available for this device. Identity and history are preserved.';
+
+  @override
+  String get deviceCapabilityApprove => 'Enable current group support';
+
+  @override
+  String get deviceCapabilityConfirm =>
+      'Confirm that this device runs the updated client. Only its capability declaration changes; keys, identity and history are preserved.';
+
+  @override
+  String get handleRecoveryUseOtherAccount => 'Go back to use another account';
 
   @override
   String get handleRecoveryOtpRequested =>
@@ -3800,6 +3834,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get handleRecoveryQuarantined =>
       'The unavailable operation is quarantined and retained in Core for audit. You may now start a new recovery.';
+
+  @override
+  String get handleRecoveryRestartWarning =>
+      'Verify your phone again. A new recovery replaces the DID and other devices must rejoin. Old local data is retained, but automatic migration to the new identity is not guaranteed. Start a new recovery?';
 
   @override
   String get handleRecoveryStartNew => 'Start a new recovery';

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-09-18.model-free-agent-tests-v1",
+  "sourceRevision": "2026-10-12.singapore-isolated-test-fix",
   "cases": [
     {
       "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
@@ -27,14 +27,14 @@
       "assertionContract": {
         "assertionIds": [
           "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
-          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+          "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_registration_login_and_recovery",
           "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
           "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
         ],
         "exactOracleAssertions": [
           [
             "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
-            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_registration_login_and_recovery",
             "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
             "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
           ]
@@ -42,7 +42,7 @@
         "negativeCheckAssertions": [
           [
             "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:real_a_commit_held_after_local_cut",
-            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_login_and_recovery",
+            "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:visible_b_registration_login_and_recovery",
             "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:late_a_error_finally_preserved_b_busy_target",
             "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001:b_session_feedback_navigation_unchanged"
           ]

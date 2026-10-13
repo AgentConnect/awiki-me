@@ -25,6 +25,16 @@ class AwikiImCoreHandleRecoveryAdapter
   final AwikiImCoreInstance _coreInstance;
 
   @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() =>
+      _runRecovery(() async {
+        final instance = await _coreInstance();
+        final operations = await instance.listPendingHandleRecoveryOperations();
+        return operations
+            .map((operation) => _operationFromSummary(operation))
+            .toList(growable: false);
+      });
+
+  @override
   Future<HandleRecoveryContext> inspectContext({
     required String handle,
     String? localIdentityId,

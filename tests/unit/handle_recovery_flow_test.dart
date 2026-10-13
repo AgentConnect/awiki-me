@@ -83,9 +83,11 @@ void main() {
         findsOneWidget,
       );
       await tester.ensureVisible(
-        find.byKey(const Key('handle-recovery-other-pending')),
+        find.byKey(const Key('handle-recovery-use-other-account')),
       );
-      await tester.tap(find.byKey(const Key('handle-recovery-other-pending')));
+      await tester.tap(
+        find.byKey(const Key('handle-recovery-use-other-account')),
+      );
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('recovery-launcher')), findsOneWidget);
       expect(core.discardCalls, 0);
@@ -1011,6 +1013,14 @@ void main() {
               'Recovery must survive pausing the old session while Core commits',
         );
 
+        expect(find.byType(HandleRecoveryPage), findsOneWidget);
+        expect(gateway.loginCalls, 0);
+        await tester.ensureVisible(
+          find.byKey(const Key('handle-recovery-enter-messages')),
+        );
+        await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
+        await tester.pumpAndSettle();
+
         expect(find.byType(HandleRecoveryPage), findsNothing);
         expect(find.byType(ConversationWorkspacePage), findsOneWidget);
         expect(
@@ -1110,6 +1120,13 @@ void main() {
         find.byKey(const Key('handle-recovery-activate')),
       );
       await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(gateway.loginCalls, 0);
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-enter-messages')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
       await tester.pumpAndSettle();
 
       expect(find.byType(HandleRecoveryPage), findsOneWidget);
@@ -1291,6 +1308,13 @@ void main() {
         find.byKey(const Key('handle-recovery-activate')),
       );
       await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HandleRecoveryPage), findsOneWidget);
+      expect(gateway.loginCalls, 0);
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-enter-messages')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
       await tester.pumpAndSettle();
 
       expect(find.byType(HandleRecoveryPage), findsNothing);
@@ -1665,6 +1689,9 @@ HandleRecoveryProgress _operation({
 );
 
 class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
+  @override
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async => [];
+
   _FakeHandleRecoveryCore({
     HandleRecoveryProgress? operation,
     this.otpResponseOperation,

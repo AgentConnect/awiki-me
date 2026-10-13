@@ -12,6 +12,7 @@ class _DesktopCliPeerSmokeConfig {
     required this.otpPhone,
     required this.otpCode,
     required this.cliBin,
+    required this.avatarProbeBin,
     required this.cliWorkspace,
     required this.cliHome,
     required this.appStateRoot,
@@ -95,6 +96,7 @@ class _DesktopCliPeerSmokeConfig {
       otpPhone: protectedOtp.phone,
       otpCode: protectedOtp.code,
       cliBin: _requiredConfig(cliPeer, 'binary', 'cliPeer.binary'),
+      avatarProbeBin: _optionalConfig(cliPeer, 'avatarProbeBinary'),
       cliWorkspace: _requiredConfig(cliPeer, 'workspace', 'cliPeer.workspace'),
       cliHome: _requiredConfig(cliPeer, 'home', 'cliPeer.home'),
       appStateRoot: _requiredConfig(app, 'stateRoot', 'app.stateRoot'),
@@ -113,6 +115,7 @@ class _DesktopCliPeerSmokeConfig {
   final String otpPhone;
   final String otpCode;
   final String cliBin;
+  final String? avatarProbeBin;
   final String cliWorkspace;
   final String cliHome;
   final String appStateRoot;

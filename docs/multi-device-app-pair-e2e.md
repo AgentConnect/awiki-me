@@ -17,6 +17,12 @@ recovery suites:
 - `multi-device-app-pair-paging-recovery`: one Join plus one exact-device
   `messages_501` Schema 3 recovery case.
 
+分页恢复的接收完成不代表 501 条输入已经完成业务投影。两端取得同一个恢复后
+新消息 ID 后并行只读观察各自历史，批量场景最多等待 5 分钟，普通消息仍为
+90 秒；保持 ID、发送方、接收方、内容、方向、已提交状态及唯一性断言。
+不调用同步或处理重试来促成通过。隔离双 App 的 CPU 配额下，已观察到接收队列
+持续正常下降但超过 90 秒，故该预算只适用于这个批量场景；未在期限内投影仍失败。
+
 The management-grant case authorizes the exact joining device once through SAS
 and local user presence. Core then delivers the root automatically, without a
 second transfer confirmation. It observes accepted delivery, Registry management
@@ -37,6 +43,13 @@ Root again without a second confirmation. Both App views must
 converge to three ready-admin Registry rows. The coordinator clears the first
 SAS round before new submissions; opening the fresh form alone cannot pass this
 checkpoint regression.
+
+The original admin opens the subsequent request through the shell's global
+Join review entry, then verifies the approval dialog's exact session and device.
+It does not assume the device ID is visible in the current page. Message-wait
+failures retain the exact-message oracle and include secret-free timeline
+counts/timestamps and existing sync diagnostics to distinguish projection and
+transport failures.
 
 ## Isolation model
 
@@ -433,3 +446,21 @@ phone numbers or name-prefix scans.
 Web 创建失败时，driver 只输出闭合阶段/错误码/HTTP 状态；activation 超时还在保留的
 admin root 写入 `web-registration-diagnostic.json`，只含状态、枚举、布尔值及 pending phase，
 不包含手机号、OTP、DID、Token、私钥或消息正文。它用于诊断，不是成功 attestation。
+
+
+### 新加坡隔离测试目标
+
+`test-fix.anpclaw.com` 是本次专用 Linux UI 测试域，独立于 `anpclaw.com`。
+由 System runner 选择 `singapore-test-fix` 后，App operator mode 固定为
+`singapore-test-fix`，只在 Linux 服务主机执行；User/Message 操作均绑定
+`/opt/awiki/test-fix-20261012` 和 `/etc/awiki/test-fix-20261012`。
+预检继续核对受管脚本、配置、解释器与 sudo 权限，不允许回退到共享环境。
+场景清单只增加这个精确测试域，不开放任意主机；具备目标声明不代表 UI 已通过。
+
+App 制品清单的 `targetTenantCatalogs` 为该目标选择 checked-in 公共租户 JSON。
+prepare 和 execute 均读取同一个 `AWIKI_SYSTEM_TEST_TARGET`，通过产品已有的
+`AWIKI_BUILTIN_TENANTS_BASE64`／`AWIKI_BUILTIN_TENANTS_SHA256` 注入；原始配置字节
+进入 compile key，配置不一致的旧制品会被拒绝。其他目标继续使用默认配置。
+此配置不含 OTP、账号或私钥；第二 Home 的声明不表示服务已部署，跨 Home 场景仍须先完成独立环境准备。
+
+注册域发现也使用同一 prepare/execute 制品流程；prepare 不读取运行 fixture，execute 通过受保护的运行时环境传入 fixture 路径，不把它固化进安装包。

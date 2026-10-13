@@ -101,6 +101,47 @@ void main() {
   });
 
   group('SmsOtpCooldownController', () {
+    testWidgets('Recovery receipt expires during a factor-exchange wait', (
+      tester,
+    ) async {
+      var now = DateTime.utc(2026, 10, 13);
+      final acceptedRetryAt = now.add(const Duration(seconds: 60));
+      final service = _MemoryCooldownService();
+      final container = ProviderContainer(
+        overrides: [
+          smsOtpCooldownServiceProvider.overrideWithValue(service),
+          smsOtpCooldownClockProvider.overrideWithValue(() => now),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(
+        handleRecoverySmsOtpCooldownProvider.notifier,
+      );
+      expect(await controller.beginSend(), isTrue);
+      await controller.completeAcceptedAt(acceptedRetryAt);
+      expect(
+        container.read(handleRecoverySmsOtpCooldownProvider).canSend,
+        isFalse,
+      );
+      expect(
+        container.read(handleRecoverySmsOtpCooldownProvider).retryAt,
+        acceptedRetryAt,
+      );
+
+      now = now.add(const Duration(seconds: 301));
+      await tester.pump(const Duration(seconds: 1));
+      expect(
+        container.read(handleRecoverySmsOtpCooldownProvider).canSend,
+        isTrue,
+      );
+      expect(
+        container.read(handleRecoverySmsOtpCooldownProvider).retryAt,
+        isNull,
+      );
+      expect(service.retryAt, isNull);
+      expect(acceptedRetryAt.isBefore(now), isTrue);
+    });
+
     test(
       'restores one persisted boundary after controller recreation',
       () async {

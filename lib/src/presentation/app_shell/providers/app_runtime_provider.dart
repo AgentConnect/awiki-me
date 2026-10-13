@@ -36,6 +36,7 @@ import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_navigation_provider.dart';
 import '../../devices/devices_provider.dart';
+import '../../devices/device_capability_provider.dart';
 import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
@@ -260,9 +261,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .showError(AppMessage.requestTimeoutRetry());
       state = state.copyWith(isInitialized: true);
     } catch (error) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.fromError(error));
+      // Pending identity work is presented by the read-only recovery entry.
+      // Opening the app is not an attempted recovery and needs no error toast.
+      if (structuredAppErrorCode(error) != 'identity.local_registry_conflict') {
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.fromError(error));
+      }
       state = state.copyWith(isInitialized: true);
     } finally {
       _endBusyOperation();
@@ -326,6 +331,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         isInitialized: true,
         activatedDid: session.did,
         authRevoked: false,
+      );
+      // Capability setup has its own inline status and must not block login.
+      unawaited(
+        ref
+            .read(deviceCapabilityProvider(null).future)
+            .then<void>((_) {}, onError: (Object _, StackTrace __) {}),
       );
       final remotePushActivation = _activateRemotePushMessageSyncBestEffort(
         epoch,

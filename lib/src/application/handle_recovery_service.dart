@@ -17,6 +17,20 @@ class HandleRecoveryService {
   final HandleRecoveryCorePort _core;
   final UserPresencePort _userPresence;
 
+  Future<List<HandleRecoveryProgress>> listPendingOperations() async {
+    final operations = await _core.listPendingOperations();
+    final seen = <String>{};
+    for (final operation in operations) {
+      _validateOperation(operation);
+      if (!seen.add(operation.operationId)) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.transitionMismatch,
+        );
+      }
+    }
+    return List.unmodifiable(operations);
+  }
+
   HandleRecoveryOwner owner({
     required HandleRecoveryIdentityScope scope,
     required String handle,

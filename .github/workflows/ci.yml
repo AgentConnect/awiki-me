@@ -5,6 +5,32 @@ on:
     - cron: "40 18 * * *"
   workflow_dispatch:
     inputs:
+      package_smoke_target:
+        description: Select only an outstanding artifact smoke target
+        required: false
+        default: all
+        type: choice
+        options: [all, desktop, android-arm64]
+      package_smoke_run:
+        description: Passed package-app run to install and start without rebuilding
+        required: false
+        default: ''
+        type: string
+      package_smoke_artifact:
+        description: Exact aggregate artifact name from the package-app run
+        required: false
+        default: ''
+        type: string
+      package_smoke_app_sha:
+        description: Expected full App source SHA from the package manifest
+        required: false
+        default: ''
+        type: string
+      package_smoke_core_sha:
+        description: Expected full Core source SHA from the package manifest
+        required: false
+        default: ''
+        type: string
       cli_ref:
         description: Exact 40-character awiki-cli-rs2 commit SHA
         required: true
@@ -39,6 +65,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: awiki-me-${{ github.workflow }}-${{ github.event_name == 'schedule' && 'nightly' || github.ref }}
@@ -54,11 +81,12 @@ env:
 # Manual source runs supply an exact cli_ref; scheduled runs retain registry defaults.
 jobs:
   validate:
+    if: ${{ !inputs.package_smoke_run }}
     runs-on: ubuntu-latest
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -79,10 +107,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          ref: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
+
+      - name: Verify the App and Core source dependency graph
+        if: inputs.sdk_dependencies == 'source'
+        run: node test-awiki-me/scripts/verify-source-inputs.mjs test-awiki-me awiki-cli-rs2
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2.23.0
@@ -155,7 +187,7 @@ jobs:
 
       - name: Record exact CLI / SDK source ref
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
         run: |
           test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CLI_REF"
           git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
@@ -227,6 +259,7 @@ jobs:
           retention-days: 14
 
   cross-repository-contracts:
+    if: ${{ !inputs.package_smoke_run }}
     name: Cross-repository System contracts
     runs-on: ubuntu-latest
     env:
@@ -238,7 +271,7 @@ jobs:
     steps:
       - name: Require exact CLI / SDK source ref and private repository read token
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           SYSTEM_TEST_READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
         run: |
           [[ "$CLI_REF" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -259,10 +292,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          ref: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
+
+      - name: Verify the App and Core source dependency graph
+        if: inputs.sdk_dependencies == 'source'
+        run: node test-awiki-me/scripts/verify-source-inputs.mjs test-awiki-me awiki-cli-rs2
 
       - name: Checkout unified System Test coordinator
         uses: actions/checkout@v6
@@ -406,14 +443,14 @@ jobs:
           retention-days: 14
 
   remote-product:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)
+    if: ${{ !inputs.package_smoke_run && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)) }}
     needs: [validate, cross-repository-contracts]
     runs-on: ubuntu-latest
     timeout-minutes: 65
     steps:
       - name: Require exact ref and remote account pool secrets
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -430,10 +467,14 @@ jobs:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
-          ref: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          ref: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
+
+      - name: Verify the App and Core source dependency graph
+        if: inputs.sdk_dependencies == 'source'
+        run: node test-awiki-me/scripts/verify-source-inputs.mjs test-awiki-me awiki-cli-rs2
 
       - uses: subosito/flutter-action@v2.23.0
         with:
@@ -484,7 +525,7 @@ jobs:
       - name: Write secret-backed awiki.info config
         working-directory: test-awiki-me
         env:
-          CLI_REF: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+          CLI_REF: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
           E2E_PHONE: ${{ secrets.AWIKI_E2E_OTP_PHONE }}
           E2E_OTP: ${{ secrets.AWIKI_E2E_OTP_CODE }}
           APP_HANDLE: ${{ secrets.AWIKI_E2E_APP_HANDLE }}
@@ -524,7 +565,7 @@ jobs:
           AWIKI_SQLITE3_SOURCE_DIR: /tmp/awiki-sqlite3
         run: |
           test "$(git -C ../awiki-cli-rs2 rev-parse HEAD)" = \
-            "${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}"
+            "${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}"
           dart run tests/e2e/runner.dart \
             --case "${{ github.event.inputs.e2e_case || 'full' }}" \
             --config .e2e/ci/remote.json \
@@ -543,11 +584,12 @@ jobs:
           retention-days: 30
 
   windows-pr:
+    if: ${{ !inputs.package_smoke_run }}
     name: Windows x64 build and native smoke
     runs-on: windows-2022
     timeout-minutes: 75
     env:
-      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262' }}
+      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2' }}
     steps:
       - name: Require exact Core source ref
         shell: bash
@@ -570,6 +612,10 @@ jobs:
           token: ${{ github.token }}
           path: awiki-cli-rs2
           persist-credentials: false
+
+      - name: Verify the App and Core source dependency graph
+        if: inputs.sdk_dependencies == 'source'
+        run: node test-awiki-me/scripts/verify-source-inputs.mjs test-awiki-me awiki-cli-rs2
 
       - name: Verify exact CLI / IM Core checkout
         shell: pwsh
@@ -771,3 +817,155 @@ jobs:
           path: test-awiki-me/build/windows/x64/runner/Release/
           if-no-files-found: error
           retention-days: 14
+
+  package-smoke:
+    if: ${{ inputs.package_smoke_run != '' }}
+    name: Installed package smoke (${{ matrix.target }})
+    env:
+      PACKAGE_RUN: ${{ inputs.package_smoke_run }}
+      PACKAGE_APP_SHA: ${{ inputs.package_smoke_app_sha }}
+      PACKAGE_CORE_SHA: ${{ inputs.package_smoke_core_sha }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include: ${{ fromJSON(inputs.package_smoke_target == 'android-arm64' && '[{"target":"android-arm64","runner":"ubuntu-latest"}]' || inputs.package_smoke_target == 'desktop' && '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"}]' || '[{"target":"macos-arm64","runner":"macos-15"},{"target":"macos-x64","runner":"macos-15-intel"},{"target":"windows-x64","runner":"windows-2022"},{"target":"android-arm64","runner":"ubuntu-latest"}]') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate explicitly selected package run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_ARTIFACT: ${{ inputs.package_smoke_artifact }}
+        run: |
+          set -euo pipefail
+          [[ "$PACKAGE_RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PACKAGE_ARTIFACT" =~ ^awiki-me-packages-[A-Za-z0-9._-]+$ ]]
+          node --test scripts/verify-package-smoke-input.test.mjs
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PACKAGE_RUN" > package-run.json
+          node scripts/verify-package-smoke-input.mjs --run-only
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.package_smoke_run }}
+          name: ${{ inputs.package_smoke_artifact }}
+          path: package-smoke-input
+      - name: Verify exact packaged bytes
+        shell: bash
+        env:
+          PACKAGE_TARGET: ${{ matrix.target }}
+        run: |
+          node scripts/verify-package-smoke-input.mjs
+      - name: Mount, install and start normal macOS App
+        if: startsWith(matrix.target, 'macos-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          mount="$RUNNER_TEMP/package-app-mount"
+          app_copy="$RUNNER_TEMP/package-app-installed"
+          mkdir -p "$mount" "$app_copy"
+          # The manifest owns the filename; do not infer product naming.
+          dmg="package-smoke-input/$(node -p 'require("./package-smoke-input/package-manifest.json").artifacts["${{ matrix.target }}"].filename')"
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount"
+          trap 'hdiutil detach "$mount" -force || true' EXIT
+          app=$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)
+          test -n "$app"
+          ditto "$app" "$app_copy/AWikiMe.app"
+          codesign --verify --deep --strict "$app_copy/AWikiMe.app"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app_copy/AWikiMe.app/Contents/Info.plist")
+          expected_arch="${{ matrix.target == 'macos-arm64' && 'arm64' || 'x86_64' }}"
+          test "$(uname -m)" = "$expected_arch"
+          lipo -archs "$app_copy/AWikiMe.app/Contents/MacOS/$executable" | grep -w "$expected_arch"
+          "$app_copy/AWikiMe.app/Contents/MacOS/$executable" > "$RUNNER_TEMP/app-startup.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; hdiutil detach "$mount" -force || true' EXIT
+          sleep 15
+          kill -0 "$app_pid"
+          kill "$app_pid"
+          wait "$app_pid" || true
+          echo 'Normal signed App installed, native architecture verified, startup remained live for 15 seconds.'
+      - name: Install and run existing Windows native smoke
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content package-smoke-input/package-manifest.json | ConvertFrom-Json
+          $installer = (Resolve-Path (Join-Path package-smoke-input $manifest.artifacts.'windows-x64'.filename)).Path
+          $installDir = Join-Path $env:RUNNER_TEMP 'package-normal-app'
+          try {
+            $p = Start-Process $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"')) -PassThru -Wait
+            if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+            ./scripts/windows/run_pr_smoke.ps1 -ReleaseDir $installDir
+          } finally {
+            $uninstaller = Join-Path $installDir 'unins000.exe'
+            if (Test-Path $uninstaller) {
+              $p = Start-Process $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -PassThru -Wait
+              if ($p.ExitCode -ne 0) { throw "Uninstaller failed: $($p.ExitCode)" }
+            }
+          }
+
+      - uses: android-actions/setup-android@v3
+        if: matrix.target == 'android-arm64'
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install and start the arm64 APK through Android native bridge
+        if: matrix.target == 'android-arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Android 11 Google APIs x86_64 images support ARM binary translation.
+          # Assert the actual system ABI list before using this as arm64 APK evidence.
+          # https://android-developers.googleblog.com/2020/03/run-arm-apps-on-android-emulator.html
+          sudo apt-get update -qq
+          sudo apt-get install -y libpulse0
+          sudo chmod 666 /dev/kvm
+          sdkmanager 'system-images;android-30;google_apis;x86_64' 'emulator'
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/package-smoke-avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | avdmanager create avd --force --name package-smoke-arm64-apk --package 'system-images;android-30;google_apis;x86_64' --path "$ANDROID_AVD_HOME/device.avd"
+          "$ANDROID_HOME/emulator/emulator" -list-avds | grep -Fx package-smoke-arm64-apk
+          "$ANDROID_HOME/emulator/emulator" -version
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          "$ANDROID_HOME/emulator/emulator" -avd package-smoke-arm64-apk -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+          trap 'adb emu kill || true; kill "$emulator_pid" 2>/dev/null || true' EXIT
+          sleep 3
+          if ! kill -0 "$emulator_pid"; then cat "$RUNNER_TEMP/emulator.log"; exit 1; fi
+          timeout 180 adb wait-for-device || { cat "$RUNNER_TEMP/emulator.log"; exit 1; }
+          booted=false
+          for attempt in $(seq 1 180); do
+            if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == 1 ]]; then booted=true; break; fi
+            sleep 2
+          done
+          test "$booted" = true
+          adb shell getprop ro.product.cpu.abilist | tee "$RUNNER_TEMP/android-abis.txt"
+          grep -q arm64-v8a "$RUNNER_TEMP/android-abis.txt"
+          apk="package-smoke-input/$(node -p 'require("./package-smoke-input/package-manifest.json").artifacts["android-arm64"].filename')"
+          adb install "$apk"
+          adb logcat -c
+          adb shell monkey -p ai.awiki.awikime -c android.intent.category.LAUNCHER 1
+          sleep 15
+          pid=$(adb shell pidof ai.awiki.awikime | tr -d '\r')
+          test -n "$pid"
+          adb logcat -d --pid="$pid" > "$RUNNER_TEMP/app-startup.log"
+          if grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGSEGV|UnsatisfiedLink|dlopen failed|native crash' "$RUNNER_TEMP/app-startup.log"; then exit 1; fi
+          adb shell am force-stop ai.awiki.awikime
+          adb uninstall ai.awiki.awikime
+          echo 'Exact signed arm64 APK installed and started through Android ARM native bridge; physical-device acceptance remains manual.'
+
+      - name: Preserve Android startup diagnostics
+        if: failure() && matrix.target == 'android-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-android-startup-diagnostics
+          path: |
+            ${{ runner.temp }}/emulator.log
+            ${{ runner.temp }}/app-startup.log
+            ${{ runner.temp }}/android-abis.txt
+          if-no-files-found: ignore
+          retention-days: 7
