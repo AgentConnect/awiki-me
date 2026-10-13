@@ -82,6 +82,30 @@ awiki_codesign_with_timestamp_retry() {
   done
 }
 
+awiki_stapler_with_network_retry() {
+  local attempt=1
+  local max_attempts=5
+  local output
+
+  while true; do
+    if output="$(xcrun stapler "$@" 2>&1)"; then
+      [[ -n "$output" ]] && printf '%s\n' "$output"
+      return 0
+    fi
+    [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    # Error 68 alone can also mean an invalid ticket: retry only an explicit
+    # transient transport error, and still require stapler to return success.
+    if [[ "$attempt" -ge "$max_attempts" ]] ||
+      ! grep -Eq 'NSURLErrorDomain Code=-(1001|1005|1009)([^0-9]|$)' <<< "$output"; then
+      return 1
+    fi
+    printf '[macos-signing] Apple ticket service connection failed; retrying stapler (%s/%s)\n' \
+      "$attempt" "$max_attempts" >&2
+    sleep $((attempt * 5))
+    attempt=$((attempt + 1))
+  done
+}
+
 awiki_codesign_distribution_item() {
   local item="$1"
   local fingerprint="$2"
@@ -345,7 +369,7 @@ awiki_verify_macos_distribution_dmg() {
     awiki_macos_signing_error "DMG signature does not contain a secure timestamp"
     return 1
   }
-  xcrun stapler validate "$dmg" || {
+  awiki_stapler_with_network_retry validate "$dmg" || {
     awiki_macos_signing_error "DMG does not contain a valid notarization ticket"
     return 1
   }
@@ -481,11 +505,11 @@ awiki_notarize_and_staple_dmg() {
     return 1
   fi
 
-  xcrun stapler staple "$dmg" || {
+  awiki_stapler_with_network_retry staple "$dmg" || {
     awiki_macos_signing_error "could not staple the notarization ticket to the DMG"
     return 1
   }
-  xcrun stapler validate "$dmg" || {
+  awiki_stapler_with_network_retry validate "$dmg" || {
     awiki_macos_signing_error "stapled DMG ticket validation failed"
     return 1
   }

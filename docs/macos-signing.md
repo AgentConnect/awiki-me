@@ -80,6 +80,11 @@ submit --no-wait` 保存可追踪的 submission ID，再独立等待最多一小
 `Accepted`、staple 成功且最终验证全部通过时才上传平台 artifact。超时或失败诊断在删除
 临时凭证后单独上传，未公证 DMG 不进入聚合任务。
 
+Apple 票据服务可能在 `stapler staple/validate` 时断开连接。仅对明确的
+`NSURLErrorDomain` 超时、连接中断或离线错误（-1001、-1005、-1009）最多尝试五次，
+逐次等待 5、10、15、20 秒；无效票据及其他错误立即失败。每个步骤仍必须实际返回成功，
+不能用重试或已有公证提交记录代替票据验证。
+
 ## 本机公证配置
 
 本机只在运行签名 Gate 或直接诊断 macOS worker 时需要组织 Developer ID identity。先将
