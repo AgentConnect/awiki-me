@@ -2555,6 +2555,24 @@ void main() {
     );
     expect(headerIcon.color, AwikiMePalette.mutedNeutral);
 
+    for (final width in <double>[1600, 960]) {
+      await tester.binding.setSurfaceSize(Size(width, 960));
+      await tester.pumpAndSettle();
+      final headerRect = tester.getRect(find.byKey(const Key('chat-header')));
+      final buttonRect = tester.getRect(headerAddMember);
+      final responsive = tester.element(headerAddMember).awikiResponsive;
+      expect(
+        headerRect.right - buttonRect.right,
+        closeTo(responsive.displayScaled(12), 0.01),
+        reason: 'The group invite action stays at the trailing edge at $width',
+      );
+      expect(
+        tester.getRect(find.byKey(const Key('chat-header-title'))).right,
+        lessThan(buttonRect.left),
+      );
+      expect(tester.takeException(), isNull);
+    }
+
     gateway.listGroupMembersCompleter = memberRefresh;
     await tester.tap(headerAddMember);
     await tester.pump();
