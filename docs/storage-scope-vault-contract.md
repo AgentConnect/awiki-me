@@ -310,8 +310,8 @@ ActiveSyncAccountBinding.ownerIdentityId
   Vault/open、其他枚举错误及逐身份 custody 校验失败仍阻断启动；实际身份修复仍由
   Core 验证和完成，App 不修改权威索引。
 
-- 本次修复的跨仓源码联调由 `dependencies.source.json` 固定 Core PR #48 的完整提交；
-  主 CI 的 release/0910 wrapper 引用使用同一提交，其 Core 清单与 Cargo 锁再固定
+- 跨仓源码联调由 `dependencies.source.json` 固定当前 Core PR 的完整消费端提交；
+  显式 source CI 的 `cli_ref` 使用该提交，其 Core 清单与 Cargo 锁再固定
   实际 Rust SDK / ANP / Identity 来源。正式 SDK 发布和客户端打包仍遵循各自门禁。
 
 - 新 replica 使用 tail-only bootstrap，从服务端当前流尾开始，不导入加入前的普通消息。

@@ -1649,3 +1649,8 @@ Host 不同。Linux 使用 runner 的 Xvfb 执行；结束删除本轮独立 App
 manifest 选择该工具并通过 `AWIKI_E2E_SYSTEM_TEST_PROBE_BINARY` 传入独立缓存路径；独立
 App runner 构建仍使用 CLI 同目录的 probe。执行前检查存在性，再准备远程身份；native 测试
 只使用 run config 的显式 `cliPeer.avatarProbeBinary`，不推测缓存目录布局。
+
+
+### 20261013 整合来源
+
+本轮显式 source CI 的 `cli_ref` 使用根目录 `dependencies.source.json` 中 `awiki-im-core.commit`，它固定包含 Dart/Node 适配器与源码锁的 Core 消费端提交。该 Core 提交内部清单再固定实际 SDK 源码；二者的 SHA 可以不同，但本轮 SDK 功能树一致。ANP / Identity 与 App 清单保持相同冻结来源。不得把历史测试包或旧 release pin 当作此组合。正式 registry 依赖尚未发布，相关 PR 保持草稿，默认 CI 与正式打包不切换为源码模式。

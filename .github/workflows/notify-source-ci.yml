@@ -20,19 +20,8 @@ jobs:
         working-directory: awiki-me
         shell: bash
         run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const assert = require('node:assert/strict');
-          const source = JSON.parse(fs.readFileSync('dependencies.source.json', 'utf8'));
-          assert.equal(source.schema_version, 1);
-          assert.deepEqual(Object.keys(source.dependencies), ['awiki-im-core']);
-          const entry = source.dependencies['awiki-im-core'];
-          assert.deepEqual(Object.keys(entry).sort(), ['commit', 'pull_request', 'repository']);
-          assert.equal(entry.repository, 'https://github.com/AgentConnect/awiki-cli-rs2.git');
-          assert.match(entry.commit, /^[0-9a-f]{40}$/);
-          assert.match(entry.pull_request, /^https:\/\/github\.com\/AgentConnect\/awiki-cli-rs2\/pull\/[1-9][0-9]*$/);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `commit=${entry.commit}\n`);
-          NODE
+          node --test scripts/verify-source-inputs.test.mjs
+          node scripts/verify-source-inputs.mjs . >> "$GITHUB_OUTPUT"
       - name: Checkout the exact candidate wrapper
         uses: actions/checkout@v6
         with:
@@ -43,7 +32,7 @@ jobs:
       - name: Verify source identity
         env:
           EXPECTED_COMMIT: ${{ steps.source.outputs.commit }}
-        run: test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$EXPECTED_COMMIT"
+        run: node awiki-me/scripts/verify-source-inputs.mjs awiki-me awiki-cli-rs2
       - uses: subosito/flutter-action@v2.23.0
         with:
           flutter-version: 3.44.0
