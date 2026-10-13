@@ -16,6 +16,7 @@ import 'dart:async';
 import '../../delete_isolated_directory.dart';
 
 import '../support/enter_existing_account.dart';
+import '../support/confirm_local_credential_deletion.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';

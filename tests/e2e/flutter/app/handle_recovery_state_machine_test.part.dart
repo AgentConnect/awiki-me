@@ -801,18 +801,22 @@ Future<void> _smLogout(
     () => find.byType(AppConfirmationDialog).evaluate().length == 1,
     failure: 'The destructive-action confirmation is missing.',
   );
-  final dialog = tester.widget<AppConfirmationDialog>(
-    find.byType(AppConfirmationDialog),
-  );
-  await _smTap(
-    tester,
-    find
-        .descendant(
-          of: find.byType(AppConfirmationDialog),
-          matching: find.text(dialog.confirmLabel),
-        )
-        .last,
-  );
+  if (delete) {
+    await confirmLocalCredentialDeletion(tester);
+  } else {
+    final dialog = tester.widget<AppConfirmationDialog>(
+      find.byType(AppConfirmationDialog),
+    );
+    await _smTap(
+      tester,
+      find
+          .descendant(
+            of: find.byType(AppConfirmationDialog),
+            matching: find.text(dialog.confirmLabel),
+          )
+          .last,
+    );
+  }
   await _pumpUntil(
     tester,
     () =>
