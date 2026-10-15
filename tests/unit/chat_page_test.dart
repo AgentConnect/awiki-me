@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/presentation/server_features/backend_capabilities_provider.dart';
 // ignore_for_file: invalid_use_of_visible_for_testing_member, invalid_use_of_protected_member
 
 import 'dart:async';
@@ -1808,6 +1809,62 @@ void main() {
     );
   });
 
+  for (final support in ['unsupported', 'unknown']) {
+    testWidgets('未提供加密时禁止切换但保留普通草稿 $support', (tester) async {
+      final gateway = FakeAwikiGateway();
+      final conversation = ConversationSummary(
+        conversationId: 'dm:did:test:peer',
+        threadId: 'dm:did:test:peer',
+        displayName: 'Peer',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:peer',
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: CupertinoPageScaffold(
+            child: ChatView(conversation: conversation, embedded: false),
+          ),
+          gateway: gateway,
+          session: const SessionIdentity(
+            did: 'did:test:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: [
+            backendFeaturesProvider.overrideWithValue(
+              AsyncData(
+                BackendFeatures({
+                  'message': {
+                    'status': 'confirmed',
+                    'capabilities': {
+                      'direct_e2ee': {'support': support},
+                    },
+                  },
+                }),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      final field = find.byType(CupertinoTextField);
+      await tester.enterText(field, '保留草稿');
+      final button = tester.widget<AppIconButton>(
+        find.byKey(const Key('chat-message-security')),
+      );
+      expect(button.onPressed, isNull);
+      expect(
+        button.semanticLabel,
+        contains(support == 'unsupported' ? '此服务器暂不支持' : '尚未确认'),
+      );
+      expect(tester.widget<CupertinoTextField>(field).controller!.text, '保留草稿');
+      expect(find.byIcon(CupertinoIcons.lock_open), findsOneWidget);
+    });
+  }
+
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -1845,6 +1902,18 @@ void main() {
         gateway: gateway,
         session: session,
         providerOverrides: <Override>[
+          backendFeaturesProvider.overrideWithValue(
+            const AsyncData(
+              BackendFeatures({
+                'message': {
+                  'status': 'confirmed',
+                  'capabilities': {
+                    'direct_e2ee': {'support': 'supported'},
+                  },
+                },
+              }),
+            ),
+          ),
           conversationListProvider.overrideWith(
             (ref) =>
                 _StaticConversationListController(ref, gateway.conversations),
@@ -3260,6 +3329,20 @@ void main() {
           ),
           gateway: gateway,
           session: session,
+          providerOverrides: [
+            backendFeaturesProvider.overrideWithValue(
+              const AsyncData(
+                BackendFeatures({
+                  'message': {
+                    'status': 'confirmed',
+                    'capabilities': {
+                      'direct_e2ee': {'support': 'supported'},
+                    },
+                  },
+                }),
+              ),
+            ),
+          ],
         ),
       );
       await tester.pumpAndSettle();

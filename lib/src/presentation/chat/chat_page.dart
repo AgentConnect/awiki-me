@@ -1,3 +1,4 @@
+import '../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 import 'package:flutter/material.dart' show Tooltip;
 import '../app_shell/providers/remote_push_coordinator_provider.dart';
