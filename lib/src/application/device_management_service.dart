@@ -331,7 +331,10 @@ class DeviceManagementService {
       }
 
       final confirmed = await _userPresence.confirm(
-        reason: _required(presenceReason, 'presenceReason'),
+        reason: _required(
+          prompt.managementAllowed ? presenceReason : messageOnlyPresenceReason,
+          'presenceReason',
+        ),
       );
       if (!confirmed) {
         try {

@@ -578,6 +578,7 @@ void main() {
   test('maps verified Join request notice without raw proof material', () {
     final request = deviceJoinRequestFromCore(
       const core.DeviceJoinRequestNotice(
+        joinPurpose: "messages_only",
         eventId: 'event-1',
         joinSessionId: 'join-2',
         did: _did,
@@ -591,6 +592,7 @@ void main() {
       ),
     );
 
+    expect(request.joinPurpose, 'messages_only');
     expect(request.joinSessionId, 'join-2');
     expect(request.candidateKeyFingerprint, 'sha256:fingerprint');
     expect(request.canStartVerification, isTrue);

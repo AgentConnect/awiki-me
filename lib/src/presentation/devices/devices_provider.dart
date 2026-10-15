@@ -898,6 +898,7 @@ class DevicesController extends StateNotifier<DevicesState> {
             displayedSas: progress.sas!,
             sasConfirmed: sasConfirmed,
             presenceReason: presenceReason,
+            messageOnlyPresenceReason: messageOnlyPresenceReason,
           );
       if (!mounted) return false;
       state = state.copyWith(activeJoin: next);

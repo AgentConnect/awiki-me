@@ -30,6 +30,7 @@ DeviceJoinProgress testJoinProgress({
 }
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
+  bool managementAllowed = true;
   bool? localManagementReadyOverride;
   Object? localManagementReadyError;
   @override
@@ -331,6 +332,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     prepareCalls += 1;
     lastPreparedSasConfirmed = sasConfirmed;
     return DeviceJoinApprovalPrompt(
+      managementAllowed: managementAllowed,
       approvalHandle: 'approval-1',
       joinSessionId: joinSessionId,
       sas: '482917',
@@ -360,10 +362,12 @@ class FakeUserPresence implements UserPresencePort {
 
   bool result;
   int calls = 0;
+  String? lastReason;
 
   @override
   Future<bool> confirm({required String reason}) async {
     calls += 1;
+    lastReason = reason;
     return result;
   }
 }

@@ -638,6 +638,7 @@ DeviceJoinRequestNotice deviceJoinRequestFromCore(
   core.DeviceJoinRequestNotice value,
 ) {
   return DeviceJoinRequestNotice(
+    joinPurpose: value.joinPurpose,
     eventId: value.eventId,
     joinSessionId: value.joinSessionId,
     did: value.did,

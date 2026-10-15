@@ -311,6 +311,20 @@ class _DeviceJoinApprovalSheetState
           ),
           const SizedBox(height: 12),
         ],
+        if (!terminal) ...<Widget>[
+          Text(
+            request.joinPurpose == 'messages_only'
+                ? l10n.deviceJoinMessageOnlyPresenceReason
+                : l10n.deviceJoinUserPresenceReason,
+            key: const Key('device-approval-purpose'),
+            style: TextStyle(
+              color: theme.secondaryText,
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         body,
       ],
     );

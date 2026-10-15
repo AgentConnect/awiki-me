@@ -2663,6 +2663,43 @@ void main() {
     expect(core.confirmCalls, 0);
   });
 
+  testWidgets(
+    'message-only purpose is visible and reaches localized confirmation',
+    (tester) async {
+      final request = _request(
+        joinPurpose: 'messages_only',
+        state: DeviceJoinRemoteState.responseVerified,
+        claimedByCurrentDevice: true,
+        canStartVerification: false,
+      );
+      final core = FakeDeviceManagementCore()
+        ..managementAllowed = false
+        ..verificationProgress = testJoinProgress();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          DeviceJoinApprovalSheet(request: request),
+          core,
+          presence: presence,
+        ),
+      );
+      await tester.pumpAndSettle();
+      const expected = '允许该设备仅用于消息通信，不授予根密钥或身份管理权限';
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('device-approval-purpose')))
+            .data,
+        expected,
+      );
+      await tester.tap(find.byKey(const Key('device-sas-confirmation')));
+      await tester.pump();
+      await tester.tap(find.text('核对用途并批准加入'));
+      await tester.pumpAndSettle();
+      expect(presence.lastReason, expected);
+      expect(core.lastPresenceConfirmed, isTrue);
+    },
+  );
+
   testWidgets('user-presence rejection never authorizes the device', (
     tester,
   ) async {
@@ -2968,12 +3005,14 @@ ProviderContainer _deviceContainer(FakeDeviceManagementCore core) {
 }
 
 DeviceJoinRequestNotice _request({
+  String? joinPurpose,
   String joinSessionId = 'join-1',
   String protocolDeviceId = 'device-new',
   DeviceJoinRemoteState state = DeviceJoinRemoteState.pending,
   bool claimedByCurrentDevice = false,
   bool canStartVerification = true,
 }) => DeviceJoinRequestNotice(
+  joinPurpose: joinPurpose,
   eventId: 'event-$joinSessionId',
   joinSessionId: joinSessionId,
   did: testDid,
