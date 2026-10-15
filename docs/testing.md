@@ -915,7 +915,11 @@ explicit per-suite allowlist or the audited `configured_same_origin` policy.
 The selected YAML configuration remains the
 source of the actual target: remote compatibility runs use `awiki.info`, local
 server runs use `agentwiki.info`, and approved Singapore staging runs use
-`anpclaw.com`. They reject localhost, `awiki.test`, insecure schemes, and other
+`anpclaw.com`. The focused `direct` suite additionally accepts the isolated
+`backend-adapt.anpclaw.com` capability candidate, using its own protected OTP
+fixture, exact source-pinned CLI, fresh App/CLI state and residual ledger.
+This does not add the candidate to operator-bound Join/Recovery suites.
+They reject localhost, `awiki.test`, insecure schemes, and other
 domains before starting Flutter. A `configured_same_origin` suite still requires
 an explicit protected target config, matching HTTPS/DID origin, its capability
 and OTP gates, and exact-scope cleanup; it does not authorize an allowlisted

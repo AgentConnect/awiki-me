@@ -826,13 +826,15 @@
         "awiki.info",
         "agentwiki.info",
         "anpclaw.com",
-        "test-fix.anpclaw.com"
+        "test-fix.anpclaw.com",
+        "backend-adapt.anpclaw.com"
       ],
       "allowedDidDomains": [
         "awiki.info",
         "agentwiki.info",
         "anpclaw.com",
-        "test-fix.anpclaw.com"
+        "test-fix.anpclaw.com",
+        "backend-adapt.anpclaw.com"
       ],
       "resourceCategories": [
         "direct_messages",
