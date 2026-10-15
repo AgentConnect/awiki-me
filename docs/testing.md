@@ -1654,3 +1654,11 @@ App runner 构建仍使用 CLI 同目录的 probe。执行前检查存在性，�
 ### 20261013 整合来源
 
 本轮显式 source CI 的 `cli_ref` 使用根目录 `dependencies.source.json` 中 `awiki-im-core.commit`，它固定包含 Dart/Node 适配器与源码锁的 Core 消费端提交。该 Core 提交内部清单再固定实际 SDK 源码；二者的 SHA 可以不同，但本轮 SDK 功能树一致。ANP / Identity 与 App 清单保持相同冻结来源。不得把历史测试包或旧 release pin 当作此组合。正式 registry 依赖尚未发布，相关 PR 保持草稿，默认 CI 与正式打包不切换为源码模式。
+
+## ChatGPT Gateway 托管身份候选验证
+
+新增邮箱 Join 由既有账号适配器发送验证码并交换仅 Join 用途 grant，身份及通信流程继续调用 Core。邮箱不进入手机号 Recovery。签名用途为 messages_only 时，批准页面说明仅消息通信，调用普通批准，不进入自动根密钥授予；缺省用途保留管理设备流程。
+
+拥有测试：`tests/unit/devices/` 与 `awiki_im_core_device_management_adapter_test.dart` 覆盖邮箱请求、DTO 映射、消息用途 UI/批准分流和邮箱 Recovery 拒绝。真实场景 `hosted_gateway_email_join`、`hosted_gateway_message_only_approval`、`hosted_gateway_root_receive` 的产品 E2E 归本仓；目前尚无这些场景的真实执行通过记录，不将 Widget 测试或原生编译作为其替代。跨 Gateway 的协议端到端测试归 Gateway。
+
+Mac 联调使用 `scripts/build_manual_dual_macos_apps.sh`，显式传入两个不同的 `ai.awiki.awikime.dev.*` bundle ID 和完整测试 tenant JSON。只选择隔离测试 primary；secondary 使用不可解析的 `.invalid` 占位，避免默认连到生产。原生库使用 Core 已提交的本地联调来源及产物 manifest 校验，不改变正式推荐版本。

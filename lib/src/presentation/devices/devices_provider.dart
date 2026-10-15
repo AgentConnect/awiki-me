@@ -593,6 +593,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   Future<bool> beginNewDeviceJoin({
     required String handle,
     required String phone,
+    String? email,
     required String otp,
     String presenceReason = 'Confirm Handle Recovery authorized Join',
   }) async {
@@ -607,7 +608,19 @@ class DevicesController extends StateNotifier<DevicesState> {
       final deviceService = ref.read(deviceManagementServiceProvider);
       final operationId = _newOperationId('join');
       final recoveryScope = _recoveryScopeForHandle(handle);
-      final progress = recoveryScope == null
+      if (email != null && recoveryScope != null) {
+        throw const DeviceManagementException(
+          'email_recovery_join_not_supported',
+        );
+      }
+      final progress = email != null
+          ? await deviceService.beginNewDeviceJoinWithEmail(
+              handle: handle,
+              email: email,
+              otp: otp,
+              operationId: operationId,
+            )
+          : recoveryScope == null
           ? await deviceService.beginNewDeviceJoinWithSms(
               handle: handle,
               phone: phone,
@@ -867,6 +880,8 @@ class DevicesController extends StateNotifier<DevicesState> {
   Future<bool> approveActiveAsMember({
     required bool sasConfirmed,
     required String presenceReason,
+    String messageOnlyPresenceReason =
+        "Allow messaging only; no identity management access",
   }) async {
     final selector = _selector;
     final progress = state.activeJoin;

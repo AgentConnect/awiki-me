@@ -322,6 +322,8 @@ class _DeviceJoinApprovalSheetState
         .approveActiveAsMember(
           sasConfirmed: _sasMatches,
           presenceReason: context.l10n.deviceJoinUserPresenceReason,
+          messageOnlyPresenceReason:
+              context.l10n.deviceJoinMessageOnlyPresenceReason,
         );
     if (approved && mounted) {
       setState(() => _sasMatches = false);

@@ -49,6 +49,19 @@ abstract interface class DeviceManagementCorePort {
     required String phone,
   });
 
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinEmailOtp({
+    required String handle,
+    required String email,
+  });
+
+  Future<DeviceJoinProgress> beginDeviceJoinWithEmail({
+    required String handle,
+    required String email,
+    required String otp,
+    required String operationId,
+    required int ttlSeconds,
+  });
+
   Future<String> resolveJoinDid(String handle);
 
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions();

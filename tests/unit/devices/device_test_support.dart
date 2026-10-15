@@ -118,6 +118,27 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   bool? lastRevokePresenceConfirmed;
 
   @override
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinEmailOtp({
+    required String handle,
+    required String email,
+  }) => sendJoinSmsOtp(handle: handle, phone: email);
+
+  @override
+  Future<DeviceJoinProgress> beginDeviceJoinWithEmail({
+    required String handle,
+    required String email,
+    required String otp,
+    required String operationId,
+    required int ttlSeconds,
+  }) => beginDeviceJoinWithSms(
+    handle: handle,
+    phone: email,
+    otp: otp,
+    operationId: operationId,
+    ttlSeconds: ttlSeconds,
+  );
+
+  @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,

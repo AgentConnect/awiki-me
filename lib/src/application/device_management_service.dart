@@ -60,6 +60,32 @@ class DeviceManagementService {
     );
   }
 
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinEmailOtp({
+    required String handle,
+    required String email,
+  }) => _core.sendJoinEmailOtp(
+    handle: _required(handle, 'handle').toLowerCase(),
+    email: _required(email, 'email').toLowerCase(),
+  );
+
+  Future<DeviceJoinProgress> beginNewDeviceJoinWithEmail({
+    required String handle,
+    required String email,
+    required String otp,
+    required String operationId,
+    int ttlSeconds = 600,
+  }) async {
+    final progress = await _core.beginDeviceJoinWithEmail(
+      handle: _required(handle, 'handle').toLowerCase(),
+      email: _required(email, 'email').toLowerCase(),
+      otp: _required(otp, 'otp'),
+      operationId: _required(operationId, 'operationId'),
+      ttlSeconds: ttlSeconds,
+    );
+    _validateProgress(progress);
+    return progress;
+  }
+
   Future<String> resolveNewDeviceJoinDid(String handle) async {
     final did = await _core.resolveJoinDid(
       _required(handle, 'handle').toLowerCase(),
@@ -277,6 +303,8 @@ class DeviceManagementService {
     required String displayedSas,
     required bool sasConfirmed,
     required String presenceReason,
+    String messageOnlyPresenceReason =
+        "Allow this device to join for messaging only; no root key or management access",
   }) async {
     _validateProgress(progress);
     if (!sasConfirmed || !_isSixDigitSas(displayedSas)) {

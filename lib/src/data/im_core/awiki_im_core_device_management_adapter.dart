@@ -202,22 +202,36 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,
+  }) => _sendJoinOtp(handle: handle, contact: phone, email: false);
+
+  @override
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinEmailOtp({
+    required String handle,
+    required String email,
+  }) => _sendJoinOtp(handle: handle, contact: email.toLowerCase(), email: true);
+
+  Future<DeviceJoinSmsOtpSendReceipt> _sendJoinOtp({
+    required String handle,
+    required String contact,
+    required bool email,
   }) async {
     final target = _handleTarget(handle, targetHandleDomain);
     http.Response response;
     try {
       response = await _userServiceClient.postJson(
-        Uri.parse(userServiceUrl).resolve(smsCodePath),
+        Uri.parse(
+          userServiceUrl,
+        ).resolve(email ? '/user-service/v1/auth/email-codes' : smsCodePath),
         body: <String, Object?>{
-          'phone': phone.trim(),
+          (email ? 'email' : 'phone'): contact.trim(),
           'purpose': 'awiki.device.join.v1',
           'target_handle': target.handle,
           'target_handle_domain': target.domain,
-          'rate_limit_seconds': joinSmsResendCooldownSeconds,
+          if (!email) 'rate_limit_seconds': joinSmsResendCooldownSeconds,
         },
       );
     } on Object {
-      throw const DeviceManagementTransportException('sms_code_network');
+      throw const DeviceManagementTransportException('join_code_network');
     }
     if (response.statusCode == 429) {
       throw DeviceJoinSmsOtpRateLimited(
@@ -226,7 +240,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw DeviceManagementTransportException(
-        'sms_code_http_${response.statusCode}',
+        'join_code_http_${response.statusCode}',
       );
     }
     return const DeviceJoinSmsOtpSendReceipt(
@@ -290,11 +304,44 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     required String otp,
     required String operationId,
     required int ttlSeconds,
+  }) => _beginWithOtp(
+    handle: handle,
+    contact: phone,
+    email: false,
+    otp: otp,
+    operationId: operationId,
+    ttlSeconds: ttlSeconds,
+  );
+
+  @override
+  Future<DeviceJoinProgress> beginDeviceJoinWithEmail({
+    required String handle,
+    required String email,
+    required String otp,
+    required String operationId,
+    required int ttlSeconds,
+  }) => _beginWithOtp(
+    handle: handle,
+    contact: email.toLowerCase(),
+    email: true,
+    otp: otp,
+    operationId: operationId,
+    ttlSeconds: ttlSeconds,
+  );
+
+  Future<DeviceJoinProgress> _beginWithOtp({
+    required String handle,
+    required String contact,
+    required bool email,
+    required String otp,
+    required String operationId,
+    required int ttlSeconds,
   }) async {
     final handleTarget = _handleTarget(handle, targetHandleDomain);
     final did = await resolveJoinDid(handle);
-    final token = await _exchangeSmsOtp(
-      phone: phone,
+    final token = await _exchangeOtp(
+      contact: contact,
+      email: email,
       otp: otp,
       targetHandle: handleTarget.handle,
       targetDomain: handleTarget.domain,
@@ -436,8 +483,10 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
       joinSessionId: joinSessionId,
       sasConfirmed: sasConfirmed,
     );
-    _approvalManagement[result.approvalHandle] = capabilities.rootTransfer;
+    _approvalManagement[result.approvalHandle] =
+        capabilities.rootTransfer && result.managementAllowed;
     return DeviceJoinApprovalPrompt(
+      managementAllowed: capabilities.rootTransfer && result.managementAllowed,
       approvalHandle: result.approvalHandle,
       joinSessionId: result.joinSessionId,
       sas: result.sas,
@@ -483,8 +532,9 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     );
   }
 
-  Future<String> _exchangeSmsOtp({
-    required String phone,
+  Future<String> _exchangeOtp({
+    required String contact,
+    required bool email,
     required String otp,
     required String targetHandle,
     required String targetDomain,
@@ -495,9 +545,9 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
       response = await _userServiceClient.postJson(
         Uri.parse(userServiceUrl).resolve(accountVerificationExchangePath),
         body: <String, Object?>{
-          'provider': 'sms',
+          'provider': email ? 'email' : 'sms',
           'purpose': 'awiki.device.join.v1',
-          'phone': phone.trim(),
+          (email ? 'email' : 'phone'): contact.trim(),
           'code': otp,
           'target_handle': targetHandle,
           'target_handle_domain': targetDomain,

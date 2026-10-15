@@ -1197,7 +1197,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => '允许加入并成为管理设备';
+  String get deviceJoinApprove => '核对用途并批准加入';
+
+  @override
+  String get deviceJoinMessageOnlyPresenceReason =>
+      '允许该设备仅用于消息通信，不授予根密钥或身份管理权限';
 
   @override
   String get deviceJoinCancel => '取消关联';

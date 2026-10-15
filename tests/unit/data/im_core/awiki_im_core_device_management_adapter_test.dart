@@ -10,6 +10,25 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test('messages-only WBA enrollment always uses ordinary approval', () async {
+    final sdk = _WebApprovalCore();
+    sdk.resolvedDid = _did;
+    sdk.capabilities = coreWbaMethodCapabilities;
+    sdk.managementAllowed = false;
+    final adapter = _adapterWithCore(sdk);
+    final prompt = await adapter.prepareDeviceJoinApproval(
+      selector: _did,
+      joinSessionId: 'web-join',
+      sasConfirmed: true,
+    );
+    expect(prompt.managementAllowed, isFalse);
+    await adapter.confirmDeviceJoinApproval(
+      approvalHandle: prompt.approvalHandle,
+      userPresenceConfirmed: true,
+    );
+    expect(sdk.ordinaryCalls, 1);
+  });
+
   test(
     'Web Join remains ordinary member approval without Root management',
     () async {
@@ -134,6 +153,70 @@ void main() {
     });
     expect(receipt.retryAfterSeconds, 60);
   });
+
+  test(
+    'email Join sends a scoped code and keeps the grant inside Core',
+    () async {
+      final requests = <http.Request>[];
+      var began = false;
+      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+        coreInstance: () async => _PublicMethodCore(),
+        userServiceUrl: 'https://awiki.info',
+        targetHandleDomain: 'awiki.info',
+        resolveJoinTarget: ({required handle, required domain}) async => _did,
+        httpClient: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/email-codes')) {
+            return http.Response('{"message":"Code sent."}', 200);
+          }
+          return http.Response(
+            jsonEncode({
+              'purpose': 'awiki.device.join.v1',
+              'account_verification_token': 'private-grant',
+              'expires_at': '2030-01-01T00:00:00Z',
+            }),
+            200,
+          );
+        }),
+        beginDeviceJoin:
+            ({
+              required did,
+              required operationId,
+              required ttlSeconds,
+              required accountVerificationGrant,
+            }) async {
+              began = true;
+              expect(did, _did);
+              expect(operationId, 'email-join');
+              return _coreProgress();
+            },
+      );
+      await adapter.sendJoinEmailOtp(
+        handle: 'alice.awiki.info',
+        email: ' Alice@Example.com ',
+      );
+      final result = await adapter.beginDeviceJoinWithEmail(
+        handle: 'alice.awiki.info',
+        email: ' Alice@Example.com ',
+        otp: '123456',
+        operationId: 'email-join',
+        ttlSeconds: 600,
+      );
+      expect(began, isTrue);
+      final send = jsonDecode(requests[0].body) as Map;
+      expect(requests[0].url.path, '/user-service/v1/auth/email-codes');
+      expect(send['email'], 'alice@example.com');
+      expect(send['purpose'], 'awiki.device.join.v1');
+      expect(send.containsKey('phone'), isFalse);
+      final exchange = jsonDecode(requests[1].body) as Map;
+      expect(exchange['provider'], 'email');
+      expect(exchange['email'], 'alice@example.com');
+      expect(exchange['code'], '123456');
+      expect(exchange['target_handle_domain'], 'awiki.info');
+      expect(exchange['idempotency_scope'], 'email-join');
+      expect(result.toString(), isNot(contains('private-grant')));
+    },
+  );
 
   test('maps SMS 429 Retry-After to a bounded typed error', () async {
     const sensitive = 'provider-secret-must-not-escape';
@@ -788,12 +871,14 @@ class _WebApprovalCore extends _PublicMethodCore {
     capabilities = coreWebMethodCapabilities;
   }
   int ordinaryCalls = 0;
+  bool managementAllowed = true;
   @override
   Future<core.DeviceJoinApprovalPrompt> prepareDeviceJoinApproval({
     required core.IdentitySelector selector,
     required String joinSessionId,
     required bool sasConfirmed,
-  }) async => const core.DeviceJoinApprovalPrompt(
+  }) async => core.DeviceJoinApprovalPrompt(
+    managementAllowed: managementAllowed,
     approvalHandle: 'web-approval',
     joinSessionId: 'web-join',
     sas: '123456',
