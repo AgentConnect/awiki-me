@@ -2788,11 +2788,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentTenantUnsupportedSubtitle =>
-      'Switch to a tenant on an approved AWiki realm to manage Daemons and Agents.';
+      'Switch to a server that supports Agent features to manage Daemons and Agents.';
 
   @override
   String get agentErrorTenantUnsupported =>
       'The current tenant does not support Agent features yet.';
+
+  @override
+  String get agentErrorDaemonUnsupported =>
+      'This server does not support Daemons yet.';
 
   @override
   String get agentErrorSelectDaemon => 'Select a running daemon.';

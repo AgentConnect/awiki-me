@@ -2626,10 +2626,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentTenantUnsupportedSubtitle =>
-      '请回到登录页切换到已批准 AWiki 域名的租户后，再管理 Daemon 和智能体。';
+      '请切换到支持智能体功能的服务器后，再管理 Daemon 和智能体。';
 
   @override
   String get agentErrorTenantUnsupported => '当前租户暂不支持智能体功能。';
+
+  @override
+  String get agentErrorDaemonUnsupported => '此服务器暂不支持 Daemon。';
 
   @override
   String get agentErrorSelectDaemon => '请选择运行 Daemon。';

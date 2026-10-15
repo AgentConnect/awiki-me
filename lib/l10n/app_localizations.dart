@@ -4971,7 +4971,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentTenantUnsupportedSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'请回到登录页切换到已批准 AWiki 域名的租户后，再管理 Daemon 和智能体。'**
+  /// **'请切换到支持智能体功能的服务器后，再管理 Daemon 和智能体。'**
   String get agentTenantUnsupportedSubtitle;
 
   /// No description provided for @agentErrorTenantUnsupported.
@@ -4979,6 +4979,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前租户暂不支持智能体功能。'**
   String get agentErrorTenantUnsupported;
+
+  /// No description provided for @agentErrorDaemonUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'此服务器暂不支持 Daemon。'**
+  String get agentErrorDaemonUnsupported;
 
   /// No description provided for @agentErrorSelectDaemon.
   ///
