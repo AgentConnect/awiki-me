@@ -4,11 +4,72 @@ import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/data/services/method_channel_attachment_picker_service.dart';
 import 'package:awiki_me/src/presentation/server_features/backend_capabilities_provider.dart';
 import 'package:awiki_me/src/presentation/server_features/server_features_page.dart';
 import 'test_support.dart';
 
 void main() {
+  for (final status in ['confirmed', 'stale', 'unavailable', 'incompatible']) {
+    test('文件选择器使用当前消息能力上限 $status', () {
+      final container = ProviderContainer(
+        overrides: [
+          backendFeaturesProvider.overrideWithValue(
+            AsyncData(
+              BackendFeatures({
+                'message': {
+                  'status': status,
+                  'capabilities': {
+                    'attachments': {
+                      'support': 'supported',
+                      'limits': {'max_object_bytes': '4096'},
+                    },
+                  },
+                },
+              }),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final picker =
+          container.read(attachmentPickerServiceProvider)
+              as MethodChannelAttachmentPickerService;
+      expect(
+        picker.maxAttachmentSizeBytes,
+        ['confirmed', 'stale'].contains(status)
+            ? 4096
+            : defaultMaxAttachmentSizeBytes,
+      );
+    });
+  }
+  test('服务器上限不能扩大客户端上限或使用另一个权威来源', () {
+    const features = BackendFeatures({
+      'public': {
+        'status': 'confirmed',
+        'capabilities': {
+          'attachments': {
+            'support': 'supported',
+            'limits': {'max_object_bytes': 1},
+          },
+        },
+      },
+      'message': {
+        'status': 'confirmed',
+        'capabilities': {
+          'attachments': {
+            'support': 'supported',
+            'limits': {'max_object_bytes': 9000},
+          },
+        },
+      },
+    });
+    expect(
+      features.boundedPositiveLimit('attachments', 'max_object_bytes', 4000),
+      4000,
+    );
+  });
   test('能力投影隔离权威来源，未知不会当作关闭', () {
     const features = BackendFeatures({
       'public': {

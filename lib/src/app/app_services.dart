@@ -352,7 +352,18 @@ final userPresencePortProvider = Provider<UserPresencePort>(
 );
 
 final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(
-  (ref) => MethodChannelAttachmentPickerService(),
+  (ref) => MethodChannelAttachmentPickerService(
+    maxAttachmentSizeBytes:
+        ref
+            .watch(backendFeaturesProvider)
+            .valueOrNull
+            ?.boundedPositiveLimit(
+              'attachments',
+              'max_object_bytes',
+              defaultMaxAttachmentSizeBytes,
+            ) ??
+        defaultMaxAttachmentSizeBytes,
+  ),
 );
 
 final textClipboardServiceProvider = Provider<TextClipboardService>(

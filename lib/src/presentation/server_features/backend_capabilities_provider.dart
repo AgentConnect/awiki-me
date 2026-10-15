@@ -20,6 +20,21 @@ class BackendFeatures {
   }
 
   bool supports(String name) => support(name) == 'supported';
+  int boundedPositiveLimit(String name, String key, int clientLimit) {
+    if (!supports(name)) return clientLimit;
+    final source = sources[name.contains('.') ? 'public' : 'message'] as Map;
+    final limits = (source['capabilities'] as Map)[name]['limits'];
+    final raw = limits is Map ? limits[key] : null;
+    final value = raw is int
+        ? raw
+        : raw is String
+        ? int.tryParse(raw)
+        : null;
+    return value != null && value > 0 && value < clientLimit
+        ? value
+        : clientLimit;
+  }
+
   bool get stale => sources.values.any(
     (source) => source is Map && source['status'] == 'stale',
   );
