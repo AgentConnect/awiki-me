@@ -742,6 +742,10 @@ class AppTestCatalogCase {
             'rwiki.cn',
           }).isEmpty
         ? 'rwiki_cn_remote'
+        : expected.allowedHosts.toSet().difference(const <String>{
+            'mcp-adapt.anpclaw.com',
+          }).isEmpty
+        ? 'singapore_mcp_adapt_remote'
         : 'awiki_info_remote';
     if (layer != expectedLayer ||
         cleanupPolicy != expectedCleanup ||

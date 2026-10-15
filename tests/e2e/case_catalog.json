@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-10-12.singapore-isolated-test-fix",
+  "sourceRevision": "2026-10-16.hosted-gateway-join",
   "cases": [
     {
       "caseId": "HANDLE-RECOVERY-STATE-MACHINE-TARGET-E2E-001",
@@ -6369,6 +6369,69 @@
             "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:real_backend_customer_scope",
             "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:visible_effective_methods",
             "REGISTRATION-DOMAIN-DISCOVERY-E2E-001:domain_a_b_a_isolation"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HOSTED-GATEWAY-JOIN-E2E-001",
+      "feature": "Hosted Gateway email Join and App management activation",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Dedicated mcp-adapt.anpclaw.com services, an existing synthetic email Gateway-owned identity in a protected fixture, current native Core, and a fresh isolated macOS App root. The root-only synthetic OTP fixture does not test delivery providers.",
+      "action": "Enter email, Handle and OTP through DeviceJoinPage; compare the App-rendered SAS with the Gateway pairing response; explicitly approve management; wait for the exact identity AppShell and native local root readiness; perform a real root-authorized DID service update.",
+      "exactOracles": [
+        "The real App email form starts a fresh device Join on the fixed isolated origin.",
+        "Both displayed pairing values match before the explicit Gateway management approval.",
+        "AppShell activates the exact requested identity; current Registry admin plus Core local root capability must agree.",
+        "The receiving Core signs and completes a DID service update with no pending state.",
+        "Private device recovery material is retained; no false zero-residual cleanup claim is made."
+      ],
+      "negativeChecks": [
+        "Foreign or nonprivate fixture input, redirected credential requests, missing native root capability, wrong identity or pairing mismatch prevents pass attestation."
+      ],
+      "environment": "singapore_mcp_adapt_remote",
+      "cleanupPolicy": "retained_isolated_gateway_device_recovery_material",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/hosted_gateway_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HOSTED-GATEWAY-JOIN-E2E-001:email_join_ui",
+          "HOSTED-GATEWAY-JOIN-E2E-001:pairing_both_sides",
+          "HOSTED-GATEWAY-JOIN-E2E-001:exact_identity_activated",
+          "HOSTED-GATEWAY-JOIN-E2E-001:local_root_management_ready",
+          "HOSTED-GATEWAY-JOIN-E2E-001:root_authorized_service_update",
+          "HOSTED-GATEWAY-JOIN-E2E-001:recovery_material_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HOSTED-GATEWAY-JOIN-E2E-001:email_join_ui"
+          ],
+          [
+            "HOSTED-GATEWAY-JOIN-E2E-001:pairing_both_sides"
+          ],
+          [
+            "HOSTED-GATEWAY-JOIN-E2E-001:exact_identity_activated",
+            "HOSTED-GATEWAY-JOIN-E2E-001:local_root_management_ready"
+          ],
+          [
+            "HOSTED-GATEWAY-JOIN-E2E-001:root_authorized_service_update"
+          ],
+          [
+            "HOSTED-GATEWAY-JOIN-E2E-001:recovery_material_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HOSTED-GATEWAY-JOIN-E2E-001:email_join_ui",
+            "HOSTED-GATEWAY-JOIN-E2E-001:pairing_both_sides",
+            "HOSTED-GATEWAY-JOIN-E2E-001:exact_identity_activated",
+            "HOSTED-GATEWAY-JOIN-E2E-001:local_root_management_ready",
+            "HOSTED-GATEWAY-JOIN-E2E-001:root_authorized_service_update"
           ]
         ]
       }

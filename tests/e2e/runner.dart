@@ -44,6 +44,7 @@ export 'runner/redaction.dart';
 part 'runner/scenarios/app_pair.dart';
 part 'runner/scenarios/desktop_peer.dart';
 part 'runner/scenarios/join.dart';
+part 'runner/scenarios/hosted_gateway.dart';
 part 'runner/scenarios/recovery.dart';
 part 'runner/cli_artifact.dart';
 part 'runner/config.dart';
@@ -718,6 +719,8 @@ class DesktopE2eRunner {
           await _runRemoteRegistrationAccountFirst();
         case DesktopE2eCase.registrationDomainDiscovery:
           await _runRemoteRegistrationDomainDiscovery();
+        case DesktopE2eCase.hostedGatewayJoin:
+          await _runHostedGatewayJoin();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-10-12.singapore-isolated-test-fix",
+  "sourceRevision": "2026-10-16.hosted-gateway-join",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -1276,17 +1276,19 @@
         "release"
       ],
       "owner": "awiki-me",
-      "estimatedMinutes": 549,
-      "timeoutMinutes": 679,
+      "estimatedMinutes": 564,
+      "timeoutMinutes": 704,
       "cleanupPolicy": "child_suite_ledgers",
       "allowedHosts": [
-        "awiki.info",
         "agentwiki.info",
+        "awiki.info",
+        "mcp-adapt.anpclaw.com",
         "test-fix.anpclaw.com"
       ],
       "allowedDidDomains": [
-        "awiki.info",
         "agentwiki.info",
+        "awiki.info",
+        "mcp-adapt.anpclaw.com",
         "test-fix.anpclaw.com"
       ],
       "resourceCategories": [
@@ -1377,6 +1379,7 @@
         "HANDLE-RECOVERY-V1-E2E-001",
         "HANDLE-RECOVERY-V1-E2E-002",
         "HANDLE-RECOVERY-V1-E2E-003",
+        "HOSTED-GATEWAY-JOIN-E2E-001",
         "IDENTITY-DATA-DELETION-RESUME-E2E-001",
         "IDENTITY-DELETE-E2E-001",
         "IDENTITY-DELETION-RECOVERY-GUARD-E2E-001",
@@ -1443,7 +1446,8 @@
         "production-keychain",
         "avatars",
         "agent-avatars",
-        "registration-domain-discovery"
+        "registration-domain-discovery",
+        "hosted-gateway-join"
       ]
     },
     "registration-account-first": {
@@ -1574,6 +1578,37 @@
       ],
       "caseIds": [
         "REGISTRATION-DOMAIN-DISCOVERY-E2E-001"
+      ]
+    },
+    "hosted-gateway-join": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos"
+      ],
+      "requiredTools": [
+        "flutter",
+        "ssh"
+      ],
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "retained_isolated_gateway_device_recovery_material",
+      "allowedHosts": [
+        "mcp-adapt.anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "mcp-adapt.anpclaw.com"
+      ],
+      "resourceCategories": [
+        "isolated_app_state",
+        "dedicated_test_identity",
+        "joined_device"
+      ],
+      "caseIds": [
+        "HOSTED-GATEWAY-JOIN-E2E-001"
       ]
     }
   }

@@ -419,6 +419,9 @@ extension DesktopE2eReporting on DesktopE2eRunner {
     if (_resourceCleanupStatus != 'residual') {
       return 'none';
     }
+    if (options.e2eCase == DesktopE2eCase.hostedGatewayJoin) {
+      return 'isolated_device_recovery_material_intentionally_retained';
+    }
     if (appPairMessageCleanup != null) {
       return appPairMessageCleanup!['status'] == 'cleaned'
           ? 'message_scope_cleaned_other_resources_retained'
@@ -433,7 +436,10 @@ extension DesktopE2eReporting on DesktopE2eRunner {
         config?.serviceBaseUrl ??
         remoteMultiDeviceJoinConfig?.serviceBaseUrl ??
         remoteHandleRecoveryConfig?.serviceBaseUrl ??
-        remoteMultiDeviceAppPairConfig?.serviceBaseUrl;
+        remoteMultiDeviceAppPairConfig?.serviceBaseUrl ??
+        (options.e2eCase == DesktopE2eCase.hostedGatewayJoin
+            ? 'https://mcp-adapt.anpclaw.com'
+            : null);
     final targetHost = targetUrl == null ? null : Uri.tryParse(targetUrl)?.host;
     final sourceRef =
         config?.cliSourceRef ?? remoteMultiDeviceJoinConfig?.cliSourceRef;

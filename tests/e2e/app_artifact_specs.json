@@ -2,7 +2,8 @@
   "schemaVersion": 1,
   "sourceRevision": "2026-10-12.isolated-tenant-config-v1",
   "targetTenantCatalogs": {
-    "singapore-test-fix": "configs/singapore-test-fix-tenants.json"
+    "singapore-test-fix": "configs/singapore-test-fix-tenants.json",
+    "singapore-mcp-adapt": "configs/singapore-mcp-adapt-tenants.json"
   },
   "artifacts": [
     {
@@ -24,17 +25,27 @@
       "name": "agent-avatars",
       "target": "integration_test/desktop_agent_avatar_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.agentavatars",
-      "supportedPlatforms": ["macos", "linux"],
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
       "dartDefines": [],
-      "consumerSuites": ["agent-avatars"]
+      "consumerSuites": [
+        "agent-avatars"
+      ]
     },
     {
       "name": "avatars",
       "target": "integration_test/desktop_avatar_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.avatars",
-      "supportedPlatforms": ["macos", "linux"],
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
       "dartDefines": [],
-      "consumerSuites": ["avatars"]
+      "consumerSuites": [
+        "avatars"
+      ]
     },
     {
       "name": "smoke-app",
@@ -451,6 +462,21 @@
       ],
       "consumerSuites": [
         "registration-account-first"
+      ]
+    },
+    {
+      "name": "hosted-gateway-join",
+      "target": "integration_test/hosted_gateway_join_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.mcpadapt.joiner",
+      "supportedPlatforms": [
+        "macos"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_RELEASE=1015"
+      ],
+      "consumerSuites": [
+        "hosted-gateway-join"
       ]
     }
   ]

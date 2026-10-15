@@ -2397,14 +2397,26 @@ cliHandle: legacy-cli
         for (final e2eCase in DesktopE2eCase.values) {
           final definition = manifest.definitionFor(e2eCase);
           if (definition.allowedHosts.isEmpty) continue;
+          final domain = e2eCase == DesktopE2eCase.hostedGatewayJoin
+              ? 'mcp-adapt.anpclaw.com'
+              : 'test-fix.anpclaw.com';
           expect(
             () => definition.validateRemoteTargetValues(
-              didDomain: 'test-fix.anpclaw.com',
-              serviceUrls: ['https://test-fix.anpclaw.com'],
+              didDomain: domain,
+              serviceUrls: ['https://$domain'],
             ),
             returnsNormally,
             reason: e2eCase.name,
           );
+          if (e2eCase == DesktopE2eCase.hostedGatewayJoin) {
+            expect(
+              () => definition.validateRemoteTargetValues(
+                didDomain: 'test-fix.anpclaw.com',
+                serviceUrls: ['https://test-fix.anpclaw.com'],
+              ),
+              throwsA(isA<E2eFailure>()),
+            );
+          }
           expect(
             () => definition.validateRemoteTargetValues(
               didDomain: 'test-fix.anpclaw.com',
