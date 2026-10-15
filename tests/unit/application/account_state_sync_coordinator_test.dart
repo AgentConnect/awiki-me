@@ -12,12 +12,105 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
+import 'package:awiki_me/src/presentation/server_features/backend_capabilities_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
 
 void main() {
+  test(
+    'stable unsupported stops retries until a newer confirmed discovery',
+    () async {
+      final remote = _CoordinatorRemote()
+        ..manifestFailure = const AccountStateSyncUnsupported();
+      var discoveryTime = 1;
+      var discoveryStatus = 'confirmed';
+      final container = ProviderContainer(
+        overrides: <Override>[
+          identityCorePortProvider.overrideWithValue(_identityCorePort()),
+          productLocalStoreProvider.overrideWithValue(
+            InMemoryAwikiProductLocalStore(),
+          ),
+          accountStateSyncPortProvider.overrideWithValue(remote),
+          backendFeaturesFutureProvider.overrideWith(
+            (ref) => Future.value(
+              BackendFeatures({
+                'public': {
+                  'status': discoveryStatus,
+                  'fetched_at': discoveryTime,
+                  'capabilities': {
+                    'account.state_sync': {'support': 'supported'},
+                  },
+                },
+              }),
+            ),
+          ),
+          accountStateSyncCoordinatorProvider.overrideWith(
+            (ref) =>
+                AccountStateSyncCoordinator(ref, failureBackoff: Duration.zero),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        accountStateSyncCoordinatorProvider.notifier,
+      );
+      container
+          .read(sessionProvider.notifier)
+          .setSession(_session(accountId: 'account-1'));
+      await coordinator.request(
+        'first',
+        minimumVersion: AccountStateVersionFloor(
+          domain: ProductAccountDomain.profile,
+          version: '1',
+        ),
+      );
+      expect(remote.manifestCalls, 1);
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).status,
+        AccountStateSyncCoordinatorStatus.unavailable,
+      );
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).lastCompletedAt,
+        isNull,
+      );
+      await coordinator.request('forced-again', force: true);
+      await Future<void>.delayed(Duration.zero);
+      expect(remote.manifestCalls, 1);
+      discoveryTime = 2;
+      discoveryStatus = 'stale';
+      container.invalidate(backendFeaturesFutureProvider);
+      await coordinator.request('stale');
+      expect(remote.manifestCalls, 1);
+      discoveryStatus = 'confirmed';
+      remote.manifestFailure = null;
+      container.invalidate(backendFeaturesFutureProvider);
+      await coordinator.request('new-confirmation');
+      expect(remote.manifestCalls, 3);
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).status,
+        AccountStateSyncCoordinatorStatus.ready,
+      );
+      final completedAt = container
+          .read(accountStateSyncCoordinatorProvider)
+          .lastCompletedAt;
+      remote.manifestFailure = const AccountStateSyncUnsupported();
+      await coordinator.request('disabled-later');
+      expect(container.read(profileProvider).profile?.displayName, 'Alice v1');
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).lastCompletedAt,
+        completedAt,
+      );
+      coordinator.resetForSession();
+      remote.manifestFailure = null;
+      await coordinator.request('new-session');
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).status,
+        AccountStateSyncCoordinatorStatus.ready,
+      );
+    },
+  );
   test(
     'reconcile publishes committed Profile and display-only Registry',
     () async {
@@ -71,46 +164,52 @@ void main() {
     },
   );
 
-  test('session switch during manifest load fences every projection', () async {
-    final remote = _CoordinatorRemote(blockManifest: true);
-    final container = ProviderContainer(
-      overrides: <Override>[
-        identityCorePortProvider.overrideWithValue(_identityCorePort()),
-        productLocalStoreProvider.overrideWithValue(
-          InMemoryAwikiProductLocalStore(),
-        ),
-        accountStateSyncPortProvider.overrideWithValue(remote),
-      ],
-    );
-    addTearDown(container.dispose);
-    container.read(accountStateSyncCoordinatorProvider);
-    container
-        .read(sessionProvider.notifier)
-        .setSession(_session(accountId: 'account-1'));
-    final operation = container
-        .read(accountStateSyncCoordinatorProvider.notifier)
-        .request(
-          'blocked',
-          minimumVersion: AccountStateVersionFloor(
-            domain: ProductAccountDomain.profile,
-            version: '2',
-          ),
+  for (final failure in <Object?>[null, const AccountStateSyncUnsupported()]) {
+    test(
+      'session switch fences late manifest ${failure == null ? 'success' : 'unsupported'}',
+      () async {
+        final remote = _CoordinatorRemote(blockManifest: true)
+          ..manifestFailure = failure;
+        final container = ProviderContainer(
+          overrides: <Override>[
+            identityCorePortProvider.overrideWithValue(_identityCorePort()),
+            productLocalStoreProvider.overrideWithValue(
+              InMemoryAwikiProductLocalStore(),
+            ),
+            accountStateSyncPortProvider.overrideWithValue(remote),
+          ],
         );
-    await remote.manifestStarted.future;
+        addTearDown(container.dispose);
+        container.read(accountStateSyncCoordinatorProvider);
+        container
+            .read(sessionProvider.notifier)
+            .setSession(_session(accountId: 'account-1'));
+        final operation = container
+            .read(accountStateSyncCoordinatorProvider.notifier)
+            .request(
+              'blocked',
+              minimumVersion: AccountStateVersionFloor(
+                domain: ProductAccountDomain.profile,
+                version: '2',
+              ),
+            );
+        await remote.manifestStarted.future;
 
-    container
-        .read(sessionProvider.notifier)
-        .setSession(_session(accountId: 'account-2'));
-    remote.releaseManifest.complete();
-    await operation;
+        container
+            .read(sessionProvider.notifier)
+            .setSession(_session(accountId: 'account-2'));
+        remote.releaseManifest.complete();
+        await operation;
 
-    expect(container.read(profileProvider).profile, isNull);
-    expect(container.read(devicesProvider).cachedRegistry, isNull);
-    expect(
-      container.read(accountStateSyncCoordinatorProvider).status,
-      AccountStateSyncCoordinatorStatus.idle,
+        expect(container.read(profileProvider).profile, isNull);
+        expect(container.read(devicesProvider).cachedRegistry, isNull);
+        expect(
+          container.read(accountStateSyncCoordinatorProvider).status,
+          AccountStateSyncCoordinatorStatus.idle,
+        );
+      },
     );
-  });
+  }
 
   test('mutation floor follows up until committed cache reaches it', () async {
     final remote = _CoordinatorRemote(
@@ -382,6 +481,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
   int concurrentManifestLoads = 0;
   int maxConcurrentManifestLoads = 0;
   int inventoryCalls = 0;
+  Object? manifestFailure;
 
   String get currentVersion {
     final floor = floorVersion;
@@ -408,6 +508,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
       await releaseManifest.future;
     }
     concurrentManifestLoads -= 1;
+    if (manifestFailure != null) throw manifestFailure!;
     final responseVersion = currentVersion;
     return AccountStateManifest(
       accountId: 'account-1',

@@ -12,9 +12,15 @@ Message Service does not carry their payloads.
 
 ## Availability
 
-After a deployment enables multi-device support, ordinary message sync and
-account-state reconciliation are default-on for every authenticated account and
-valid device. AWiki Me does not select an account allowlist, device cohort, or
+Account-state reconciliation requires the current tenant's confirmed
+`account.state_sync` capability, an authenticated account and a valid device.
+An explicit stable `not_supported` RPC result suspends reconciliation and its
+retry timers for that discovery snapshot. A newer confirmed discovery or a new
+session may enable it again; stale discovery cannot undo the rejection.
+The App retains committed caches, pending version floors and the previous
+completion time, and reports `unavailable` instead of manufacturing sync success.
+Authentication, unknown-method and network errors retain their normal handling.
+Ordinary message sync remains separate. AWiki Me does not select an account allowlist, device cohort, or
 percentage rollout. `AWIKI_SYNC_V2_READ=false` is reserved for a global
 emergency rollback. The separate Direct/Group E2EE capability gates remain
 available, while AWiki Me ordinary Direct sends and group creation select the

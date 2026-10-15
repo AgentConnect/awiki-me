@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_services.dart';
 import '../../../application/account_state_sync_request_bus.dart';
 import '../../../application/account_state_sync_service.dart';
+import '../../../application/ports/account_state_sync_port.dart';
 import '../../../application/models/product_local_models.dart';
 import '../../../application/product_local_store.dart';
 import '../../../domain/entities/device_management.dart';
@@ -22,6 +23,7 @@ enum AccountStateSyncCoordinatorStatus {
   ready,
   partialFailure,
   retryWaiting,
+  unavailable,
 }
 
 class AccountStateSyncCoordinatorState {
@@ -92,6 +94,8 @@ class AccountStateSyncCoordinator
       <ProductAccountDomain, String>{};
   bool _disposed = false;
   bool _remoteUnavailable = false;
+  bool _backendRejected = false;
+  int? _rejectedDiscoveryTime;
 
   Future<void> request(
     String reason, {
@@ -148,6 +152,9 @@ class AccountStateSyncCoordinator
     _followUpRequested = false;
     _followUpReason = null;
     _requiredMinimumVersions.clear();
+    _remoteUnavailable = false;
+    _backendRejected = false;
+    _rejectedDiscoveryTime = null;
     state = const AccountStateSyncCoordinatorState();
   }
 
@@ -196,11 +203,24 @@ class AccountStateSyncCoordinator
     }
     final features = await ref.read(backendFeaturesFutureProvider);
     if (!_isCurrent(fence)) return;
-    _remoteUnavailable = !features.supports('account.state_sync');
+    final public = features.sources['public'];
+    final fetchedAt = public is Map ? public['fetched_at'] : null;
+    if (_backendRejected &&
+        public is Map &&
+        public['status'] == 'confirmed' &&
+        fetchedAt is int &&
+        (_rejectedDiscoveryTime == null ||
+            fetchedAt > _rejectedDiscoveryTime!)) {
+      _backendRejected = false;
+    }
+    _remoteUnavailable =
+        _backendRejected || !features.supports('account.state_sync');
     if (_remoteUnavailable) {
       await _publishCachedSnapshots(fence, <ProductAccountDomain, Object>{});
       _followUpRequested = false;
       _retryTimer?.cancel();
+      _retryTimer = null;
+      _publishUnavailable(reason);
       return;
     }
     state = AccountStateSyncCoordinatorState(
@@ -240,6 +260,10 @@ class AccountStateSyncCoordinator
       if (!_isCurrent(fence)) {
         return;
       }
+      if (error is AccountStateSyncUnsupported) {
+        _stopUnsupported(reason, fetchedAt);
+        return;
+      }
       final failures = <ProductAccountDomain, Object>{
         for (final domain in ProductAccountDomain.values) domain: error,
       };
@@ -254,6 +278,12 @@ class AccountStateSyncCoordinator
       return;
     }
     if (result.sessionInvalidated || !_isCurrent(fence)) {
+      return;
+    }
+    if (result.failures.values.any(
+      (error) => error is AccountStateSyncUnsupported,
+    )) {
+      _stopUnsupported(reason, fetchedAt);
       return;
     }
 
@@ -354,6 +384,29 @@ class AccountStateSyncCoordinator
         projectionErrors[ProductAccountDomain.deviceRegistry] = error;
       }
     }
+  }
+
+  void _stopUnsupported(String reason, Object? fetchedAt) {
+    _backendRejected = true;
+    _rejectedDiscoveryTime = fetchedAt is int ? fetchedAt : null;
+    _remoteUnavailable = true;
+    _followUpRequested = false;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _publishUnavailable(reason);
+  }
+
+  void _publishUnavailable(String reason) {
+    state = AccountStateSyncCoordinatorState(
+      status: AccountStateSyncCoordinatorStatus.unavailable,
+      lastReason: reason,
+      lastCompletedAt: state.lastCompletedAt,
+      domainVersions: state.domainVersions,
+      minimumVersions: Map.unmodifiable(_requiredMinimumVersions),
+      unmetMinimumVersions: Map.unmodifiable(_requiredMinimumVersions),
+      domainErrors: state.domainErrors,
+      warnings: state.warnings,
+    );
   }
 
   Future<void> _finish(

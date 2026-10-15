@@ -12,6 +12,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 void main() {
+  for (final scenario in [
+    (200, -32010, 'not_supported', true),
+    (200, 1401, 'not_supported', false),
+    (200, 1403, 'not_supported', false),
+    (200, -32601, 'Method not found', false),
+    (401, -32010, 'not_supported', false),
+    (403, -32010, 'not_supported', false),
+  ]) {
+    test('classifies only stable unsupported: $scenario', () async {
+      final httpClient = _RpcHttpClient(
+        statusCode: scenario.$1,
+        error: {'code': scenario.$2, 'message': scenario.$3},
+      );
+      final utility = AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://example.test',
+        httpClient: httpClient,
+      );
+      final adapter = UserServiceAccountStateSyncAdapter(
+        userServiceUrl: 'https://example.test',
+        client: utility,
+        authenticatedClient: AuthenticatedUserServiceRpcClient(
+          client: utility,
+          sessions: AuthSessionCoordinator(sessions: _Sessions()),
+        ),
+      );
+      await expectLater(
+        adapter.loadManifest(),
+        throwsA(
+          scenario.$4
+              ? isA<AccountStateSyncUnsupported>()
+              : isA<AwikiOnboardingUtilityError>(),
+        ),
+      );
+    });
+  }
   test('requires an explicit device-access authenticated client', () async {
     final adapter = UserServiceAccountStateSyncAdapter(
       userServiceUrl: 'https://example.test',
@@ -160,10 +195,17 @@ void main() {
 }
 
 class _RpcHttpClient extends http.BaseClient {
-  _RpcHttpClient({this.extraManifestKey = false, this.result});
+  _RpcHttpClient({
+    this.extraManifestKey = false,
+    this.result,
+    this.error,
+    this.statusCode = 200,
+  });
 
   final bool extraManifestKey;
   final Map<String, Object?>? result;
+  final Map<String, Object?>? error;
+  final int statusCode;
   String? lastAuthorization;
   String? lastPath;
   String? lastMethod;
@@ -195,12 +237,13 @@ class _RpcHttpClient extends http.BaseClient {
       jsonEncode(<String, Object?>{
         'jsonrpc': '2.0',
         'result': responseResult,
+        if (error != null) 'error': error,
         'id': 'req-1',
       }),
     );
     return http.StreamedResponse(
       Stream<List<int>>.value(bytes),
-      200,
+      statusCode,
       headers: const <String, String>{'content-type': 'application/json'},
     );
   }
@@ -244,7 +287,9 @@ class _Sessions with AppSessionTransitionGuard implements AppSessionService {
       sessionLeaseFor(session);
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) =>
