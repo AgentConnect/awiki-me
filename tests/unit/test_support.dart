@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/application/ports/backend_capabilities_port.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -4297,7 +4298,49 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
 }
 
 class FakeIdentityCorePort
-    implements IdentityCorePort, DaemonSubkeyAuthorizationCorePort {
+    implements
+        IdentityCorePort,
+        DaemonSubkeyAuthorizationCorePort,
+        BackendCapabilitiesPort {
+  // Default fixture represents a fully declared official candidate. Tests can
+  // replace this map to exercise disabled, missing, and stale declarations.
+  Map<String, dynamic> backendFeatureSources = {
+    'public': {
+      'status': 'confirmed',
+      'capabilities': {
+        for (final key in [
+          'identity.multi_device',
+          'identity.device_revoke',
+          'identity.capability_upgrade',
+          'identity.root_transfer',
+          'agents.managed_agents',
+          'agents.daemon',
+          'account.state_sync',
+          'services.mail',
+          'client_updates.policy',
+        ])
+          key: {'support': 'supported'},
+      },
+    },
+    'message': {
+      'status': 'confirmed',
+      'capabilities': {
+        for (final key in [
+          'direct',
+          'groups',
+          'attachments',
+          'direct_e2ee',
+          'group_e2ee',
+        ])
+          key: {'support': 'supported'},
+      },
+    },
+  };
+  @override
+  Future<Map<String, dynamic>> backendCapabilities({
+    bool force = false,
+  }) async => backendFeatureSources;
+
   @override
   Future<IdentityMethodCapabilities> identityMethodCapabilities(
     String did,

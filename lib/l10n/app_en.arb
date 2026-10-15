@@ -4,7 +4,13 @@
   "agentLifecycleRetiredReason": "This agent's legacy integration has been retired. Its controller needs to create a new agent.",
   "agentLifecycleInactiveReason": "This agent has been disabled and cannot receive new instructions.",
   "agentLifecycleMessageNotice": "{name} is unavailable",
-  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
+  "@agentLifecycleMessageNotice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "@@locale": "en",
   "identityMethodLabel": "Identity method",
   "identityWebAdminLimitation": "Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.",
@@ -1767,14 +1773,42 @@
   "deviceJoinLocalSasLabel": "Shown on this device",
   "commonLater": "Later",
   "deviceJoinNoticeTitle": "{device} wants to join your account",
-  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "@deviceJoinNoticeTitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "deviceJoinNoticeExpiry": "Valid until {time}",
-  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "@deviceJoinNoticeExpiry": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "deviceJoinStepRequest": "Send join request",
   "deviceJoinStepRequestSub": "Sent to your managing device",
   "deviceJoinStepVerify": "Managing device verifies",
   "deviceJoinStepVerifyWaiting": "Waiting for “Start verification”",
   "deviceJoinStepVerifySas": "Confirm both 6-digit codes match",
   "deviceJoinStepJoin": "Join the account",
-  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later"
+  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later",
+  "serverFeaturesTitle": "Server features",
+  "serverFeaturesSupported": "Available",
+  "serverFeaturesUnsupported": "Not supported by this server",
+  "serverFeaturesUnknown": "Not confirmed yet. Please retry.",
+  "serverFeaturesStale": "Unable to refresh. Showing the last confirmed features.",
+  "serverFeaturesMessaging": "Messaging",
+  "serverFeaturesGroups": "Group chats",
+  "serverFeaturesAttachments": "Attachments",
+  "serverFeaturesEncryption": "Encrypted chats",
+  "serverFeaturesGroupEncryption": "Encrypted groups",
+  "serverFeaturesDevices": "Multiple devices",
+  "serverFeaturesAgents": "Agents",
+  "serverFeaturesMail": "Email",
+  "serverFeaturesUpdates": "Client updates",
+  "serverFeaturesPages": "Pages and sites",
+  "onboardingHandleOnlyHint": "Register with a username. No phone number or email is required.\nMore server features are shown after sign-in."
 }

@@ -589,3 +589,14 @@ Onboarding support 与 bootstrap 的有效 environment 绑定，`server-info` �
 返回的有效 phone/email 方法，最终注册准入仍由 Core 调用 User Service 原子执行。
 
 对于联系人类型受限的客户域，已有账号入口先对精确 Handle 做公开 existing 检查，再读取未带 registration_domain 的部署验证渠道，以保留既有登录/Join 的正常因子。该显示路径不授予身份或新建资格；发送与注册前仍复核 existing 分支，服务端保留最终域策略。切换 Handle 时恢复域名注册发现，异步结果用请求 revision 防止旧加载覆盖新模式。
+
+## 能力发现的租户隔离
+
+后端能力由 Core 提供，APP 通过 BackendCapabilitiesPort 消费安全投影。
+backendFeaturesProvider 以当前 Core port 与 session generation 选择独立异步提供者，
+切换后不沿用上一租户 AsyncValue 的 data。运行时再次核对客户端实例，迟到响应拒绝更新。
+同上下文刷新沿用 Core 的 confirmed/stale 状态；注册发现也只保留相同流程上下文的旧结果。
+
+服务器功能页面使用同一投影展示已确认、关闭和未确认状态；独立 Agent 入口、设备操作、
+加密选项与账户同步按声明判断。关闭账户同步时仍发布本地缓存，不伪造远端 reconcile 成功。
+明确没有更新政策是正常状态，已缓存最低版本仍有效。状态变化不删除身份、历史或草稿。

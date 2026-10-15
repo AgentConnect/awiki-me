@@ -172,7 +172,9 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     }
     try {
       _validateNetworkUri(_policyUri, label: 'update policy');
-      final response = await _sendBounded(_policyUri);
+      final response = await _sendBounded(_policyUri.path.endsWith('/server-info')
+          ? _policyUri.replace(queryParameters: {..._policyUri.queryParameters, 'capabilities_version': '1'})
+          : _policyUri);
       if (_disposed) throw StateError('Update service disposed.');
       if (response.statusCode == 404 && !officialTenant) {
         return _acceptPolicy(
@@ -196,6 +198,23 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
       final document = decoded.map<String, Object?>(
         (key, value) => MapEntry(key.toString(), value),
       );
+      final updates = document['client_updates'];
+      final policy = updates is Map ? updates['policy'] : null;
+      if (document['schema_version'] == 1 &&
+          document['capabilities_version'] == 1 &&
+          policy is Map &&
+          policy['protocol_version'] == 1 &&
+          policy['enabled'] == false) {
+        return _acceptPolicy(
+          currentVersion,
+          _CachedUpdatePolicy(
+            unavailable: true,
+            manifest: cached.manifest,
+            revision: cached.revision,
+            cachedAt: DateTime.now().toUtc(),
+          ),
+        );
+      }
       // Disabled products must pass the same origin/revision checks as an
       // enabled product before they are allowed to remove a cached minimum.
       final revision = _validateResponsePolicy(document, cached.revision);
@@ -623,7 +642,7 @@ Uri _buildPolicyUri(String backendBaseUrl, String? override) {
   if (override != null) return Uri.parse(override);
   final base = Uri.parse(backendBaseUrl);
   return Uri.parse(
-    '${_origin(base)}/user-service/v1/server-info?client_platform=app',
+    '${_origin(base)}/user-service/v1/server-info?client_platform=app&capabilities_version=1',
   );
 }
 

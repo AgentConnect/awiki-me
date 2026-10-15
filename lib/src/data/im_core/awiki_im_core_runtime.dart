@@ -163,6 +163,16 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     _core = opened;
   }
 
+  Future<Map<String, dynamic>> backendCapabilities({bool force = false}) async {
+    final instance = await coreInstance();
+    final client = _currentClient;
+    final public = await instance.backendCapabilities(force: force);
+    final local = client == null ? null : await client.backendCapabilities(force: force);
+    _ensureNotDisposed();
+    if (!identical(client, _currentClient)) throw StateError('capability_context_changed');
+    return {'public': public, if (local != null) 'message': local};
+  }
+
   Future<void> openAndValidate() async {
     await open();
     await validate();

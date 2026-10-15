@@ -1,3 +1,4 @@
+import '../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 import '../../domain/entities/agent/agent_availability.dart';
 import 'agent_availability_provider.dart';
@@ -258,7 +259,13 @@ class PendingDaemonUpgradeCancel {
 }
 
 final agentImEnabledProvider = Provider<bool>(
-  (ref) => ref.watch(awikiEnvironmentConfigProvider).agentImEnabled,
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).agentImEnabled &&
+      (ref
+              .watch(backendFeaturesProvider)
+              .valueOrNull
+              ?.supports('agents.managed_agents') ??
+          false),
 );
 
 enum AgentInventoryAutoSyncReason { backgroundDiscovery, daemonInstall }

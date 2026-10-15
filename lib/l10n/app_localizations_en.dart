@@ -4363,4 +4363,54 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deviceJoinStepJoinSub =>
       'Joins as a regular device; a managing device can grant management later';
+
+  @override
+  String get serverFeaturesTitle => 'Server features';
+
+  @override
+  String get serverFeaturesSupported => 'Available';
+
+  @override
+  String get serverFeaturesUnsupported => 'Not supported by this server';
+
+  @override
+  String get serverFeaturesUnknown => 'Not confirmed yet. Please retry.';
+
+  @override
+  String get serverFeaturesStale =>
+      'Unable to refresh. Showing the last confirmed features.';
+
+  @override
+  String get serverFeaturesMessaging => 'Messaging';
+
+  @override
+  String get serverFeaturesGroups => 'Group chats';
+
+  @override
+  String get serverFeaturesAttachments => 'Attachments';
+
+  @override
+  String get serverFeaturesEncryption => 'Encrypted chats';
+
+  @override
+  String get serverFeaturesGroupEncryption => 'Encrypted groups';
+
+  @override
+  String get serverFeaturesDevices => 'Multiple devices';
+
+  @override
+  String get serverFeaturesAgents => 'Agents';
+
+  @override
+  String get serverFeaturesMail => 'Email';
+
+  @override
+  String get serverFeaturesUpdates => 'Client updates';
+
+  @override
+  String get serverFeaturesPages => 'Pages and sites';
+
+  @override
+  String get onboardingHandleOnlyHint =>
+      'Register with a username. No phone number or email is required.\nMore server features are shown after sign-in.';
 }

@@ -1,3 +1,4 @@
+import '../../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -90,6 +91,7 @@ class AccountStateSyncCoordinator
   final Map<ProductAccountDomain, String> _requiredMinimumVersions =
       <ProductAccountDomain, String>{};
   bool _disposed = false;
+  bool _remoteUnavailable = false;
 
   Future<void> request(
     String reason, {
@@ -159,6 +161,7 @@ class AccountStateSyncCoordinator
         _requiredMinimumVersions,
       );
       await _runOnce(reason, minimumVersions: minimumVersions);
+      if (_remoteUnavailable) break;
       if (_requiredMinimumVersions.isNotEmpty && !_disposed) {
         versionFloorAttempts += 1;
         if (versionFloorAttempts >= maximumVersionFloorAttempts) {
@@ -189,6 +192,15 @@ class AccountStateSyncCoordinator
     );
     if (fence == null || !_isCurrent(fence)) {
       resetForSession();
+      return;
+    }
+    final features = await ref.read(backendFeaturesFutureProvider);
+    if (!_isCurrent(fence)) return;
+    _remoteUnavailable = !features.supports('account.state_sync');
+    if (_remoteUnavailable) {
+      await _publishCachedSnapshots(fence, <ProductAccountDomain, Object>{});
+      _followUpRequested = false;
+      _retryTimer?.cancel();
       return;
     }
     state = AccountStateSyncCoordinatorState(

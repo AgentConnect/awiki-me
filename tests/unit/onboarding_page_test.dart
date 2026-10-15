@@ -2760,6 +2760,43 @@ void main() {
     expect(gateway.registerHandleCalls, 0);
   });
 
+  testWidgets('新版 handle-only 注册不要求联系方式', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..serverInfo = OnboardingServerInfo.fromJson({
+        'schema_version': 1,
+        'capabilities_version': 1,
+        'service': {'kind': 'awiki-open-server', 'name': 'Open Server'},
+        'identity': {
+          'handle_registration': {
+            'enabled': true,
+            'default_method': 'handle_only',
+            'availability': 'open',
+            'methods': [
+              {
+                'id': 'handle_only',
+                'enabled': true,
+                'verification': {'required': false, 'type': 'none'},
+              },
+            ],
+          },
+          'handle_recovery': {'methods': []},
+        },
+      });
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await _settleVerificationStep(tester);
+    expect(find.text('发送验证码'), findsNothing);
+    expect(find.text('手机号'), findsNothing);
+    expect(find.textContaining('无需手机号或邮箱'), findsOneWidget);
+    await tester.enterText(find.byType(CupertinoTextField).first, 'alice');
+    await tester.ensureVisible(find.text('完成'));
+    await _tapVisible(tester, find.text('完成'));
+    await _settleVerificationStep(tester);
+    expect(gateway.registerHandleWithoutContactVerificationCalls, 1);
+    expect(gateway.registerHandleCalls, 0);
+  });
+
   testWidgets('server-info 加载失败时注册区展示重试入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..serverInfoError = StateError('server-info unavailable');

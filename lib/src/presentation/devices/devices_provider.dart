@@ -1,3 +1,4 @@
+import '../server_features/backend_capabilities_provider.dart';
 // [INPUT]: Session identity with exact local ID, Device Registry/Join/revoke services, root-transfer service, and UI intents.
 // [OUTPUT]: Secret-free device list, Join continuity, revoke, and admin-readiness presentation state.
 // [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
@@ -307,6 +308,13 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   Future<void> loadManagement() async {
+    final capabilityEpoch = _sessionEpoch;
+    final features = await ref.read(backendFeaturesFutureProvider);
+    if (!mounted ||
+        capabilityEpoch != _sessionEpoch ||
+        !features.supports('identity.multi_device')) {
+      return;
+    }
     final selector = _selector;
     if (selector == null) {
       state = state.copyWith(error: DeviceManagementErrorKind.unavailable);
@@ -770,6 +778,13 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool _managementProgressPending = false;
 
   Future<void> refreshManagementProgress() async {
+    final capabilityEpoch = _sessionEpoch;
+    final features = await ref.read(backendFeaturesFutureProvider);
+    if (!mounted ||
+        capabilityEpoch != _sessionEpoch ||
+        !features.supports('identity.multi_device')) {
+      return;
+    }
     if (_managementProgressPending ||
         state.isLoading ||
         state.isActionPending) {

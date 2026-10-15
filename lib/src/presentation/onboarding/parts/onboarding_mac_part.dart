@@ -932,16 +932,21 @@ class _MacRegisterForm extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _MacAuthHint(text: context.l10n.onboardingNoVerificationHint),
-          const SizedBox(height: 18),
-          OnboardingOutlinedField(
-            controller: phoneController,
-            semanticsIdentifier: 'e2e-phone-input',
-            label: context.l10n.onboardingPhone,
-            placeholder: context.l10n.onboardingPhonePlaceholder,
-            keyboardType: TextInputType.phone,
-            prefix: const _MacPhonePrefix(),
+          _MacAuthHint(
+            text: onboarding.authMode == 'handle_only'
+                ? context.l10n.onboardingHandleOnlyHint
+                : context.l10n.onboardingNoVerificationHint,
           ),
+          const SizedBox(height: 18),
+          if (onboarding.authMode != 'handle_only')
+            OnboardingOutlinedField(
+              controller: phoneController,
+              semanticsIdentifier: 'e2e-phone-input',
+              label: context.l10n.onboardingPhone,
+              placeholder: context.l10n.onboardingPhonePlaceholder,
+              keyboardType: TextInputType.phone,
+              prefix: const _MacPhonePrefix(),
+            ),
           const SizedBox(height: 16),
           OnboardingOutlinedField(
             controller: handleController,

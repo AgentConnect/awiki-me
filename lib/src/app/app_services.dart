@@ -3,6 +3,7 @@
 // [POS]: Composition boundary; high-risk device operations stay behind typed ports and user presence.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../presentation/server_features/backend_capabilities_provider.dart';
 import '../data/avatar/avatar_image_cache.dart';
 
 import '../application/attachment_picker_service.dart';
@@ -120,17 +121,31 @@ final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
 
 final multiDeviceDeviceRevokeEnabledProvider = Provider<bool>(
   (ref) =>
-      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDeviceRevokeEnabled,
+      ref
+          .watch(awikiEnvironmentConfigProvider)
+          .multiDeviceDeviceRevokeEnabled &&
+      (ref
+              .watch(backendFeaturesProvider)
+              .valueOrNull
+              ?.supports('identity.device_revoke') ??
+          false),
 );
 
 final multiDeviceDirectE2eeEnabledProvider = Provider<bool>(
   (ref) =>
-      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDirectE2eeEnabled,
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDirectE2eeEnabled &&
+      (ref
+              .watch(backendFeaturesProvider)
+              .valueOrNull
+              ?.supports('direct_e2ee') ??
+          false),
 );
 
 final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
   (ref) =>
-      ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled &&
+      (ref.watch(backendFeaturesProvider).valueOrNull?.supports('group_e2ee') ??
+          false),
 );
 
 final messageSyncV2ReadEnabledProvider = Provider<bool>(

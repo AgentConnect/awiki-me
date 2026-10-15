@@ -4053,4 +4053,53 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deviceJoinStepJoinSub => '作为普通设备加入，之后可由管理设备授予管理权限';
+
+  @override
+  String get serverFeaturesTitle => '服务器功能';
+
+  @override
+  String get serverFeaturesSupported => '可用';
+
+  @override
+  String get serverFeaturesUnsupported => '此服务器暂不支持';
+
+  @override
+  String get serverFeaturesUnknown => '尚未确认，请稍后重试';
+
+  @override
+  String get serverFeaturesStale => '暂时无法更新，正在显示最近确认的功能。';
+
+  @override
+  String get serverFeaturesMessaging => '普通聊天';
+
+  @override
+  String get serverFeaturesGroups => '群聊';
+
+  @override
+  String get serverFeaturesAttachments => '附件';
+
+  @override
+  String get serverFeaturesEncryption => '私聊加密';
+
+  @override
+  String get serverFeaturesGroupEncryption => '加密群';
+
+  @override
+  String get serverFeaturesDevices => '多设备登录';
+
+  @override
+  String get serverFeaturesAgents => 'Agent';
+
+  @override
+  String get serverFeaturesMail => '邮件';
+
+  @override
+  String get serverFeaturesUpdates => '客户端更新';
+
+  @override
+  String get serverFeaturesPages => '内容与站点';
+
+  @override
+  String get onboardingHandleOnlyHint =>
+      '此服务器可直接使用用户名注册，无需手机号或邮箱。\n登录后可查看聊天等功能的支持情况。';
 }

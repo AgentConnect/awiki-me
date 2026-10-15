@@ -3,6 +3,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/app_session.dart';
 import '../../application/models/daemon_subkey_authorization_revoke_result.dart';
 import '../../application/ports/identity_core_port.dart';
+import '../../application/ports/backend_capabilities_port.dart';
 import '../../application/ports/device_capability_upgrade_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
@@ -17,6 +18,7 @@ import 'identity_method_mapper.dart';
 class AwikiImCoreIdentityAdapter
     implements
         IdentityCorePort,
+        BackendCapabilitiesPort,
         IdentityDocumentCorePort,
         DaemonSubkeyAuthorizationCorePort,
         LocalIdentityDataDeletionPort,
@@ -36,6 +38,13 @@ class AwikiImCoreIdentityAdapter
   }) : _runtime = null,
        _coreInstance = coreInstance,
        _mappers = mappers;
+
+  @override
+  Future<Map<String, dynamic>> backendCapabilities({bool force = false}) async {
+    final runtime = _runtime;
+    if (runtime != null) return runtime.backendCapabilities(force: force);
+    return {'public': await (await _coreInstance()).backendCapabilities(force: force)};
+  }
 
   final AwikiImCoreRuntime? _runtime;
   final Future<core.AwikiImCore> Function() _coreInstance;

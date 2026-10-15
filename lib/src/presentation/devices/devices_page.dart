@@ -20,6 +20,8 @@ import '../shared/widgets/awiki_glass_controls.dart';
 import 'device_join_approval_sheet.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
+import '../server_features/backend_capabilities_provider.dart';
+import '../server_features/server_features_page.dart';
 import 'device_capability_card.dart';
 import 'device_capability_provider.dart';
 import 'identity_services_page.dart';
@@ -64,6 +66,13 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (ref
+            .watch(backendFeaturesProvider)
+            .valueOrNull
+            ?.supports('identity.multi_device') !=
+        true) {
+      return ServerFeaturesPage(embedded: widget.embedded);
+    }
     final state = ref.watch(devicesProvider);
     final registry = state.displayRegistry;
     final canManage = state.currentDeviceCanManage;

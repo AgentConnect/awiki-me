@@ -16,6 +16,40 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('明确不提供更新政策是正常状态且保留最低版本', () async {
+    var unavailable = false;
+    final client = MockClient(
+      (_) async => http.Response(
+        jsonEncode(
+          unavailable
+              ? {
+                  'schema_version': 1,
+                  'capabilities_version': 1,
+                  'client_updates': {
+                    'policy': {'enabled': false, 'protocol_version': 1},
+                  },
+                }
+              : _manifestJson(minimumVersion: '2.0.0'),
+        ),
+        200,
+      ),
+    );
+    final service = _service(
+      storage: _MemoryKeyValueStore(),
+      httpClient: client,
+    );
+    addTearDown(service.dispose);
+    expect(
+      (await service.checkForUpdates(force: true)).versionUnsupported,
+      isTrue,
+    );
+    unavailable = true;
+    final result = await service.checkForUpdates(force: true);
+    expect(result.policyUnavailable, isTrue);
+    expect(result.versionUnsupported, isTrue);
+    expect(result.failureReason, isNull);
+  });
+
   test(
     'cached minimum survives TLS failure with typed redacted diagnostics',
     () async {
@@ -113,7 +147,7 @@ void main() {
     final baseUrl = primaryTenantBaseUrl;
     expect(
       kDefaultUpdateManifestUrl,
-      '$baseUrl/user-service/v1/server-info?client_platform=app',
+      '$baseUrl/user-service/v1/server-info?client_platform=app&capabilities_version=1',
     );
     expect(kDefaultReleasesUrl, '$baseUrl/#download');
   });
@@ -348,7 +382,7 @@ void main() {
         storage: storage,
         httpClient: _QueueHttpClient(<_HttpFixture>[
           _HttpFixture.json(
-            'https://awiki.ai/user-service/v1/server-info?client_platform=app',
+            'https://awiki.ai/user-service/v1/server-info?client_platform=app&capabilities_version=1',
             _serverInfoJson(
               origin: 'https://awiki.ai',
               minimumVersion: '2.0.0',
@@ -375,7 +409,7 @@ void main() {
     final storage = _MemoryKeyValueStore();
     final client = _QueueHttpClient(<_HttpFixture>[
       _HttpFixture.json(
-        'https://updates.example/user-service/v1/server-info?client_platform=app',
+        'https://updates.example/user-service/v1/server-info?client_platform=app&capabilities_version=1',
         _serverInfoJson(),
       ),
     ]);
