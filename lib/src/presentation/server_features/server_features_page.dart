@@ -41,8 +41,13 @@ class ServerFeaturesPage extends ConsumerWidget {
                       semanticsLabel: l10n.commonBack,
                     ),
               trailing: CupertinoButton(
+                key: const Key('server-features-refresh'),
+                padding: EdgeInsets.zero,
                 onPressed: () => refreshBackendFeatures(ref),
-                child: Text(l10n.commonRefresh),
+                child: Icon(
+                  CupertinoIcons.refresh,
+                  semanticLabel: l10n.commonRefresh,
+                ),
               ),
             ),
             Expanded(

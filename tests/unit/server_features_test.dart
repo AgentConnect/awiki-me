@@ -92,6 +92,17 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('服务器功能'), findsOneWidget);
+      final refresh = find.byKey(const Key('server-features-refresh'));
+      final buttonRect = tester.getRect(refresh);
+      final iconRect = tester.getRect(
+        find.descendant(
+          of: refresh,
+          matching: find.byIcon(CupertinoIcons.refresh),
+        ),
+      );
+      expect(buttonRect.contains(iconRect.topLeft), isTrue);
+      expect(buttonRect.contains(iconRect.bottomRight), isTrue);
+      expect(buttonRect.right, lessThanOrEqualTo(width));
       expect(find.text('此服务器暂不支持'), findsOneWidget);
       expect(find.textContaining('最近确认'), findsOneWidget);
       expect(tester.takeException(), isNull);
