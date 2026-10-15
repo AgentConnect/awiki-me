@@ -2797,26 +2797,31 @@ void main() {
     expect(gateway.registerHandleCalls, 0);
   });
 
-  testWidgets('server-info 加载失败时注册区展示重试入口', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..serverInfoError = StateError('server-info unavailable');
+  for (final size in [const Size(390, 844), const Size(1200, 860)]) {
+    testWidgets('server-info 加载失败时注册区展示重试入口 ${size.width}', (tester) async {
+      _setTestViewSize(tester, size);
+      final gateway = FakeAwikiGateway()
+        ..serverInfoError = StateError('server-info unavailable');
 
-    await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
-    );
-    await _settleVerificationStep(tester);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await _settleVerificationStep(tester);
 
-    expect(find.text('无法读取当前服务器支持的登录方式。请检查租户地址后重试。'), findsOneWidget);
-    expect(find.text('重试'), findsOneWidget);
-    expect(find.text('发送验证码'), findsNothing);
+      expect(find.text('无法读取当前服务器支持的登录方式。请检查租户地址后重试。'), findsOneWidget);
+      expect(find.text('server_info_unavailable'), findsNothing);
+      expect(find.text('request_timeout_retry'), findsNothing);
+      expect(find.text('重试'), findsOneWidget);
+      expect(find.text('发送验证码'), findsNothing);
 
-    gateway.serverInfoError = null;
-    await _tapVisible(tester, find.text('重试'));
-    await _settleVerificationStep(tester);
+      gateway.serverInfoError = null;
+      await _tapVisible(tester, find.text('重试'));
+      await _settleVerificationStep(tester);
 
-    expect(gateway.loadServerInfoCalls, greaterThanOrEqualTo(2));
-    expect(find.text('发送验证码'), findsOneWidget);
-  });
+      expect(gateway.loadServerInfoCalls, greaterThanOrEqualTo(2));
+      expect(find.text('发送验证码'), findsOneWidget);
+    });
+  }
 
   testWidgets('邮箱提交直接注册并默认用 handle 作为昵称', (tester) async {
     final gateway = FakeAwikiGateway()..emailVerificationResult = true;

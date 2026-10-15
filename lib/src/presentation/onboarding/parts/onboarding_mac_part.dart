@@ -910,7 +910,6 @@ class _MacRegisterForm extends StatelessWidget {
         builder: (context, ref, _) => _OnboardingCapabilityPanel(
           icon: CupertinoIcons.exclamationmark_triangle,
           message: context.l10n.onboardingServerInfoLoadFailed,
-          detail: onboarding.serverInfoError,
           actionLabel: context.l10n.commonRetry,
           onAction: () =>
               ref.read(onboardingProvider.notifier).loadServerInfo(force: true),
