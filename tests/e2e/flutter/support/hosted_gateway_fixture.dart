@@ -15,7 +15,9 @@ class HostedGatewayFixture {
     this.handle,
     this.did, {
     http.Client? client,
+    this.provider = 'email',
   }) : _client = client ?? http.Client();
+  final String provider;
   final String contact;
   final String handle;
   final String did;
@@ -57,6 +59,34 @@ class HostedGatewayFixture {
     );
   }
 
+  static Future<({HostedGatewayFixture gateway, String code})>
+  loadPhoneRegistration(String path) async {
+    final file = File(path);
+    final stat = await file.stat();
+    if (await FileSystemEntity.isLink(path) || stat.mode & 0x3f != 0) {
+      throw StateError('hosted_fixture_permissions');
+    }
+    final value = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    if (value['domain'] != hostedDomain ||
+        value['provider'] != 'phone' ||
+        !RegExp(r'^\+155500[0-9]{5}$').hasMatch(value['contact'] as String) ||
+        !RegExp(
+          r'^gw-mcp-e2e-[a-f0-9]{16}$',
+        ).hasMatch(value['handle'] as String) ||
+        !RegExp(r'^[0-9]{6}$').hasMatch(value['code'] as String)) {
+      throw StateError('hosted_registration_fixture');
+    }
+    return (
+      gateway: HostedGatewayFixture(
+        value['contact'] as String,
+        value['handle'] as String,
+        '',
+        provider: 'phone',
+      ),
+      code: value['code'] as String,
+    );
+  }
+
   void close() => _client.close();
 
   Future<String> otp(String purpose, String target) async {
@@ -72,7 +102,7 @@ class HostedGatewayFixture {
     final discarded = process.stderr.drain<void>();
     process.stdin.write(
       jsonEncode({
-        'provider': 'email',
+        'provider': provider,
         'contact': contact,
         'code': code,
         'purpose': purpose,
@@ -98,6 +128,7 @@ class HostedGatewayFixture {
   Future<Map<String, dynamic>> request(
     String path, [
     Map<String, dynamic>? body,
+    int expectedStatus = 200,
   ]) async {
     if (!RegExp(r'^/connect(?:/[a-z-]+)?$').hasMatch(path)) {
       throw StateError('hosted_path_invalid');
@@ -119,7 +150,7 @@ class HostedGatewayFixture {
     final response = await _client
         .send(request)
         .timeout(const Duration(seconds: 40));
-    if (response.statusCode != 200) {
+    if (response.statusCode != expectedStatus) {
       throw StateError('hosted_http_failed');
     }
     final bytes = <int>[];
@@ -148,10 +179,14 @@ class HostedGatewayFixture {
 
   Future<Map<String, dynamic>> post(
     String action,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    int expectedStatus = 200,
+  }) async {
     final state = await request('/connect/state');
-    return request('/connect/$action', {...body, 'csrf': state['csrf']});
+    return request('/connect/$action', {
+      ...body,
+      'csrf': state['csrf'],
+    }, expectedStatus);
   }
 
   Future<void> login() async {
@@ -161,7 +196,7 @@ class HostedGatewayFixture {
       sha256.convert(utf8.encode(_cookie)).toString(),
     );
     await post('verify', {
-      'provider': 'email',
+      'provider': provider,
       'contact': contact,
       'code': code,
     });

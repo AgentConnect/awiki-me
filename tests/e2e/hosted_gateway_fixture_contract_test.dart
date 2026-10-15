@@ -36,6 +36,90 @@ void main() {
   });
 
   test(
+    'phone registration requires private reserved fixture and exact target',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'hosted-phone-contract-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final file = File('${root.path}/private.json');
+      final state = {
+        'domain': hostedDomain,
+        'provider': 'phone',
+        'contact': '+15550012345',
+        'handle': 'gw-mcp-e2e-${'a' * 16}',
+        'code': '123456',
+      };
+      await file.writeAsString(jsonEncode(state));
+      await Process.run('chmod', ['600', file.path]);
+      final fixture = await HostedGatewayFixture.loadPhoneRegistration(
+        file.path,
+      );
+      expect(fixture.gateway.provider, 'phone');
+      expect(fixture.code, state['code']);
+      fixture.gateway.close();
+      for (final change in [
+        {'domain': 'awiki.info'},
+        {'provider': 'email'},
+        {'contact': '+8613800000000'},
+        {'handle': 'ordinary-user'},
+        {'code': '123'},
+      ]) {
+        await file.writeAsString(jsonEncode({...state, ...change}));
+        await expectLater(
+          HostedGatewayFixture.loadPhoneRegistration(file.path),
+          throwsStateError,
+        );
+      }
+      await file.writeAsString(jsonEncode(state));
+      await Process.run('chmod', ['644', file.path]);
+      await expectLater(
+        HostedGatewayFixture.loadPhoneRegistration(file.path),
+        throwsStateError,
+      );
+      await Process.run('chmod', ['600', file.path]);
+      final link = Link('${root.path}/linked.json');
+      await link.create(file.path);
+      await expectLater(
+        HostedGatewayFixture.loadPhoneRegistration(link.path),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'expected denial remains explicit and unexpected success fails',
+    () async {
+      var status = 403;
+      final fixture = HostedGatewayFixture(
+        'synthetic',
+        'synthetic',
+        '',
+        client: MockClient(
+          (request) async => http.Response(
+            request.url.path == '/connect/state'
+                ? '{"csrf":"synthetic"}'
+                : '{"error":{"code":"root_key_not_hosted"}}',
+            request.url.path == '/connect/state' ? 200 : status,
+          ),
+        ),
+      );
+      addTearDown(fixture.close);
+      final result = await fixture.post(
+        'device-requests',
+        {},
+        expectedStatus: 403,
+      );
+      expect((result['error'] as Map)['code'], 'root_key_not_hosted');
+      status = 200;
+      await expectLater(
+        fixture.post('device-requests', {}, expectedStatus: 403),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
     'browser redirects and foreign paths never carry a cookie elsewhere',
     () async {
       var requests = 0;

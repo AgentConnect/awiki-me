@@ -177,7 +177,10 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   registrationDomainDiscovery(<String>[
     'REGISTRATION-DOMAIN-DISCOVERY-E2E-001',
   ]),
-  hostedGatewayJoin(<String>['HOSTED-GATEWAY-JOIN-E2E-001']),
+  hostedGatewayJoin(<String>[
+    'HOSTED-GATEWAY-JOIN-E2E-001',
+    'HOSTED-GATEWAY-APPROVAL-E2E-001',
+  ]),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
   multiDeviceRemoteRecovery(_multiDeviceRemoteRecoveryCaseIds),
   handleRecoveryLocalData(_handleRecoveryLocalDataCaseIds),
@@ -422,7 +425,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       DesktopE2eCase.identitySwitch => const Duration(minutes: 10),
-      DesktopE2eCase.hostedGatewayJoin => const Duration(minutes: 25),
+      DesktopE2eCase.hostedGatewayJoin => const Duration(minutes: 35),
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 40),
       DesktopE2eCase.multiDeviceRemoteRecovery => const Duration(minutes: 20),
       DesktopE2eCase.handleRecoveryLocalData => const Duration(minutes: 45),

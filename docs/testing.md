@@ -1661,13 +1661,15 @@ App runner 构建仍使用 CLI 同目录的 probe。执行前检查存在性，�
 
 拥有测试：`tests/unit/devices/` 与 `awiki_im_core_device_management_adapter_test.dart` 覆盖邮箱请求、DTO 映射、消息用途 UI/批准分流和邮箱 Recovery 拒绝。真实场景 `hosted_gateway_email_join`、`hosted_gateway_message_only_approval`、`hosted_gateway_root_receive` 的产品 E2E 归本仓；目前尚无这些场景的真实执行通过记录，不将 Widget 测试或原生编译作为其替代。跨 Gateway 的协议端到端测试归 Gateway。
 
-新增 `hosted-gateway-join` / `HOSTED-GATEWAY-JOIN-E2E-001`，当前只支持 macOS，已进入
+新增 `hosted-gateway-join`，含 `HOSTED-GATEWAY-JOIN-E2E-001` 与
+`HOSTED-GATEWAY-APPROVAL-E2E-001`，当前只支持 macOS，已进入
 owning catalog 与 full 的平台适用聚合。用专属 Gateway runner 先准备合成邮箱身份，
 再显式传入 0600 的 private fixture 路径：
 
 ```bash
 AWIKI_SYSTEM_TEST_TARGET=singapore-mcp-adapt \
 AWIKI_HOSTED_FIXTURE_PATH=<absolute-private-fixture-path> \
+AWIKI_HOSTED_PHONE_FIXTURE_PATH=<absolute-private-phone-fixture-path> \
 dart run tests/e2e/runner.dart --case hosted-gateway-join
 ```
 
@@ -1677,6 +1679,10 @@ dart run tests/e2e/runner.dart --case hosted-gateway-join
 实例，不能代替实际邮件投递。缺 fixture、错误权限/域名、缺根密钥或未激活均失败。
 fixture、App 状态和远程设备保留用于本轮恢复与联调，ledger 明确 residual，不声称清空。
 `--prepare-only` 只构建，不创建设备；真实执行结果以本轮 case attestation 为准。
-本场景尚不覆盖 APP 批准 Gateway messages_only 的反向流程；后者仍需单独验收。
+反向场景通过真实手机号注册 UI 创建初始管理设备，再在 Gateway 选择该身份；APP
+必须在批准前显示签名验证后的 messages_only 用途，双方 SAS 一致，一次计数式
+用户在场确认后 Gateway 只能成为普通成员，且因无根密钥拒绝管理操作。手机号 fixture
+仅允许专属实例的保留合成号码与私有测试预设验证码；该测试不证明短信投递或系统
+生物识别。两个场景均须真实执行才可记录通过，独立保留 App 根目录及设备恢复材料。
 
 Mac 联调使用 `scripts/build_manual_dual_macos_apps.sh`，显式传入两个不同的 `ai.awiki.awikime.dev.*` bundle ID 和完整测试 tenant JSON。只选择隔离测试 primary；secondary 使用不可解析的 `.invalid` 占位，避免默认连到生产。原生库使用 Core 已提交的本地联调来源及产物 manifest 校验，不改变正式推荐版本。

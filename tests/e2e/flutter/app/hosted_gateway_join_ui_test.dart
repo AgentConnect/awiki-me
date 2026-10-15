@@ -22,29 +22,10 @@ import 'package:integration_test/integration_test.dart';
 import '../../case_attestation.dart';
 import '../support/hosted_gateway_fixture.dart';
 import '../support/read_rendered_sas.dart';
+import '../support/hosted_widget_support.dart';
+import 'hosted_gateway_approval_ui_case.dart';
 
 const String caseId = 'HOSTED-GATEWAY-JOIN-E2E-001';
-
-Future<void> until(WidgetTester tester, bool Function() predicate) async {
-  for (var attempt = 0; attempt < 300; attempt++) {
-    if (predicate()) return;
-    await tester.pump(const Duration(milliseconds: 300));
-  }
-  throw StateError('hosted_app_state_deadline');
-}
-
-Future<void> input(WidgetTester tester, String identifier, String value) async {
-  final field = find.descendant(
-    of: find.bySemanticsIdentifier(identifier),
-    matching: find.byType(CupertinoTextField),
-  );
-  if (field.evaluate().length != 1) {
-    throw StateError('hosted_app_field_missing');
-  }
-  await tester.ensureVisible(field);
-  await tester.enterText(field, value);
-  await tester.pump();
-}
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +34,7 @@ void main() {
       failedTestCount: binding.failureMethodsDetails.length,
     ),
   );
+  registerHostedGatewayApprovalCase();
   testWidgets(
     'hosted email Join activates receiving App management',
     (tester) async {

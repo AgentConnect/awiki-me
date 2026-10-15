@@ -1379,6 +1379,7 @@
         "HANDLE-RECOVERY-V1-E2E-001",
         "HANDLE-RECOVERY-V1-E2E-002",
         "HANDLE-RECOVERY-V1-E2E-003",
+        "HOSTED-GATEWAY-APPROVAL-E2E-001",
         "HOSTED-GATEWAY-JOIN-E2E-001",
         "IDENTITY-DATA-DELETION-RESUME-E2E-001",
         "IDENTITY-DELETE-E2E-001",
@@ -1593,8 +1594,8 @@
         "release"
       ],
       "owner": "awiki-me-identity",
-      "estimatedMinutes": 15,
-      "timeoutMinutes": 25,
+      "estimatedMinutes": 25,
+      "timeoutMinutes": 35,
       "cleanupPolicy": "retained_isolated_gateway_device_recovery_material",
       "allowedHosts": [
         "mcp-adapt.anpclaw.com"
@@ -1608,7 +1609,8 @@
         "joined_device"
       ],
       "caseIds": [
-        "HOSTED-GATEWAY-JOIN-E2E-001"
+        "HOSTED-GATEWAY-JOIN-E2E-001",
+        "HOSTED-GATEWAY-APPROVAL-E2E-001"
       ]
     }
   }

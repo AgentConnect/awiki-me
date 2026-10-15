@@ -4,6 +4,8 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
   Future<void> _runHostedGatewayJoin() async {
     final fixture =
         Platform.environment['AWIKI_HOSTED_FIXTURE_PATH']?.trim() ?? '';
+    final phoneFixture =
+        Platform.environment['AWIKI_HOSTED_PHONE_FIXTURE_PATH']?.trim() ?? '';
     if (platform != DesktopE2ePlatform.macos) {
       throw E2eFailure(
         'Hosted Gateway App acceptance currently requires macOS.',
@@ -12,12 +14,16 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
     if (!options.dryRun && !options.prepareOnly) {
       if (fixture.isEmpty ||
           !File(fixture).isAbsolute ||
-          !File(fixture).existsSync()) {
+          !File(fixture).existsSync() ||
+          phoneFixture.isEmpty ||
+          !File(phoneFixture).isAbsolute ||
+          !File(phoneFixture).existsSync()) {
         throw E2eFailure(
           'Hosted Gateway acceptance needs an explicit protected fixture file.',
         );
       }
-      if (appStateRootDir.existsSync()) {
+      if (appStateRootDir.existsSync() ||
+          Directory('${appStateRootDir.path}-approval').existsSync()) {
         throw E2eFailure(
           'Hosted Gateway acceptance requires a fresh App device root.',
         );
@@ -28,6 +34,7 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
       );
     }
     _addRuntimeSecret(fixture);
+    _addRuntimeSecret(phoneFixture);
     await commands.requireExecutable('ssh');
     await commands.run('bash', const [
       'scripts/verify_im_core_native_artifact.sh',
@@ -50,6 +57,7 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
       stateRoot: appStateRootDir,
       environment: {
         'AWIKI_HOSTED_FIXTURE_PATH': fixture,
+        'AWIKI_HOSTED_PHONE_FIXTURE_PATH': phoneFixture,
         'AWIKI_HOSTED_APP_STATE_ROOT': appStateRootDir.path,
       },
     );

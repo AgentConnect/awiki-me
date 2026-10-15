@@ -6435,6 +6435,75 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "HOSTED-GATEWAY-APPROVAL-E2E-001",
+      "feature": "App approves Gateway as an ordinary message-only device",
+      "layer": "remote_product_ui_security",
+      "preconditions": "Dedicated mcp-adapt.anpclaw.com services, protected synthetic phone registration fixture, current native Core, and a fresh isolated macOS App root. Synthetic OTP and counted presence fixtures do not attest delivery providers or macOS biometrics.",
+      "action": "Register through the real phone UI, select that identity in Gateway, inspect the signed message-only purpose in the App approval sheet, compare both SAS values, approve once and verify the Gateway remains an ordinary member without a hosted root.",
+      "exactOracles": [
+        "Phone UI creates the sole initial management device.",
+        "The verified message-only purpose is displayed before approval.",
+        "Both pairing values agree before one counted presence confirmation.",
+        "Gateway completes Join as a member without management readiness.",
+        "Gateway rejects management requests because it does not host the root.",
+        "Private identity and device recovery materials are retained."
+      ],
+      "negativeChecks": [
+        "Wrong target, pairing, purpose, management escalation or unexpected hosted root prevents pass attestation."
+      ],
+      "environment": "singapore_mcp_adapt_remote",
+      "cleanupPolicy": "retained_isolated_gateway_device_recovery_material",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/hosted_gateway_approval_ui_case.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:phone_registration_ui",
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:verified_message_only_purpose_ui",
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:pairing_both_sides",
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:single_user_presence",
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:gateway_ordinary_member",
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:gateway_root_absent",
+          "HOSTED-GATEWAY-APPROVAL-E2E-001:recovery_material_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:phone_registration_ui"
+          ],
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:verified_message_only_purpose_ui"
+          ],
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:pairing_both_sides",
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:single_user_presence"
+          ],
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:gateway_ordinary_member"
+          ],
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:gateway_root_absent"
+          ],
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:recovery_material_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:phone_registration_ui",
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:verified_message_only_purpose_ui",
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:pairing_both_sides",
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:single_user_presence",
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:gateway_ordinary_member",
+            "HOSTED-GATEWAY-APPROVAL-E2E-001:gateway_root_absent"
+          ]
+        ]
+      }
     }
   ]
 }
