@@ -131,6 +131,7 @@ String localizeAgentUiMessage(AppLocalizations l10n, String message) {
     AgentUiMessageCodes.personalAgentDisabled =>
       l10n.agentErrorPersonalAgentDisabled,
     AgentUiMessageCodes.tenantUnsupported => l10n.agentErrorTenantUnsupported,
+    AgentUiMessageCodes.daemonUnsupported => l10n.agentErrorDaemonUnsupported,
     AgentUiMessageCodes.acpUpgradeRequired => l10n.agentAcpUpgradeRequired,
     AgentUiMessageCodes.selectDaemon => l10n.agentErrorSelectDaemon,
     AgentUiMessageCodes.daemonBootstrapMissing =>

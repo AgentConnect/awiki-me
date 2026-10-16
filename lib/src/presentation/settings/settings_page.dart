@@ -26,13 +26,15 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../shared/widgets/awiki_desktop.dart';
 import '../shared/widgets/awiki_glass.dart';
+import '../server_features/server_features_page.dart';
+import '../server_features/backend_capabilities_provider.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
 import 'notify_settings.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
-enum SettingsDetail { devices, language, display }
+enum SettingsDetail { devices, language, display, serverFeatures }
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
@@ -55,6 +57,11 @@ class SettingsPage extends ConsumerWidget {
     final l10n = context.l10n;
     final session = ref.watch(sessionProvider).session;
     final supportsHandleRecovery =
+        (ref
+                .watch(backendFeaturesProvider)
+                .valueOrNull
+                ?.supports('identity.account_recovery') ??
+            false) &&
         session != null &&
         ref
                 .watch(identityMethodCapabilitiesProvider(session.did))
@@ -120,6 +127,15 @@ class SettingsPage extends ConsumerWidget {
       _SettingsSection(
         key: const Key('settings-general-section'),
         children: <Widget>[
+          AppListTile(
+            key: const Key('settings-server-features-row'),
+            title: l10n.serverFeaturesTitle,
+            onTap: () => AppNavigator.push<void>(
+              context,
+              (_) => const ServerFeaturesPage(),
+            ),
+          ),
+          const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsCurrentVersion,
             leading: leading(
@@ -323,6 +339,16 @@ class SettingsPage extends ConsumerWidget {
           first: session == null,
           title: l10n.settingsAppSection,
           children: <Widget>[
+            _DesktopSettingsRow(
+              key: const Key('settings-server-features-row'),
+              title: l10n.serverFeaturesTitle,
+              selected: selectedDetail == SettingsDetail.serverFeatures,
+              onTap: () => _openDetail(
+                context,
+                SettingsDetail.serverFeatures,
+                (_) => const ServerFeaturesPage(),
+              ),
+            ),
             _DesktopSettingsRow(
               key: const Key('settings-current-version-row'),
               title: l10n.settingsCurrentVersion,

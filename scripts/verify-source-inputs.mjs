@@ -12,8 +12,11 @@ const repositories = {
 
 export function validateManifest(manifest) {
   assert.equal(manifest.schema_version, 1);
-  assert.deepEqual(Object.keys(manifest.dependencies ?? {}).sort(), Object.keys(repositories).sort());
-  for (const [name, repository] of Object.entries(repositories)) {
+  const names = Object.keys(manifest.dependencies ?? {});
+  assert.ok(names.includes('awiki-im-core'), 'Core source is required');
+  assert.ok(names.every(name => Object.hasOwn(repositories, name)), 'Unknown SDK source');
+  for (const name of names) {
+    const repository = repositories[name];
     const entry = manifest.dependencies[name];
     assert.deepEqual(Object.keys(entry).sort(), ['commit', 'pull_request', 'repository']);
     assert.equal(entry.repository, `https://github.com/${repository}.git`);
@@ -27,7 +30,7 @@ export function validateManifest(manifest) {
 
 export function verifyCoreCheckout(appManifest, coreManifest, actualHead) {
   const app = validateManifest(appManifest);
-  const core = validateManifest(coreManifest);
+  const core = coreManifest == null ? {} : validateManifest(coreManifest);
   assert.equal(actualHead, app['awiki-im-core'].commit, 'Core consumer checkout mismatch');
   // Core's own SDK pin can precede its consumer manifest commit. ANP and
   // Identity must be the same reviewed sources on both sides of that boundary.
@@ -42,7 +45,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const app = read(appRoot);
   const sources = validateManifest(app);
   if (coreRoot !== undefined) {
-    verifyCoreCheckout(app, read(coreRoot), execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim());
+    const coreManifest = fs.existsSync(path.join(coreRoot, 'dependencies.source.json')) ? read(coreRoot) : null;
+    verifyCoreCheckout(app, coreManifest, execFileSync('git', ['-C', coreRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim());
   }
   console.log(`commit=${sources['awiki-im-core'].commit}`);
 }

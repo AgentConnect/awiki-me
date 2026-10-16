@@ -163,6 +163,137 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     _core = opened;
   }
 
+  Future<Map<String, dynamic>> backendCapabilities({bool force = false}) async {
+    final instance = await coreInstance();
+    final client = _currentClient;
+    final sources = <String, dynamic>{};
+    Object? authenticationError;
+    Future<void> read(
+      String name,
+      Future<Map<String, dynamic>> Function() refresh,
+      Future<Map<String, dynamic>> Function() snapshot,
+    ) async {
+      try {
+        sources[name] = await refresh();
+      } on core.AwikiImCoreException catch (error) {
+        sources[name] = await snapshot();
+        if (const [
+          'auth_required',
+          'session_expired',
+          'permission_denied',
+        ].contains(error.code)) {
+          authenticationError = error;
+        }
+      }
+    }
+
+    await Future.wait([
+      read(
+        'public',
+        () => instance.backendCapabilities(force: force),
+        instance.backendCapabilitiesSnapshot,
+      ),
+      if (client != null)
+        read(
+          'message',
+          () => client.backendCapabilities(force: force),
+          client.backendCapabilitiesSnapshot,
+        ),
+    ]);
+    _ensureNotDisposed();
+    if (!identical(client, _currentClient)) {
+      throw StateError('capability_context_changed');
+    }
+    if (authenticationError != null) throw authenticationError!;
+    return sources;
+  }
+
+  Stream<Map<String, dynamic>> watchBackendCapabilities() {
+    late StreamController<Map<String, dynamic>> controller;
+    final subscriptions = <StreamSubscription<Map<String, dynamic>>>[];
+    final sources = <String, dynamic>{};
+    Timer? timer;
+    var cancelled = false;
+    controller = StreamController<Map<String, dynamic>>(
+      onListen: () async {
+        try {
+          final instance = await coreInstance();
+          final client = _currentClient;
+          bool current() =>
+              !cancelled && !_disposed && identical(client, _currentClient);
+          void publish() {
+            if (current()) controller.add(Map.of(sources));
+          }
+
+          void observe(String name, Stream<Map<String, dynamic>> stream) {
+            subscriptions.add(
+              stream.listen(
+                (state) {
+                  if (!current()) return;
+                  sources[name] = state['snapshot'];
+                  sources['${name}_diagnostics'] = {
+                    'refresh_error': state['refresh_error'],
+                    'persistence_failed': state['persistence_failed'],
+                  };
+                  publish();
+                },
+                onError: (Object error, StackTrace stack) {
+                  if (current()) controller.addError(error, stack);
+                },
+              ),
+            );
+          }
+
+          // Native subscriptions emit their current state first, closing the gap
+          // after restoration without letting an older read overwrite an update.
+          if (!current()) return;
+          sources['public'] = await instance.backendCapabilitiesSnapshot();
+          if (client != null) {
+            sources['message'] = await client.backendCapabilitiesSnapshot();
+          }
+          publish();
+          if (!current()) return;
+          observe('public', instance.watchBackendCapabilities());
+          if (client != null) {
+            observe('message', client.watchBackendCapabilities());
+          }
+          Future<void> refresh() async {
+            if (!current()) return;
+            // Core keeps each source's successful state and publishes auth failures.
+            await Future.wait([
+              instance.backendCapabilities().then<void>(
+                (_) {},
+                onError: (Object _) {},
+              ),
+              if (client != null)
+                client.backendCapabilities().then<void>(
+                  (_) {},
+                  onError: (Object _) {},
+                ),
+            ]);
+          }
+
+          if (!current()) return;
+          unawaited(refresh());
+          timer = Timer.periodic(
+            const Duration(seconds: 10),
+            (_) => unawaited(refresh()),
+          );
+        } catch (error, stack) {
+          if (!cancelled && !_disposed) controller.addError(error, stack);
+        }
+      },
+      onCancel: () async {
+        cancelled = true;
+        timer?.cancel();
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+      },
+    );
+    return controller.stream;
+  }
+
   Future<void> openAndValidate() async {
     await open();
     await validate();

@@ -1,3 +1,4 @@
+import '../../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/app_services.dart';
 import '../../../application/account_state_sync_request_bus.dart';
 import '../../../application/account_state_sync_service.dart';
+import '../../../application/ports/account_state_sync_port.dart';
 import '../../../application/models/product_local_models.dart';
 import '../../../application/product_local_store.dart';
 import '../../../domain/entities/device_management.dart';
@@ -21,6 +23,7 @@ enum AccountStateSyncCoordinatorStatus {
   ready,
   partialFailure,
   retryWaiting,
+  unavailable,
 }
 
 class AccountStateSyncCoordinatorState {
@@ -74,6 +77,47 @@ class AccountStateSyncCoordinator
       sessionProvider,
       _handleSessionChanged,
     );
+    _capabilitySubscription = ref.listen<AsyncValue<BackendFeatures>>(
+      backendFeaturesProvider,
+      (previous, next) {
+        final wasSupported =
+            previous?.valueOrNull?.supports('account.state_sync') ?? false;
+        final supported =
+            next.valueOrNull?.supports('account.state_sync') ?? false;
+        final public = next.valueOrNull?.sources['public'];
+        final disabled =
+            next.valueOrNull?.support('account.state_sync') == 'unsupported' ||
+            (public is Map && public['status'] == 'incompatible');
+        if (disabled && wasSupported) _capabilityEpoch += 1;
+        final generation = ref.read(sessionProvider).generation;
+        scheduleMicrotask(() async {
+          if (_disposed || ref.read(sessionProvider).generation != generation) {
+            return;
+          }
+          if (disabled && wasSupported) {
+            _remoteUnavailable = true;
+            _retryTimer?.cancel();
+            _retryTimer = null;
+            return;
+          }
+          if (!supported) return;
+          final active = _activeOperation;
+          if (active != null) await active.catchError((_) {});
+          if (_disposed || ref.read(sessionProvider).generation != generation) {
+            return;
+          }
+          if (_remoteUnavailable ||
+              state.status == AccountStateSyncCoordinatorStatus.idle) {
+            unawaited(
+              request(
+                'backend_capability_confirmed',
+                force: true,
+              ).catchError((_) {}),
+            );
+          }
+        });
+      },
+    );
   }
 
   final Ref ref;
@@ -82,6 +126,8 @@ class AccountStateSyncCoordinator
   final int maximumVersionFloorAttempts;
 
   late final ProviderSubscription<SessionState> _sessionSubscription;
+  late final ProviderSubscription<AsyncValue<BackendFeatures>>
+  _capabilitySubscription;
   late final AccountStateSyncRequestBus _requestBus;
   Future<void>? _activeOperation;
   Timer? _retryTimer;
@@ -90,6 +136,10 @@ class AccountStateSyncCoordinator
   final Map<ProductAccountDomain, String> _requiredMinimumVersions =
       <ProductAccountDomain, String>{};
   bool _disposed = false;
+  bool _remoteUnavailable = false;
+  int _capabilityEpoch = 0;
+  bool _backendRejected = false;
+  int? _rejectedDiscoveryTime;
 
   Future<void> request(
     String reason, {
@@ -146,6 +196,9 @@ class AccountStateSyncCoordinator
     _followUpRequested = false;
     _followUpReason = null;
     _requiredMinimumVersions.clear();
+    _remoteUnavailable = false;
+    _backendRejected = false;
+    _rejectedDiscoveryTime = null;
     state = const AccountStateSyncCoordinatorState();
   }
 
@@ -159,6 +212,7 @@ class AccountStateSyncCoordinator
         _requiredMinimumVersions,
       );
       await _runOnce(reason, minimumVersions: minimumVersions);
+      if (_remoteUnavailable) break;
       if (_requiredMinimumVersions.isNotEmpty && !_disposed) {
         versionFloorAttempts += 1;
         if (versionFloorAttempts >= maximumVersionFloorAttempts) {
@@ -191,6 +245,29 @@ class AccountStateSyncCoordinator
       resetForSession();
       return;
     }
+    final features = await ref.read(backendFeaturesFutureProvider);
+    if (!_isCurrent(fence)) return;
+    final capabilityEpoch = _capabilityEpoch;
+    final public = features.sources['public'];
+    final fetchedAt = public is Map ? public['fetched_at'] : null;
+    if (_backendRejected &&
+        public is Map &&
+        public['status'] == 'confirmed' &&
+        fetchedAt is int &&
+        (_rejectedDiscoveryTime == null ||
+            fetchedAt > _rejectedDiscoveryTime!)) {
+      _backendRejected = false;
+    }
+    _remoteUnavailable =
+        _backendRejected || !features.supports('account.state_sync');
+    if (_remoteUnavailable) {
+      await _publishCachedSnapshots(fence, <ProductAccountDomain, Object>{});
+      _followUpRequested = false;
+      _retryTimer?.cancel();
+      _retryTimer = null;
+      _publishUnavailable(reason);
+      return;
+    }
     state = AccountStateSyncCoordinatorState(
       status: AccountStateSyncCoordinatorStatus.syncing,
       lastReason: reason,
@@ -221,11 +298,17 @@ class AccountStateSyncCoordinator
             expectedDeviceAuthGeneration: fence.deviceAuthGeneration,
             sessionGeneration: fence.sessionGeneration,
             isSessionCurrent: (binding, generation) =>
-                fence.matchesBinding(binding, generation) && _isCurrent(fence),
+                fence.matchesBinding(binding, generation) &&
+                _isCurrent(fence) &&
+                capabilityEpoch == _capabilityEpoch,
             minimumVersions: minimumVersions,
           );
     } on Object catch (error) {
       if (!_isCurrent(fence)) {
+        return;
+      }
+      if (error is AccountStateSyncUnsupported) {
+        _stopUnsupported(reason, fetchedAt);
         return;
       }
       final failures = <ProductAccountDomain, Object>{
@@ -241,7 +324,18 @@ class AccountStateSyncCoordinator
       );
       return;
     }
+    if (_isCurrent(fence) && capabilityEpoch != _capabilityEpoch) {
+      _remoteUnavailable = true;
+      _publishUnavailable(reason);
+      return;
+    }
     if (result.sessionInvalidated || !_isCurrent(fence)) {
+      return;
+    }
+    if (result.failures.values.any(
+      (error) => error is AccountStateSyncUnsupported,
+    )) {
+      _stopUnsupported(reason, fetchedAt);
       return;
     }
 
@@ -342,6 +436,29 @@ class AccountStateSyncCoordinator
         projectionErrors[ProductAccountDomain.deviceRegistry] = error;
       }
     }
+  }
+
+  void _stopUnsupported(String reason, Object? fetchedAt) {
+    _backendRejected = true;
+    _rejectedDiscoveryTime = fetchedAt is int ? fetchedAt : null;
+    _remoteUnavailable = true;
+    _followUpRequested = false;
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _publishUnavailable(reason);
+  }
+
+  void _publishUnavailable(String reason) {
+    state = AccountStateSyncCoordinatorState(
+      status: AccountStateSyncCoordinatorStatus.unavailable,
+      lastReason: reason,
+      lastCompletedAt: state.lastCompletedAt,
+      domainVersions: state.domainVersions,
+      minimumVersions: Map.unmodifiable(_requiredMinimumVersions),
+      unmetMinimumVersions: Map.unmodifiable(_requiredMinimumVersions),
+      domainErrors: state.domainErrors,
+      warnings: state.warnings,
+    );
   }
 
   Future<void> _finish(
@@ -512,6 +629,7 @@ class AccountStateSyncCoordinator
     _retryTimer?.cancel();
     _requestBus.detach();
     _sessionSubscription.close();
+    _capabilitySubscription.close();
     super.dispose();
   }
 }

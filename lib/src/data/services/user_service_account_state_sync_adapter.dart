@@ -278,8 +278,18 @@ class UserServiceAccountStateSyncAdapter
     );
   }
 
-  Future<Map<String, Object?>> _accountStateCall(String method) {
-    return _rpcCall(path: accountStateEndpoint, method: method);
+  Future<Map<String, Object?>> _accountStateCall(String method) async {
+    try {
+      return await _rpcCall(path: accountStateEndpoint, method: method);
+    } on AwikiOnboardingUtilityError catch (error) {
+      if (error.statusCode != 401 &&
+          error.statusCode != 403 &&
+          error.rpcCode == -32010 &&
+          error.message == 'not_supported') {
+        throw const AccountStateSyncUnsupported();
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, Object?>> _rpcCall({

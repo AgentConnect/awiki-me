@@ -1746,6 +1746,52 @@ void main() {
       );
     });
 
+    test(
+      'reuses an existing endpoint without overriding a conflicting name',
+      () {
+        String listing(List<Map<String, String>> tenants) => jsonEncode({
+          'data': {'tenants': tenants},
+        });
+        const builtin = <String, String>{
+          'name': 'builtin',
+          'backend_base_url': 'https://candidate.example/',
+          'did_host': 'candidate.example',
+        };
+        DesktopCliTenantConfig? select(List<Map<String, String>> tenants) =>
+            cliTenantConfigFromListJson(
+              listing(tenants),
+              'e2e-run',
+              backendBaseUrl: 'https://candidate.example',
+              didHost: 'candidate.example',
+            );
+        expect(select([builtin])?.name, 'builtin');
+        expect(
+          select([
+            {...builtin, 'did_host': 'other.example'},
+          ]),
+          isNull,
+        );
+        expect(
+          select([
+            builtin,
+            {
+              ...builtin,
+              'name': 'e2e-run',
+              'backend_base_url': 'https://other.example',
+            },
+          ])?.backendBaseUrl,
+          'https://other.example',
+        );
+        expect(
+          () => select([
+            builtin,
+            {...builtin, 'name': 'duplicate'},
+          ]),
+          throwsA(isA<E2eFailure>()),
+        );
+      },
+    );
+
     test('rejects malformed or duplicate targets', () {
       expect(
         () => cliTenantConfigFromListJson('{}', 'e2e-run'),

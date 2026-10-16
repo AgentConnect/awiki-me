@@ -7,6 +7,7 @@ import '../shared/sidebar_workspace.dart';
 import 'display_settings_page.dart';
 import 'language_selection_page.dart';
 import 'settings_page.dart';
+import '../server_features/server_features_page.dart';
 
 /// Desktop settings keep navigation and the active controls visible together.
 class SettingsWorkspacePage extends ConsumerStatefulWidget {
@@ -24,6 +25,7 @@ class _SettingsWorkspacePageState extends ConsumerState<SettingsWorkspacePage> {
   Widget build(BuildContext context) {
     final sessionState = ref.watch(sessionProvider);
     final content = switch (_selected) {
+      SettingsDetail.serverFeatures => const ServerFeaturesPage(embedded: true),
       SettingsDetail.devices => const DevicesPage(embedded: true),
       SettingsDetail.language => const LanguageSelectionPage(embedded: true),
       _ => const DisplaySettingsPage(embedded: true),

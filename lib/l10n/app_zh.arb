@@ -4,7 +4,13 @@
   "agentLifecycleRetiredReason": "该智能体的旧版接入已停用，需要由控制者重新创建。",
   "agentLifecycleInactiveReason": "该智能体已停用，暂时无法接收新指令。",
   "agentLifecycleMessageNotice": "{name}已不可用",
-  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
+  "@agentLifecycleMessageNotice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "@@locale": "zh",
   "chatMentionMember": "提及群成员",
   "settingsAppearance": "外观",
@@ -1191,8 +1197,9 @@
   "agentSkillRequestFailed": "暂时无法生成 Skill Agent 安装指令，请重试。",
   "agentErrorPersonalAgentDisabled": "个人助理功能未开启。",
   "agentTenantUnsupportedTitle": "当前租户暂不支持智能体",
-  "agentTenantUnsupportedSubtitle": "请回到登录页切换到已批准 AWiki 域名的租户后，再管理 Daemon 和智能体。",
+  "agentTenantUnsupportedSubtitle": "请切换到支持智能体功能的服务器后，再管理 Daemon 和智能体。",
   "agentErrorTenantUnsupported": "当前租户暂不支持智能体功能。",
+  "agentErrorDaemonUnsupported": "此服务器暂不支持 Daemon。",
   "agentErrorSelectDaemon": "请选择运行 Daemon。",
   "agentErrorDaemonBootstrapMissing": "运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新状态。",
   "agentErrorDaemonUnreachableDelete": "Daemon 当前不可达，暂时不能删除。",
@@ -1767,14 +1774,52 @@
   "deviceJoinLocalSasLabel": "本机显示",
   "commonLater": "稍后",
   "deviceJoinNoticeTitle": "{device} 请求加入你的账户",
-  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "@deviceJoinNoticeTitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "deviceJoinNoticeExpiry": "{time} 前有效",
-  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "@deviceJoinNoticeExpiry": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "deviceJoinStepRequest": "发起关联请求",
   "deviceJoinStepRequestSub": "已发送给你的管理设备",
   "deviceJoinStepVerify": "管理设备验证",
   "deviceJoinStepVerifyWaiting": "等待对方点击「开始验证」",
   "deviceJoinStepVerifySas": "确认两端 6 位验证码一致",
   "deviceJoinStepJoin": "加入账户",
-  "deviceJoinStepJoinSub": "作为普通设备加入，之后可由管理设备授予管理权限"
+  "deviceJoinStepJoinSub": "作为普通设备加入，之后可由管理设备授予管理权限",
+  "serverFeaturesTitle": "服务器功能",
+  "serverFeaturesSupported": "可用",
+  "serverFeaturesUnsupported": "此服务器暂不支持",
+  "serverFeaturesUnknown": "尚未确认，请稍后重试",
+  "serverFeaturesStale": "暂时无法更新，正在显示最近确认的功能。",
+  "serverFeaturesMessaging": "普通聊天",
+  "serverFeaturesGroups": "群聊",
+  "serverFeaturesAttachments": "附件",
+  "serverFeaturesEncryption": "私聊加密",
+  "serverFeaturesGroupEncryption": "加密群",
+  "serverFeaturesDevices": "多设备登录",
+  "serverFeaturesAgents": "Agent",
+  "serverFeaturesMail": "邮件",
+  "serverFeaturesUpdates": "客户端更新",
+  "serverFeaturesPages": "内容与站点",
+  "onboardingHandleOnlyHint": "此服务器可直接使用用户名注册，无需手机号或邮箱。\n登录后可查看聊天等功能的支持情况。",
+  "serverFeaturesSummaryDetail": "登录后可在“服务器功能”查看聊天与加密能力。",
+  "serverFeaturesUpgradeRequired": "服务器需要升级后才能确认功能。本机身份与历史仍可使用。",
+  "serverFeaturesUpdatedAt": "上次确认：{time}",
+  "@serverFeaturesUpdatedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -478,7 +478,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           domain: ref.read(activeAppTenantProvider).didHost,
           inviteCode: inviteController.text,
           requireInvite: requireInvite,
-          phone: onboarding.authMode == 'email' ? null : _normalizedPhone,
+          phone: onboarding.authMode == 'phone' ? _normalizedPhone : null,
           email: onboarding.authMode == 'email'
               ? emailController.text.trim()
               : null,

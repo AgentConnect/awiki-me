@@ -29,7 +29,7 @@ class _AgentDetailPane extends ConsumerWidget {
   final Set<String> pendingAgentDids;
   final ValueChanged<AgentSummary> onRefresh;
   final ValueChanged<AgentSummary> onCreateRuntime;
-  final VoidCallback onInstallDaemon;
+  final VoidCallback? onInstallDaemon;
   final ValueChanged<AgentSummary> onOpenChat;
   final ValueChanged<AgentSummary> onRename;
   final ValueChanged<AgentSummary> onUpgrade;
@@ -268,11 +268,11 @@ class _AgentDetailPane extends ConsumerWidget {
           key: ValueKey<String>('diagnostic-${agent.agentDid}'),
           agent: agent,
         ),
-        if (agent.isDaemon) ...<Widget>[
+        if (agent.isDaemon && onInstallDaemon != null) ...<Widget>[
           SizedBox(height: responsive.spacing(14)),
           _InstallDaemonPanel(
             isLoading: state.isActionPending(AgentActionKeys.installCommand),
-            onPressed: onInstallDaemon,
+            onPressed: onInstallDaemon!,
           ),
         ],
         if (personalAgentVisible &&
