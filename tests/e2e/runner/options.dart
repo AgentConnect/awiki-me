@@ -177,6 +177,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   registrationDomainDiscovery(<String>[
     'REGISTRATION-DOMAIN-DISCOVERY-E2E-001',
   ]),
+  hostedGatewayEmailJoin(<String>['HOSTED-GATEWAY-JOIN-E2E-001']),
   hostedGatewayResume(<String>['HOSTED-GATEWAY-RESUME-E2E-001']),
   hostedGatewayJoin(<String>[
     'HOSTED-GATEWAY-JOIN-E2E-001',
@@ -241,6 +242,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       ),
       DesktopE2eCase.hostedGatewayResume =>
         'integration_test/hosted_gateway_resume_ui_test.dart',
+      DesktopE2eCase.hostedGatewayEmailJoin ||
       DesktopE2eCase.hostedGatewayJoin =>
         'integration_test/hosted_gateway_join_ui_test.dart',
       DesktopE2eCase.smoke => 'integration_test/app_smoke_test.dart',
@@ -322,6 +324,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.registrationDomainDiscovery =>
         'registration-domain-discovery',
       DesktopE2eCase.hostedGatewayResume => 'hosted-gateway-resume',
+      DesktopE2eCase.hostedGatewayEmailJoin => 'hosted-gateway-email-join',
       DesktopE2eCase.hostedGatewayJoin => 'hosted-gateway-join',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
@@ -363,6 +366,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   bool get requiresCliPeer =>
       this != DesktopE2eCase.full &&
       this != DesktopE2eCase.hostedGatewayJoin &&
+      this != DesktopE2eCase.hostedGatewayEmailJoin &&
       this != DesktopE2eCase.hostedGatewayResume &&
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
@@ -392,6 +396,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.registrationDomainDiscovery =>
         'registration-domain-discovery',
       DesktopE2eCase.hostedGatewayResume => 'hosted-gateway-resume',
+      DesktopE2eCase.hostedGatewayEmailJoin => 'hosted-gateway-email-join',
       DesktopE2eCase.hostedGatewayJoin => 'hosted-gateway-join',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.multiDeviceRemoteRecovery =>
@@ -433,6 +438,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       DesktopE2eCase.identitySwitch => const Duration(minutes: 10),
       DesktopE2eCase.hostedGatewayResume => const Duration(minutes: 10),
+      DesktopE2eCase.hostedGatewayEmailJoin => const Duration(minutes: 20),
       DesktopE2eCase.hostedGatewayJoin => const Duration(minutes: 35),
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 40),
       DesktopE2eCase.multiDeviceRemoteRecovery => const Duration(minutes: 20),
@@ -481,6 +487,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.registrationDomainDiscovery =>
         'registration-domain-discovery',
       DesktopE2eCase.hostedGatewayResume => 'hosted-gateway-resume',
+      DesktopE2eCase.hostedGatewayEmailJoin => 'hosted-gateway-email-join',
       DesktopE2eCase.hostedGatewayJoin => 'hosted-gateway-join',
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
       DesktopE2eCase.multiDeviceRemoteRecovery =>
@@ -551,6 +558,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   static DesktopE2eCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
       'hosted-gateway-resume' => DesktopE2eCase.hostedGatewayResume,
+      'hosted-gateway-email-join' => DesktopE2eCase.hostedGatewayEmailJoin,
       'hosted-gateway-join' => DesktopE2eCase.hostedGatewayJoin,
       'did-method-web' || 'did_method_web' => DesktopE2eCase.didMethodWeb,
       '' || 'smoke' || 'app' || 'local' => DesktopE2eCase.smoke,

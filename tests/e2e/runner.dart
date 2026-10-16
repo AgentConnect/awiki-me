@@ -721,6 +721,7 @@ class DesktopE2eRunner {
           await _runRemoteRegistrationDomainDiscovery();
         case DesktopE2eCase.hostedGatewayResume:
           await _runHostedGatewayResume();
+        case DesktopE2eCase.hostedGatewayEmailJoin:
         case DesktopE2eCase.hostedGatewayJoin:
           await _runHostedGatewayJoin();
         case DesktopE2eCase.multiDeviceRemoteJoin:

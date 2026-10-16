@@ -35,7 +35,9 @@ void main() {
       failedTestCount: binding.failureMethodsDetails.length,
     ),
   );
-  registerHostedGatewayApprovalCase();
+  if (e2eInvocationValue('AWIKI_HOSTED_EMAIL_ONLY', compiledValue: '') != '1') {
+    registerHostedGatewayApprovalCase();
+  }
   testWidgets(
     'hosted email Join activates receiving App management',
     (tester) async {

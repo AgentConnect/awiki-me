@@ -2399,6 +2399,7 @@ cliHandle: legacy-cli
           if (definition.allowedHosts.isEmpty) continue;
           final domain =
               (e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+                  e2eCase == DesktopE2eCase.hostedGatewayEmailJoin ||
                   e2eCase == DesktopE2eCase.hostedGatewayResume)
               ? 'mcp-adapt.anpclaw.com'
               : 'test-fix.anpclaw.com';
@@ -2411,6 +2412,7 @@ cliHandle: legacy-cli
             reason: e2eCase.name,
           );
           if ((e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+              e2eCase == DesktopE2eCase.hostedGatewayEmailJoin ||
               e2eCase == DesktopE2eCase.hostedGatewayResume)) {
             expect(
               () => definition.validateRemoteTargetValues(

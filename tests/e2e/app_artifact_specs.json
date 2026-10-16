@@ -476,7 +476,8 @@
         "AWIKI_RELEASE=1015"
       ],
       "consumerSuites": [
-        "hosted-gateway-join"
+        "hosted-gateway-join",
+        "hosted-gateway-email-join"
       ]
     },
     {

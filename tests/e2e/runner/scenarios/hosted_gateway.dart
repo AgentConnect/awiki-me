@@ -53,6 +53,7 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
   Future<void> _runHostedGatewayJoin() async {
     final fixture =
         Platform.environment['AWIKI_HOSTED_FIXTURE_PATH']?.trim() ?? '';
+    final emailOnly = options.e2eCase == DesktopE2eCase.hostedGatewayEmailJoin;
     final phoneFixture =
         Platform.environment['AWIKI_HOSTED_PHONE_FIXTURE_PATH']?.trim() ?? '';
     if (platform != DesktopE2ePlatform.macos) {
@@ -64,9 +65,10 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
       if (fixture.isEmpty ||
           !File(fixture).isAbsolute ||
           !File(fixture).existsSync() ||
-          phoneFixture.isEmpty ||
-          !File(phoneFixture).isAbsolute ||
-          !File(phoneFixture).existsSync()) {
+          (!emailOnly &&
+              (phoneFixture.isEmpty ||
+                  !File(phoneFixture).isAbsolute ||
+                  !File(phoneFixture).existsSync()))) {
         throw E2eFailure(
           'Hosted Gateway acceptance needs an explicit protected fixture file.',
         );
@@ -107,6 +109,7 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
       environment: {
         'AWIKI_HOSTED_FIXTURE_PATH': fixture,
         'AWIKI_HOSTED_PHONE_FIXTURE_PATH': phoneFixture,
+        'AWIKI_HOSTED_EMAIL_ONLY': emailOnly ? '1' : '0',
         // The executable builder creates its state root. Product fixtures need
         // their own untouched device roots underneath that runner-owned root.
         'AWIKI_HOSTED_APP_STATE_ROOT': '${appStateRootDir.path}/joining-device',

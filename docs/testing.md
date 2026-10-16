@@ -1701,3 +1701,7 @@ Hosted Gateway runner 的构建工作目录与 fresh 设备目录分离。手机
 只重启同一设备，核对恢复身份、Registry 与本地根能力，并实际执行根签名服务更新。
 其独立 attestation 不能替代新加入流程的历史结果；两段证据应分别记录。
 错误只显示 allowlist 中的 Core 错误码，不记录 message/serviceDataJson。
+
+`hosted-gateway-email-join` 复用邮箱加入的原 case ID 和断言，仅准备一个新的接收设备，
+沿用受保护 fixture 的既有账号/身份；不执行手机号注册和反向批准。适合在手机号用例通过后
+定向复核邮箱首次激活边界。它不是已加入设备的重试入口；已有状态的检查使用上述 resume。

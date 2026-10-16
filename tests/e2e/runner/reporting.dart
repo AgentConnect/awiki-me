@@ -420,6 +420,7 @@ extension DesktopE2eReporting on DesktopE2eRunner {
       return 'none';
     }
     if ((options.e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+        options.e2eCase == DesktopE2eCase.hostedGatewayEmailJoin ||
         options.e2eCase == DesktopE2eCase.hostedGatewayResume)) {
       return 'isolated_device_recovery_material_intentionally_retained';
     }
@@ -439,6 +440,7 @@ extension DesktopE2eReporting on DesktopE2eRunner {
         remoteHandleRecoveryConfig?.serviceBaseUrl ??
         remoteMultiDeviceAppPairConfig?.serviceBaseUrl ??
         ((options.e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+                options.e2eCase == DesktopE2eCase.hostedGatewayEmailJoin ||
                 options.e2eCase == DesktopE2eCase.hostedGatewayResume)
             ? 'https://mcp-adapt.anpclaw.com'
             : null);
