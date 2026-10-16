@@ -229,14 +229,21 @@ class DevicesController extends StateNotifier<DevicesState> {
     _capabilitySubscription = ref.listen<AsyncValue<BackendFeatures>>(
       backendFeaturesProvider,
       (previous, next) {
-        final wasSupported = previous?.valueOrNull?.supports('identity.multi_device') ?? false;
-        final supported = next.valueOrNull?.supports('identity.multi_device') ?? false;
+        final wasSupported =
+            previous?.valueOrNull?.supports('identity.multi_device') ?? false;
+        final supported =
+            next.valueOrNull?.supports('identity.multi_device') ?? false;
         final epoch = _sessionEpoch;
         scheduleMicrotask(() {
           if (!mounted || epoch != _sessionEpoch) return;
-          if (supported && !wasSupported) {
-            if (!state.isLoading) unawaited(loadManagement());
-          } else if (!supported && wasSupported) {
+          if (supported &&
+              !wasSupported &&
+              _managementRequested &&
+              (_managementPaused || !_managementAttempted)) {
+            _managementPaused = false;
+            unawaited(loadManagement());
+          } else if (!supported && wasSupported && _managementRequested) {
+            _managementPaused = true;
             _generation += 1;
             state = state.copyWith(isLoading: false);
           }
@@ -259,7 +266,8 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool _revokeRpcCompleted = false;
   late String _sessionKey;
   late final ProviderSubscription<SessionState> _sessionSubscription;
-  late final ProviderSubscription<AsyncValue<BackendFeatures>> _capabilitySubscription;
+  late final ProviderSubscription<AsyncValue<BackendFeatures>>
+  _capabilitySubscription;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   String? _selectedAdminJoinSessionId;
 
@@ -283,6 +291,9 @@ class DevicesController extends StateNotifier<DevicesState> {
     _sessionKey = nextKey;
     _sessionEpoch += 1;
     _managementLoad = null;
+    _managementRequested = false;
+    _managementAttempted = false;
+    _managementPaused = false;
     _generation += 1;
     _registryReadGeneration += 1;
     _lastAppliedRegistryReadGeneration = 0;
@@ -328,12 +339,18 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   Future<void>? _managementLoad;
+  bool _managementRequested = false;
+  bool _managementAttempted = false;
+  bool _managementPaused = false;
   Future<void> loadManagement() {
+    _managementRequested = true;
     final active = _managementLoad;
     if (active != null) return active;
     final operation = _loadManagement();
     _managementLoad = operation;
-    return operation.whenComplete(() { if (identical(_managementLoad, operation)) _managementLoad = null; });
+    return operation.whenComplete(() {
+      if (identical(_managementLoad, operation)) _managementLoad = null;
+    });
   }
 
   Future<void> _loadManagement() async {
@@ -349,6 +366,7 @@ class DevicesController extends StateNotifier<DevicesState> {
       state = state.copyWith(error: DeviceManagementErrorKind.unavailable);
       return;
     }
+    _managementAttempted = true;
     final generation = ++_generation;
     final registryReadGeneration = ++_registryReadGeneration;
     final hadAuthoritativeRegistry = state.registry != null;
