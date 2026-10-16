@@ -1693,3 +1693,11 @@ Hosted Gateway runner 的构建工作目录与 fresh 设备目录分离。手机
 邮箱 Join 在公开设备请求列表出现精确会话后才配对；读取不创建新会话。
 失败仅输出闭合诊断码/HTTP 状态及 owning 测试源码行，不输出 OTP、SAS、响应正文、令牌或密钥。
 失败后的真实设备材料保留；后续执行前对账已创建的 Join，不以新目录掩盖未确认的远端结果。
+
+
+`hosted-gateway-resume` 是需要既有本地 fixture 的独立续办检查，不加入 `full` 自动枚举。
+提供 `AWIKI_HOSTED_FIXTURE_PATH` 和 `AWIKI_HOSTED_RESUME_STATE_ROOT`，后者必须是本仓
+`.e2e/hosted-gateway-join/<run>/app/joining-device` 的原始保留目录。它不创建账号、设备或 Join，
+只重启同一设备，核对恢复身份、Registry 与本地根能力，并实际执行根签名服务更新。
+其独立 attestation 不能替代新加入流程的历史结果；两段证据应分别记录。
+错误只显示 allowlist 中的 Core 错误码，不记录 message/serviceDataJson。

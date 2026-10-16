@@ -1,3 +1,4 @@
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -24,6 +25,26 @@ Future<void> input(WidgetTester tester, String identifier, String value) async {
 
 // Only our closed diagnostic codes may cross the private fixture boundary.
 String hostedFailureCode(Object error) {
+  const coreCodes = {
+    'invalid_input',
+    'identity_required',
+    'identity_not_found',
+    'identity_not_ready',
+    'auth_required',
+    'session_expired',
+    'permission_denied',
+    'local_identity_recovery_required',
+    'transport_unavailable',
+    'local_state_unavailable',
+    'identity_unresolved',
+    'identity_binding_conflict',
+    'remote_error',
+    'protocol_error',
+    'internal',
+  };
+  if (error is core.AwikiImCoreException && coreCodes.contains(error.code)) {
+    return 'core_${error.code}';
+  }
   const codes = {
     'hosted_app_state_deadline',
     'hosted_app_field_missing',

@@ -1612,6 +1612,37 @@
         "HOSTED-GATEWAY-JOIN-E2E-001",
         "HOSTED-GATEWAY-APPROVAL-E2E-001"
       ]
+    },
+    "hosted-gateway-resume": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos"
+      ],
+      "requiredTools": [
+        "flutter",
+        "ssh"
+      ],
+      "requiredFor": [
+        "local-fixture"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 5,
+      "timeoutMinutes": 10,
+      "cleanupPolicy": "retained_isolated_gateway_device_recovery_material",
+      "allowedHosts": [
+        "mcp-adapt.anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "mcp-adapt.anpclaw.com"
+      ],
+      "resourceCategories": [
+        "isolated_app_state",
+        "dedicated_test_identity",
+        "joined_device"
+      ],
+      "caseIds": [
+        "HOSTED-GATEWAY-RESUME-E2E-001"
+      ]
     }
   }
 }

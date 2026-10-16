@@ -1,6 +1,55 @@
 part of '../../runner.dart';
 
 extension HostedGatewayJoinScenario on DesktopE2eRunner {
+  Future<void> _runHostedGatewayResume() async {
+    final fixture = Platform.environment['AWIKI_HOSTED_FIXTURE_PATH'] ?? '';
+    final retained =
+        Platform.environment['AWIKI_HOSTED_RESUME_STATE_ROOT'] ?? '';
+    if (platform != DesktopE2ePlatform.macos) {
+      throw E2eFailure('Hosted Gateway resume requires macOS.');
+    }
+    if (!options.dryRun && !options.prepareOnly) {
+      final allowed = Directory('.e2e/hosted-gateway-join').absolute.path;
+      if (!File(fixture).isAbsolute ||
+          !File(fixture).existsSync() ||
+          !Directory(retained).isAbsolute ||
+          !Directory(retained).existsSync() ||
+          !Directory(
+            retained,
+          ).resolveSymbolicLinksSync().startsWith('$allowed/') ||
+          !retained.endsWith('/app/joining-device')) {
+        throw E2eFailure(
+          'Select an existing isolated hosted joining-device root.',
+        );
+      }
+      suiteDefinition.validateRemoteTargetValues(
+        didDomain: 'mcp-adapt.anpclaw.com',
+        serviceUrls: const ['https://mcp-adapt.anpclaw.com'],
+      );
+    }
+    _addRuntimeSecret(fixture);
+    _addRuntimeSecret(retained);
+    await commands.run('bash', const [
+      'scripts/verify_im_core_native_artifact.sh',
+    ], timeout: const Duration(minutes: 1));
+    if (options.dryRun) return;
+    final artifact = await _prepareIntegrationExecutable(
+      name: 'hosted-gateway-resume',
+      stateRoot: appStateRootDir,
+    );
+    if (options.prepareOnly) return;
+    _resourceSideEffectsPossible = true;
+    await _executePreparedIntegration(
+      artifact: artifact,
+      caseIds: options.e2eCase.caseIds,
+      stateRoot: appStateRootDir,
+      environment: {
+        'AWIKI_HOSTED_FIXTURE_PATH': fixture,
+        'AWIKI_HOSTED_RESUME_STATE_ROOT': retained,
+      },
+    );
+  }
+
   Future<void> _runHostedGatewayJoin() async {
     final fixture =
         Platform.environment['AWIKI_HOSTED_FIXTURE_PATH']?.trim() ?? '';

@@ -6504,6 +6504,60 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "HOSTED-GATEWAY-RESUME-E2E-001",
+      "feature": "Hosted App management recovery on the exact retained device",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An explicitly selected retained isolated hosted App root and protected matching email fixture; no new account or Join.",
+      "action": "Restart the real App, verify the exact restored identity and local root capability, then perform a root-authorized service update.",
+      "exactOracles": [
+        "The retained App restores the exact identity.",
+        "Registry management and local root readiness agree.",
+        "A root-authorized service update succeeds.",
+        "Original keys and device state remain retained."
+      ],
+      "negativeChecks": [
+        "Missing or foreign retained root, wrong identity, or unavailable root capability prevents a pass."
+      ],
+      "environment": "singapore_mcp_adapt_remote",
+      "cleanupPolicy": "retained_isolated_gateway_device_recovery_material",
+      "requiredFor": [
+        "local-fixture"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/hosted_gateway_resume_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HOSTED-GATEWAY-RESUME-E2E-001:exact_identity_restored",
+          "HOSTED-GATEWAY-RESUME-E2E-001:local_root_management_ready",
+          "HOSTED-GATEWAY-RESUME-E2E-001:root_authorized_service_update",
+          "HOSTED-GATEWAY-RESUME-E2E-001:recovery_material_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HOSTED-GATEWAY-RESUME-E2E-001:exact_identity_restored"
+          ],
+          [
+            "HOSTED-GATEWAY-RESUME-E2E-001:local_root_management_ready"
+          ],
+          [
+            "HOSTED-GATEWAY-RESUME-E2E-001:root_authorized_service_update"
+          ],
+          [
+            "HOSTED-GATEWAY-RESUME-E2E-001:recovery_material_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HOSTED-GATEWAY-RESUME-E2E-001:exact_identity_restored",
+            "HOSTED-GATEWAY-RESUME-E2E-001:local_root_management_ready",
+            "HOSTED-GATEWAY-RESUME-E2E-001:root_authorized_service_update"
+          ]
+        ]
+      }
     }
   ]
 }

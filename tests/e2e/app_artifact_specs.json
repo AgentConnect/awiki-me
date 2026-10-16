@@ -478,6 +478,21 @@
       "consumerSuites": [
         "hosted-gateway-join"
       ]
+    },
+    {
+      "name": "hosted-gateway-resume",
+      "target": "integration_test/hosted_gateway_resume_ui_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.mcpadapt.joiner",
+      "supportedPlatforms": [
+        "macos"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_RELEASE=1015"
+      ],
+      "consumerSuites": [
+        "hosted-gateway-resume"
+      ]
     }
   ]
 }

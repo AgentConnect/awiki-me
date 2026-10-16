@@ -419,7 +419,8 @@ extension DesktopE2eReporting on DesktopE2eRunner {
     if (_resourceCleanupStatus != 'residual') {
       return 'none';
     }
-    if (options.e2eCase == DesktopE2eCase.hostedGatewayJoin) {
+    if ((options.e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+        options.e2eCase == DesktopE2eCase.hostedGatewayResume)) {
       return 'isolated_device_recovery_material_intentionally_retained';
     }
     if (appPairMessageCleanup != null) {
@@ -437,7 +438,8 @@ extension DesktopE2eReporting on DesktopE2eRunner {
         remoteMultiDeviceJoinConfig?.serviceBaseUrl ??
         remoteHandleRecoveryConfig?.serviceBaseUrl ??
         remoteMultiDeviceAppPairConfig?.serviceBaseUrl ??
-        (options.e2eCase == DesktopE2eCase.hostedGatewayJoin
+        ((options.e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+                options.e2eCase == DesktopE2eCase.hostedGatewayResume)
             ? 'https://mcp-adapt.anpclaw.com'
             : null);
     final targetHost = targetUrl == null ? null : Uri.tryParse(targetUrl)?.host;
