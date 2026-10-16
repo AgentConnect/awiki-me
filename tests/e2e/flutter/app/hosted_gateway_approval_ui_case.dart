@@ -220,7 +220,7 @@ void registerHostedGatewayApprovalCase() {
         final denied = await gateway.post('device-requests', {
           'handle': '${gateway.handle}.$hostedDomain',
         }, expectedStatus: 403);
-        if ((denied['error'] as Map?)?['code'] != 'root_key_not_hosted') {
+        if (denied['error'] != 'root_key_not_hosted') {
           throw StateError('hosted_approval_root_not_absent');
         }
         await E2eCaseAttestationWriter.markPassed(

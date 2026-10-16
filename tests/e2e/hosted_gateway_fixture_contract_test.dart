@@ -99,7 +99,7 @@ void main() {
           (request) async => http.Response(
             request.url.path == '/connect/state'
                 ? '{"csrf":"synthetic"}'
-                : '{"error":{"code":"root_key_not_hosted"}}',
+                : '{"error":"root_key_not_hosted","retryable":false}',
             request.url.path == '/connect/state' ? 200 : status,
           ),
         ),
@@ -110,7 +110,7 @@ void main() {
         {},
         expectedStatus: 403,
       );
-      expect((result['error'] as Map)['code'], 'root_key_not_hosted');
+      expect(result['error'], 'root_key_not_hosted');
       status = 200;
       await expectLater(
         fixture.post('device-requests', {}, expectedStatus: 403),
