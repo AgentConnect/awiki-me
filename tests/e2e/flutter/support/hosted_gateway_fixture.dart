@@ -111,7 +111,9 @@ class HostedGatewayFixture {
     );
     await process.stdin.close();
     final exit = await process.exitCode.timeout(
-      const Duration(seconds: 30),
+      // Importing the exact User release can exceed 30s while the isolated
+      // server builds. This bounds fixture setup, not the OTP validity period.
+      const Duration(seconds: 120),
       onTimeout: () {
         process.kill(ProcessSignal.sigkill);
         throw StateError('hosted_fixture_timeout');
