@@ -114,7 +114,10 @@ void registerHostedGatewayApprovalCase() {
           find.byKey(const Key('onboarding-mac-phone-submit-action')),
         );
         phase = 'phone_activation';
-        await until(tester, () => find.byType(AppShell).evaluate().length == 1);
+        await until(
+          tester,
+          () => onboarding.read(sessionProvider).session?.did != null,
+        );
         final active = ProviderScope.containerOf(
           tester.element(find.byType(AppShell)),
         );

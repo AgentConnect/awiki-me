@@ -10,6 +10,7 @@ import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/domain/entities/identity_method.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
@@ -151,6 +152,18 @@ void main() {
           'grant_management': true,
           'operation_id': fixture.operationId(),
         });
+        await until(
+          tester,
+          () =>
+              container.read(sessionProvider).session?.did == fixture!.did &&
+              container.read(appRuntimeProvider).activatedDid == fixture.did,
+        );
+        final done = find.descendant(
+          of: page,
+          matching: find.text(tester.element(page).l10n.commonDone),
+        );
+        await tester.ensureVisible(done);
+        await tester.tap(done);
         await until(tester, () => find.byType(AppShell).evaluate().length == 1);
         final active = ProviderScope.containerOf(
           tester.element(find.byType(AppShell)),
