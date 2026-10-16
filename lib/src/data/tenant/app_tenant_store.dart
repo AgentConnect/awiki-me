@@ -143,6 +143,7 @@ class AppTenantStore {
       tenantProfileId: TenantProfileId.generate(),
       storageScopeId: StorageScopeId.generate(),
       kind: AppTenantKind.custom,
+      capabilitySummaryPending: true,
       name: name,
       backendBaseUrl: backend,
       didHost: didHost,
@@ -156,6 +157,27 @@ class AppTenantStore {
       officialCatalogVersion: registry.officialCatalogVersion,
       activeTenantProfileId: registry.activeTenantProfileId,
       tenants: _sort(<AppTenantProfile>[...registry.tenants, tenant]),
+    );
+    await saveRegistry(next, expectedRevision: registry.revision);
+    return next;
+  }
+
+  Future<AppTenantRegistry> markCapabilitySummarySeen(String tenantId) async {
+    final registry = await loadRegistry();
+    if (!registry.tenants
+        .firstWhere((tenant) => tenant.id == tenantId)
+        .capabilitySummaryPending) {
+      return registry;
+    }
+    final next = registry.copyWith(
+      revision: registry.revision + 1,
+      tenants: registry.tenants
+          .map(
+            (tenant) => tenant.id == tenantId
+                ? tenant.copyWith(capabilitySummaryPending: false)
+                : tenant,
+          )
+          .toList(),
     );
     await saveRegistry(next, expectedRevision: registry.revision);
     return next;

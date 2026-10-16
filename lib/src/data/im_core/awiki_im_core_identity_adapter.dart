@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/app_session.dart';
@@ -19,6 +20,7 @@ class AwikiImCoreIdentityAdapter
     implements
         IdentityCorePort,
         BackendCapabilitiesPort,
+        BackendCapabilitiesObservationPort,
         IdentityDocumentCorePort,
         DaemonSubkeyAuthorizationCorePort,
         LocalIdentityDataDeletionPort,
@@ -43,7 +45,29 @@ class AwikiImCoreIdentityAdapter
   Future<Map<String, dynamic>> backendCapabilities({bool force = false}) async {
     final runtime = _runtime;
     if (runtime != null) return runtime.backendCapabilities(force: force);
-    return {'public': await (await _coreInstance()).backendCapabilities(force: force)};
+    return {
+      'public': await (await _coreInstance()).backendCapabilities(force: force),
+    };
+  }
+
+  @override
+  Stream<Map<String, dynamic>> watchBackendCapabilities() async* {
+    final runtime = _runtime;
+    if (runtime != null) {
+      yield* runtime.watchBackendCapabilities();
+    } else {
+      final instance = await _coreInstance();
+      yield {'public': await instance.backendCapabilitiesSnapshot()};
+      unawaited(
+        instance.backendCapabilities().then<void>(
+          (_) {},
+          onError: (Object _) {},
+        ),
+      );
+      yield* instance.watchBackendCapabilities().map(
+        (state) => {'public': state['snapshot']},
+      );
+    }
   }
 
   final AwikiImCoreRuntime? _runtime;

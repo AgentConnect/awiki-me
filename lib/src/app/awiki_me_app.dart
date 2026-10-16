@@ -1,3 +1,4 @@
+import '../presentation/server_features/new_tenant_capability_summary.dart';
 import 'dart:async';
 
 import 'app_appearance.dart';
@@ -469,7 +470,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
                   child: material.Theme(
                     data: appTheme.materialTheme,
                     child: AppOrientationScope(
-                      child: child ?? const SizedBox.shrink(),
+                      child: NewTenantCapabilitySummary(child: child ?? const SizedBox.shrink()),
                     ),
                   ),
                 ),

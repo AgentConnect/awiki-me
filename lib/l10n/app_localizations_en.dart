@@ -4417,4 +4417,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get onboardingHandleOnlyHint =>
       'Register with a username. No phone number or email is required.\nMore server features are shown after sign-in.';
+
+  @override
+  String get serverFeaturesSummaryDetail =>
+      'After signing in, see Server features for messaging and encryption.';
+
+  @override
+  String get serverFeaturesUpgradeRequired =>
+      'The server needs an upgrade to confirm its features. Local identities and history remain available.';
+
+  @override
+  String serverFeaturesUpdatedAt(String time) {
+    return 'Last confirmed: $time';
+  }
 }

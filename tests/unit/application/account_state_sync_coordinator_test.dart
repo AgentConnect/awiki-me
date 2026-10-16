@@ -20,6 +20,95 @@ import '../test_support.dart';
 
 void main() {
   test(
+    'explicit close fences active sync and resume retains mutation floor',
+    () async {
+      final support = StateProvider<String>((_) => 'supported');
+      final remote = _CoordinatorRemote(blockManifest: true, version: '2');
+      final container = ProviderContainer(
+        overrides: [
+          identityCorePortProvider.overrideWithValue(_identityCorePort()),
+          productLocalStoreProvider.overrideWithValue(
+            InMemoryAwikiProductLocalStore(),
+          ),
+          accountStateSyncPortProvider.overrideWithValue(remote),
+          backendFeaturesProvider.overrideWith(
+            (ref) => AsyncData(
+              BackendFeatures({
+                'public': {
+                  'status': 'confirmed',
+                  'fetched_at': 1,
+                  'capabilities': {
+                    'account.state_sync': {'support': ref.watch(support)},
+                  },
+                },
+              }),
+            ),
+          ),
+          backendFeaturesFutureProvider.overrideWith(
+            (ref) =>
+                Future.value(ref.watch(backendFeaturesProvider).requireValue),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        accountStateSyncCoordinatorProvider.notifier,
+      );
+      container
+          .read(sessionProvider.notifier)
+          .setSession(_session(accountId: 'account-1'));
+      final pending = coordinator.request(
+        'profile_mutation',
+        minimumVersion: AccountStateVersionFloor(
+          domain: ProductAccountDomain.profile,
+          version: '2',
+        ),
+      );
+      await remote.manifestStarted.future;
+      container.read(support.notifier).state = 'unsupported';
+      await Future<void>.delayed(Duration.zero);
+      remote.releaseManifest.complete();
+      await pending;
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).lastCompletedAt,
+        isNull,
+      );
+      expect(
+        container
+            .read(accountStateSyncCoordinatorProvider)
+            .minimumVersions[ProductAccountDomain.profile],
+        '2',
+      );
+      final calls = remote.manifestCalls;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(remote.manifestCalls, calls);
+      container.read(support.notifier).state = 'supported';
+      for (
+        var attempt = 0;
+        attempt < 50 &&
+            container
+                    .read(accountStateSyncCoordinatorProvider)
+                    .lastCompletedAt ==
+                null;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(
+        container
+            .read(accountStateSyncCoordinatorProvider)
+            .domainVersions[ProductAccountDomain.profile],
+        '2',
+      );
+      expect(
+        container.read(accountStateSyncCoordinatorProvider).lastCompletedAt,
+        isNotNull,
+      );
+      expect(remote.maxConcurrentManifestLoads, 1);
+    },
+  );
+
+  test(
     'stable unsupported stops retries until a newer confirmed discovery',
     () async {
       final remote = _CoordinatorRemote()

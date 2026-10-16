@@ -226,6 +226,23 @@ class DevicesController extends StateNotifier<DevicesState> {
       appLifecycleProvider,
       _handleLifecycleChanged,
     );
+    _capabilitySubscription = ref.listen<AsyncValue<BackendFeatures>>(
+      backendFeaturesProvider,
+      (previous, next) {
+        final wasSupported = previous?.valueOrNull?.supports('identity.multi_device') ?? false;
+        final supported = next.valueOrNull?.supports('identity.multi_device') ?? false;
+        final epoch = _sessionEpoch;
+        scheduleMicrotask(() {
+          if (!mounted || epoch != _sessionEpoch) return;
+          if (supported && !wasSupported) {
+            if (!state.isLoading) unawaited(loadManagement());
+          } else if (!supported && wasSupported) {
+            _generation += 1;
+            state = state.copyWith(isLoading: false);
+          }
+        });
+      },
+    );
   }
 
   final Ref ref;
@@ -242,6 +259,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool _revokeRpcCompleted = false;
   late String _sessionKey;
   late final ProviderSubscription<SessionState> _sessionSubscription;
+  late final ProviderSubscription<AsyncValue<BackendFeatures>> _capabilitySubscription;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   String? _selectedAdminJoinSessionId;
 
@@ -264,6 +282,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     if (nextKey == _sessionKey) return;
     _sessionKey = nextKey;
     _sessionEpoch += 1;
+    _managementLoad = null;
     _generation += 1;
     _registryReadGeneration += 1;
     _lastAppliedRegistryReadGeneration = 0;
@@ -303,11 +322,21 @@ class DevicesController extends StateNotifier<DevicesState> {
   @override
   void dispose() {
     _sessionSubscription.close();
+    _capabilitySubscription.close();
     _lifecycleSubscription.close();
     super.dispose();
   }
 
-  Future<void> loadManagement() async {
+  Future<void>? _managementLoad;
+  Future<void> loadManagement() {
+    final active = _managementLoad;
+    if (active != null) return active;
+    final operation = _loadManagement();
+    _managementLoad = operation;
+    return operation.whenComplete(() { if (identical(_managementLoad, operation)) _managementLoad = null; });
+  }
+
+  Future<void> _loadManagement() async {
     final capabilityEpoch = _sessionEpoch;
     final features = await ref.read(backendFeaturesFutureProvider);
     if (!mounted ||

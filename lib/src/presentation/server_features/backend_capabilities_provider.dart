@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../application/ports/backend_capabilities_port.dart';
@@ -42,14 +41,17 @@ class BackendFeatures {
 
 // A new tenant or session observes a different provider, never the previous
 // AsyncValue's retained data. Refreshes within that exact context retain layout.
-final _featuresForContextProvider = FutureProvider.autoDispose
-    .family<BackendFeatures, (BackendCapabilitiesPort, int)>((
-      ref,
-      context,
-    ) async {
-      final timer = Timer(const Duration(minutes: 5), ref.invalidateSelf);
-      ref.onDispose(timer.cancel);
-      return BackendFeatures(await context.$1.backendCapabilities());
+final _featuresForContextProvider = StreamProvider.autoDispose
+    .family<BackendFeatures, (BackendCapabilitiesPort, int)>((ref, context) {
+      final port = context.$1;
+      if (port is BackendCapabilitiesObservationPort) {
+        return (port as BackendCapabilitiesObservationPort)
+            .watchBackendCapabilities()
+            .map(BackendFeatures.new);
+      }
+      return Stream.fromFuture(
+        port.backendCapabilities().then(BackendFeatures.new),
+      );
     });
 final backendFeaturesProvider = Provider<AsyncValue<BackendFeatures>>((ref) {
   final generation = ref.watch(
@@ -93,6 +95,7 @@ Future<void> refreshBackendFeatures(WidgetRef ref) async {
         ref.read(sessionProvider).generation != generation) {
       return;
     }
+    if (identities is BackendCapabilitiesObservationPort) return;
     ref.invalidate(
       _featuresForContextProvider((
         identities as BackendCapabilitiesPort,

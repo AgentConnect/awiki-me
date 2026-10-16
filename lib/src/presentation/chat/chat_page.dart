@@ -1049,6 +1049,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   localRuntimeAgent: runtimeAgent,
                 ),
         );
+    ref.listen<bool>(multiDeviceGroupE2eeEnabledProvider, (previous, enabled) {
+      if (enabled && previous != true && currentConversation.isGroup) {
+        unawaited(_refreshGroupSecurity(currentConversation));
+      }
+    });
     ref.listen<ChatThreadState>(
       chatThreadProvider(displayThreadId),
       (previous, next) =>

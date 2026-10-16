@@ -1811,5 +1811,15 @@
   "serverFeaturesMail": "Email",
   "serverFeaturesUpdates": "Client updates",
   "serverFeaturesPages": "Pages and sites",
-  "onboardingHandleOnlyHint": "Register with a username. No phone number or email is required.\nMore server features are shown after sign-in."
+  "onboardingHandleOnlyHint": "Register with a username. No phone number or email is required.\nMore server features are shown after sign-in.",
+  "serverFeaturesSummaryDetail": "After signing in, see Server features for messaging and encryption.",
+  "serverFeaturesUpgradeRequired": "The server needs an upgrade to confirm its features. Local identities and history remain available.",
+  "serverFeaturesUpdatedAt": "Last confirmed: {time}",
+  "@serverFeaturesUpdatedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  }
 }

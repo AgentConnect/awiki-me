@@ -4105,4 +4105,15 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get onboardingHandleOnlyHint =>
       '此服务器可直接使用用户名注册，无需手机号或邮箱。\n登录后可查看聊天等功能的支持情况。';
+
+  @override
+  String get serverFeaturesSummaryDetail => '登录后可在“服务器功能”查看聊天与加密能力。';
+
+  @override
+  String get serverFeaturesUpgradeRequired => '服务器需要升级后才能确认功能。本机身份与历史仍可使用。';
+
+  @override
+  String serverFeaturesUpdatedAt(String time) {
+    return '上次确认：$time';
+  }
 }

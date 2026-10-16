@@ -77,6 +77,47 @@ class AccountStateSyncCoordinator
       sessionProvider,
       _handleSessionChanged,
     );
+    _capabilitySubscription = ref.listen<AsyncValue<BackendFeatures>>(
+      backendFeaturesProvider,
+      (previous, next) {
+        final wasSupported =
+            previous?.valueOrNull?.supports('account.state_sync') ?? false;
+        final supported =
+            next.valueOrNull?.supports('account.state_sync') ?? false;
+        final public = next.valueOrNull?.sources['public'];
+        final disabled =
+            next.valueOrNull?.support('account.state_sync') == 'unsupported' ||
+            (public is Map && public['status'] == 'incompatible');
+        if (disabled && wasSupported) _capabilityEpoch += 1;
+        final generation = ref.read(sessionProvider).generation;
+        scheduleMicrotask(() async {
+          if (_disposed || ref.read(sessionProvider).generation != generation) {
+            return;
+          }
+          if (disabled && wasSupported) {
+            _remoteUnavailable = true;
+            _retryTimer?.cancel();
+            _retryTimer = null;
+            return;
+          }
+          if (!supported) return;
+          final active = _activeOperation;
+          if (active != null) await active.catchError((_) {});
+          if (_disposed || ref.read(sessionProvider).generation != generation) {
+            return;
+          }
+          if (_remoteUnavailable ||
+              state.status == AccountStateSyncCoordinatorStatus.idle) {
+            unawaited(
+              request(
+                'backend_capability_confirmed',
+                force: true,
+              ).catchError((_) {}),
+            );
+          }
+        });
+      },
+    );
   }
 
   final Ref ref;
@@ -85,6 +126,8 @@ class AccountStateSyncCoordinator
   final int maximumVersionFloorAttempts;
 
   late final ProviderSubscription<SessionState> _sessionSubscription;
+  late final ProviderSubscription<AsyncValue<BackendFeatures>>
+  _capabilitySubscription;
   late final AccountStateSyncRequestBus _requestBus;
   Future<void>? _activeOperation;
   Timer? _retryTimer;
@@ -94,6 +137,7 @@ class AccountStateSyncCoordinator
       <ProductAccountDomain, String>{};
   bool _disposed = false;
   bool _remoteUnavailable = false;
+  int _capabilityEpoch = 0;
   bool _backendRejected = false;
   int? _rejectedDiscoveryTime;
 
@@ -203,6 +247,7 @@ class AccountStateSyncCoordinator
     }
     final features = await ref.read(backendFeaturesFutureProvider);
     if (!_isCurrent(fence)) return;
+    final capabilityEpoch = _capabilityEpoch;
     final public = features.sources['public'];
     final fetchedAt = public is Map ? public['fetched_at'] : null;
     if (_backendRejected &&
@@ -253,7 +298,9 @@ class AccountStateSyncCoordinator
             expectedDeviceAuthGeneration: fence.deviceAuthGeneration,
             sessionGeneration: fence.sessionGeneration,
             isSessionCurrent: (binding, generation) =>
-                fence.matchesBinding(binding, generation) && _isCurrent(fence),
+                fence.matchesBinding(binding, generation) &&
+                _isCurrent(fence) &&
+                capabilityEpoch == _capabilityEpoch,
             minimumVersions: minimumVersions,
           );
     } on Object catch (error) {
@@ -275,6 +322,11 @@ class AccountStateSyncCoordinator
         minimumVersions: minimumVersions,
         unmetMinimumVersions: minimumVersions,
       );
+      return;
+    }
+    if (_isCurrent(fence) && capabilityEpoch != _capabilityEpoch) {
+      _remoteUnavailable = true;
+      _publishUnavailable(reason);
       return;
     }
     if (result.sessionInvalidated || !_isCurrent(fence)) {
@@ -577,6 +629,7 @@ class AccountStateSyncCoordinator
     _retryTimer?.cancel();
     _requestBus.detach();
     _sessionSubscription.close();
+    _capabilitySubscription.close();
     super.dispose();
   }
 }

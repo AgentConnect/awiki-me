@@ -69,8 +69,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     if (ref
             .watch(backendFeaturesProvider)
             .valueOrNull
-            ?.supports('identity.multi_device') !=
-        true) {
+            ?.support('identity.multi_device') ==
+        'unsupported') {
       return ServerFeaturesPage(embedded: widget.embedded);
     }
     final state = ref.watch(devicesProvider);

@@ -54,6 +54,28 @@ class ServerFeaturesPage extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (features.sources.values.any(
+                    (source) =>
+                        source is Map &&
+                        source['refresh_error'] == 'upgrade_required',
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(l10n.serverFeaturesUpgradeRequired),
+                    ),
+                  for (final source in features.sources.values)
+                    if (source is Map && source['fetched_at'] is int)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          l10n.serverFeaturesUpdatedAt(
+                            DateTime.fromMillisecondsSinceEpoch(
+                              (source['fetched_at'] as int) * 1000,
+                            ).toLocal().toString().split('.').first,
+                          ),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
                   if (features.stale)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),

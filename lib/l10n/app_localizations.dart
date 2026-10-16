@@ -7713,6 +7713,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'此服务器可直接使用用户名注册，无需手机号或邮箱。\n登录后可查看聊天等功能的支持情况。'**
   String get onboardingHandleOnlyHint;
+
+  /// No description provided for @serverFeaturesSummaryDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后可在“服务器功能”查看聊天与加密能力。'**
+  String get serverFeaturesSummaryDetail;
+
+  /// No description provided for @serverFeaturesUpgradeRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器需要升级后才能确认功能。本机身份与历史仍可使用。'**
+  String get serverFeaturesUpgradeRequired;
+
+  /// No description provided for @serverFeaturesUpdatedAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次确认：{time}'**
+  String serverFeaturesUpdatedAt(String time);
 }
 
 class _AppLocalizationsDelegate

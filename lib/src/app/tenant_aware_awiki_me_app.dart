@@ -57,7 +57,7 @@ class TenantAwareAwikiMeApp extends StatefulWidget {
 
 class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     with WidgetsBindingObserver
-    implements AppTenantActions {
+    implements AppTenantActions, TenantCapabilitySummaryActions {
   late final AppTenantStore _store;
   late final DesktopShellService _desktopShell;
   late final DesktopStartupPresentationService _desktopStartupPresentation;
@@ -394,6 +394,18 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       _runtime = restored;
       _runtimeFuture = Future<_TenantRuntime>.value(restored);
     });
+  }
+
+  @override
+  Future<void> markCapabilitySummarySeen(String tenantId) async {
+    final registry = await _store.markCapabilitySummarySeen(tenantId);
+    if (mounted &&
+        _runtime?.registry.activeTenant.id == registry.activeTenant.id &&
+        (_runtime?.registry.revision ?? 0) <= registry.revision) {
+      setState(() {
+        _runtime = _runtime?.copyWith(registry: registry);
+      });
+    }
   }
 
   @override

@@ -1,3 +1,7 @@
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/presentation/server_features/new_tenant_capability_summary.dart';
+import 'dart:async';
+import 'package:awiki_me/src/application/ports/backend_capabilities_port.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
@@ -10,7 +14,101 @@ import 'package:awiki_me/src/presentation/server_features/backend_capabilities_p
 import 'package:awiki_me/src/presentation/server_features/server_features_page.dart';
 import 'test_support.dart';
 
+class _ObservedCapabilities extends FakeIdentityCorePort
+    implements BackendCapabilitiesObservationPort {
+  final updates = StreamController<Map<String, dynamic>>.broadcast();
+  @override
+  Stream<Map<String, dynamic>> watchBackendCapabilities() => updates.stream;
+}
+
 void main() {
+  for (final pending in [false, true]) {
+    for (final width in [390.0, 1100.0]) {
+      testWidgets('新增租户摘要只在确认后显示 $pending $width', (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const NewTenantCapabilitySummary(
+              child: CupertinoPageScaffold(child: Text('local history')),
+            ),
+            providerOverrides: [
+              activeAppTenantProvider.overrideWithValue(
+                defaultTenantProfile().copyWith(
+                  capabilitySummaryPending: pending,
+                ),
+              ),
+              backendFeaturesProvider.overrideWithValue(
+                const AsyncData(
+                  BackendFeatures({
+                    'public': {
+                      'status': 'confirmed',
+                      'capabilities': {
+                        'identity.multi_device': {'support': 'supported'},
+                        'agents.managed_agents': {'support': 'supported'},
+                      },
+                    },
+                  }),
+                ),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byKey(const Key('new-tenant-capability-summary')),
+          pending ? findsOneWidget : findsNothing,
+        );
+        expect(find.text('local history'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pump(const Duration(seconds: 8));
+        expect(
+          find.byKey(const Key('new-tenant-capability-summary')),
+          findsNothing,
+        );
+      });
+    }
+  }
+
+  test('能力订阅保持旧快照并响应关闭和恢复，不等待主动刷新', () async {
+    final identity = _ObservedCapabilities();
+    final container = ProviderContainer(
+      overrides: [identityCorePortProvider.overrideWithValue(identity)],
+    );
+    final subscription = container.listen(
+      backendFeaturesProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(() async {
+      subscription.close();
+      container.dispose();
+      await identity.updates.close();
+    });
+    Map<String, dynamic> source(String status, String support) => {
+      'public': {
+        'status': status,
+        'capabilities': {
+          'agents.managed_agents': {'support': support},
+        },
+      },
+    };
+    identity.updates.add(source('confirmed', 'supported'));
+    await container.read(backendFeaturesFutureProvider);
+    expect(container.read(agentImEnabledProvider), isTrue);
+    identity.updates.add(source('stale', 'supported'));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(agentImEnabledProvider), isTrue);
+    identity.updates.add(source('confirmed', 'unsupported'));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(agentImEnabledProvider), isFalse);
+    identity.updates.add(source('confirmed', 'supported'));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(agentImEnabledProvider), isTrue);
+  });
+
   for (final status in ['confirmed', 'stale', 'unavailable', 'incompatible']) {
     test('文件选择器使用当前消息能力上限 $status', () {
       final container = ProviderContainer(
