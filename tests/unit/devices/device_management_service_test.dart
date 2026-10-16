@@ -194,6 +194,25 @@ void main() {
   );
 
   test(
+    'signed message-only approval uses the exact localized presence reason',
+    () async {
+      final core = _FakeDeviceCore()..managementAllowed = false;
+      final presence = _FakeUserPresence(result: true);
+      final progress = _adminSasProgress();
+      await _service(core: core, presence: presence).approveAsMember(
+        selector: progress.did,
+        progress: progress,
+        displayedSas: progress.sas!,
+        sasConfirmed: true,
+        presenceReason: 'management access',
+        messageOnlyPresenceReason: '仅允许消息，不授予管理权限',
+      );
+      expect(presence.lastReason, '仅允许消息，不授予管理权限');
+      expect(core.confirmedPresence, isTrue);
+    },
+  );
+
+  test(
     'explicit verification start calls the combined Core operation',
     () async {
       final core = _FakeDeviceCore();
@@ -482,15 +501,18 @@ class _FakeUserPresence implements UserPresencePort {
   final bool? result;
   final Completer<bool>? completer;
   int calls = 0;
+  String? lastReason;
 
   @override
   Future<bool> confirm({required String reason}) async {
     calls += 1;
+    lastReason = reason;
     return completer?.future ?? result ?? false;
   }
 }
 
 class _FakeDeviceCore implements DeviceManagementCorePort {
+  bool managementAllowed = true;
   bool? localManagementReadyOverride;
   @override
   Future<bool> localManagementReady({
@@ -542,6 +564,27 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   );
   Object? registryError;
   int registryCalls = 0;
+
+  @override
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinEmailOtp({
+    required String handle,
+    required String email,
+  }) => sendJoinSmsOtp(handle: handle, phone: email);
+
+  @override
+  Future<DeviceJoinProgress> beginDeviceJoinWithEmail({
+    required String handle,
+    required String email,
+    required String otp,
+    required String operationId,
+    required int ttlSeconds,
+  }) => beginDeviceJoinWithSms(
+    handle: handle,
+    phone: email,
+    otp: otp,
+    operationId: operationId,
+    ttlSeconds: ttlSeconds,
+  );
 
   @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
@@ -689,6 +732,7 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
     prepareCalls += 1;
     preparedSasConfirmed = sasConfirmed;
     return DeviceJoinApprovalPrompt(
+      managementAllowed: managementAllowed,
       approvalHandle: 'approval-1',
       joinSessionId: joinSessionId,
       sas: '482917',

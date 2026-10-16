@@ -133,12 +133,30 @@ void main() {
       final transcript = utf8.encode(
         'Compare this one-time SAS with the new device: 482917\r\n'
         'Type the same 6-digit SAS to continue: '
-        'Type APPROVE to allow this device to join and become a management device: ',
+        'Type APPROVE to join and configure identity management on this device: ',
       );
 
       expect(remoteMultiDeviceCliApprovalSas(transcript), '482917');
       expect(remoteMultiDeviceCliRequestsSasInput(transcript), isTrue);
       expect(remoteMultiDeviceCliRequestsApproval(transcript), isTrue);
+      expect(
+        remoteMultiDeviceCliRequestsApproval(
+          transcript,
+          managementAllowed: false,
+        ),
+        isFalse,
+      );
+      final messageOnly = utf8.encode(
+        'Type APPROVE to join for messaging only (no root key or management permission): ',
+      );
+      expect(remoteMultiDeviceCliRequestsApproval(messageOnly), isFalse);
+      expect(
+        remoteMultiDeviceCliRequestsApproval(
+          messageOnly,
+          managementAllowed: false,
+        ),
+        isTrue,
+      );
     });
 
     test('waits for a complete ASCII SAS and rejects prompt drift', () {

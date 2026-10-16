@@ -1,5 +1,12 @@
 # AWiki Me 多设备加入、设备页与永久撤销
 
+## 消息用途 Join（2026-10-15）
+
+Gateway 的 `messages_only` 用途来自 Core 验证的签名请求，批准页在开始验证及 SAS 核对阶段
+明确展示“仅用于消息通信，不授予根密钥或身份管理权限”。系统确认使用相同的本地化说明；
+依据准备批准时 Core 返回的 `managementAllowed` 选择确认文案及普通成员批准接口。
+消息用途不创建自动管理任务。旧请求缺省继续下述管理设备流程，不能通过设备名称判断用途。
+
 ## 一次 Join 授权自动配置管理权限（2026-09-15）
 
 App/CLI 的正常加入确认含义为“允许该设备加入并成为管理设备”。保留身份/SAS 核对及一次 user presence；取消此路径后续独立 root 授权。Core 的既有普通 Join 接口仍供 Node/DSH 使用，独立 root-key send 仍要求单独明确授权，不能将 user_presence_confirmed 硬编码为 true 接入自动流程。

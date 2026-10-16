@@ -1654,3 +1654,61 @@ App runner 构建仍使用 CLI 同目录的 probe。执行前检查存在性，�
 ### 20261013 整合来源
 
 本轮显式 source CI 的 `cli_ref` 使用根目录 `dependencies.source.json` 中 `awiki-im-core.commit`，它固定包含 Dart/Node 适配器与源码锁的 Core 消费端提交。该 Core 提交内部清单再固定实际 SDK 源码；二者的 SHA 可以不同，但本轮 SDK 功能树一致。ANP / Identity 与 App 清单保持相同冻结来源。不得把历史测试包或旧 release pin 当作此组合。正式 registry 依赖尚未发布，相关 PR 保持草稿，默认 CI 与正式打包不切换为源码模式。
+
+## ChatGPT Gateway 托管身份候选验证
+
+新增邮箱 Join 由既有账号适配器发送验证码并交换仅 Join 用途 grant，身份及通信流程继续调用 Core。邮箱不进入手机号 Recovery。签名用途为 messages_only 时，批准页面说明仅消息通信，调用普通批准，不进入自动根密钥授予；缺省用途保留管理设备流程。
+
+拥有测试：`tests/unit/devices/` 与 `awiki_im_core_device_management_adapter_test.dart` 覆盖邮箱请求、DTO 映射、消息用途 UI/批准分流和邮箱 Recovery 拒绝。真实场景 `hosted_gateway_email_join`、`hosted_gateway_message_only_approval`、`hosted_gateway_root_receive` 的产品 E2E 归本仓；目前尚无这些场景的真实执行通过记录，不将 Widget 测试或原生编译作为其替代。跨 Gateway 的协议端到端测试归 Gateway。
+
+新增 `hosted-gateway-join`，含 `HOSTED-GATEWAY-JOIN-E2E-001` 与
+`HOSTED-GATEWAY-APPROVAL-E2E-001`，当前只支持 macOS，已进入
+owning catalog 与 full 的平台适用聚合。用专属 Gateway runner 先准备合成邮箱身份，
+再显式传入 0600 的 private fixture 路径：
+
+```bash
+AWIKI_SYSTEM_TEST_TARGET=singapore-mcp-adapt \
+AWIKI_HOSTED_FIXTURE_PATH=<absolute-private-fixture-path> \
+AWIKI_HOSTED_PHONE_FIXTURE_PATH=<absolute-private-phone-fixture-path> \
+dart run tests/e2e/runner.dart --case hosted-gateway-join
+```
+
+该场景构建独立 bundle ID 的 native App，使用真实 `DeviceJoinPage` 输入邮箱/Handle/OTP、
+比对页面 SAS 和 Gateway 配对值，明确批准后验证 AppShell 的准确身份、Core 本地管理
+能力和真实根密钥签名的 DID service 更新。合成 OTP 只通过受限 SSH fixture 写入指定
+实例，不能代替实际邮件投递。缺 fixture、错误权限/域名、缺根密钥或未激活均失败。
+fixture、App 状态和远程设备保留用于本轮恢复与联调，ledger 明确 residual，不声称清空。
+`--prepare-only` 只构建，不创建设备；真实执行结果以本轮 case attestation 为准。
+反向场景通过真实手机号注册 UI 创建初始管理设备，再在 Gateway 选择该身份；APP
+必须在批准前显示签名验证后的 messages_only 用途，双方 SAS 一致，一次计数式
+用户在场确认后 Gateway 只能成为普通成员，且因无根密钥拒绝管理操作。手机号 fixture
+仅允许专属实例的保留合成号码与私有测试预设验证码；该测试不证明短信投递或系统
+生物识别。两个场景均须真实执行才可记录通过，独立保留 App 根目录及设备恢复材料。
+
+Mac 联调使用 `scripts/build_manual_dual_macos_apps.sh`，显式传入两个不同的 `ai.awiki.awikime.dev.*` bundle ID 和完整测试 tenant JSON。只选择隔离测试 primary；secondary 使用不可解析的 `.invalid` 占位，避免默认连到生产。原生库使用 Core 已提交的本地联调来源及产物 manifest 校验，不改变正式推荐版本。
+
+
+Hosted Gateway runner 的构建工作目录与 fresh 设备目录分离。手机号用例先经真实 UI 请求验证码，
+随后在固定隔离实例为当前用途和 Handle 准备有效的短期测试验证码，不复用构建前已过期的值。
+邮箱 Join 在公开设备请求列表出现精确会话后才配对；读取不创建新会话。
+失败仅输出闭合诊断码/HTTP 状态及 owning 测试源码行，不输出 OTP、SAS、响应正文、令牌或密钥。
+失败后的真实设备材料保留；后续执行前对账已创建的 Join，不以新目录掩盖未确认的远端结果。
+
+
+`hosted-gateway-resume` 是需要既有本地 fixture 的独立续办检查，不加入 `full` 自动枚举。
+提供 `AWIKI_HOSTED_FIXTURE_PATH` 和 `AWIKI_HOSTED_RESUME_STATE_ROOT`，后者必须是本仓
+`.e2e/hosted-gateway-join/<run>/app/joining-device` 的原始保留目录。它不创建账号、设备或 Join，
+只重启同一设备，核对恢复身份、Registry 与本地根能力，并实际执行根签名服务更新。
+其独立 attestation 不能替代新加入流程的历史结果；两段证据应分别记录。
+错误只显示 allowlist 中的 Core 错误码，不记录 message/serviceDataJson。
+
+`hosted-gateway-email-join` 复用邮箱加入的原 case ID 和断言，仅准备一个新的接收设备，
+沿用受保护 fixture 的既有账号/身份；不执行手机号注册和反向批准。适合在手机号用例通过后
+定向复核邮箱首次激活边界。它不是已加入设备的重试入口；已有状态的检查使用上述 resume。
+
+邮箱配对刷新仅对409 `device_join_notice_missing` 且retryable=true等待，最多30次/500ms；
+其它409、拒绝及签名不一致立即失败。接收端显示SAS不能替代Gateway已经收到验证响应。
+管理批准操作号绑定同一身份与Join，响应丢失重试复用原标识。
+
+邮箱加入的消息身份激活早于根导入/管理令牌替换。验收先等待产品devicesProvider的
+currentDeviceCanManage，再独立核对Registry与本地根能力并执行根签名操作，不把AppShell当管理完成。

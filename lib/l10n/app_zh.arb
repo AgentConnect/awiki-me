@@ -488,7 +488,8 @@
       }
     }
   },
-  "deviceJoinApprove": "允许加入并成为管理设备",
+  "deviceJoinApprove": "核对用途并批准加入",
+  "deviceJoinMessageOnlyPresenceReason": "允许该设备仅用于消息通信，不授予根密钥或身份管理权限",
   "deviceJoinCancel": "取消关联",
   "deviceJoinAuthorized": "设备已加入",
   "deviceJoinFinalizing": "正在完成设备操作...",

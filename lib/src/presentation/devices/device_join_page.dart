@@ -39,6 +39,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   Timer? _pollTimer;
+  bool _useEmail = false;
   bool _otpSendFailed = false;
   bool _otpRateLimited = false;
   bool _activationPending = false;
@@ -167,12 +168,34 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             style: TextStyle(color: context.awikiTheme.secondaryText),
           ),
           const SizedBox(height: 16),
+          CupertinoSlidingSegmentedControl<bool>(
+            groupValue: _useEmail,
+            children: {
+              false: Text(context.l10n.onboardingPhone),
+              true: Text(context.l10n.onboardingEmail),
+            },
+            onValueChanged: (value) {
+              if (value == null || state.isActionPending) return;
+              setState(() {
+                _useEmail = value;
+                _phoneController.clear();
+                _otpController.clear();
+              });
+            },
+          ),
+          const SizedBox(height: 12),
           AppTextField(
             controller: _phoneController,
-            label: context.l10n.deviceJoinPhone,
-            placeholder: '+8613800138000',
-            keyboardType: TextInputType.phone,
-            semanticsIdentifier: 'multi-device-join-phone',
+            label: _useEmail
+                ? context.l10n.onboardingEmail
+                : context.l10n.deviceJoinPhone,
+            placeholder: _useEmail ? 'name@example.com' : '+8613800138000',
+            keyboardType: _useEmail
+                ? TextInputType.emailAddress
+                : TextInputType.phone,
+            semanticsIdentifier: _useEmail
+                ? 'multi-device-join-email'
+                : 'multi-device-join-phone',
           ),
           const SizedBox(height: 12),
           AppTextField(
@@ -390,9 +413,10 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
       _otpRateLimited = false;
     });
     try {
-      final receipt = await ref
-          .read(deviceManagementServiceProvider)
-          .sendJoinSmsOtp(handle: handle, phone: phone);
+      final service = ref.read(deviceManagementServiceProvider);
+      final receipt = _useEmail
+          ? await service.sendJoinEmailOtp(handle: handle, email: phone)
+          : await service.sendJoinSmsOtp(handle: handle, phone: phone);
       await cooldown.completeAcceptedAfter(receipt.retryAfterSeconds);
       if (mounted) AwikiMeToast.show(context, context.l10n.otpSent);
     } on DeviceJoinSmsOtpRateLimited catch (error) {
@@ -421,7 +445,8 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
         .read(devicesProvider.notifier)
         .beginNewDeviceJoin(
           handle: _handleController.text,
-          phone: _phoneController.text,
+          phone: _useEmail ? '' : _phoneController.text,
+          email: _useEmail ? _phoneController.text : null,
           otp: otp,
           presenceReason: context.l10n.handleRecoveryPresenceReason,
         );

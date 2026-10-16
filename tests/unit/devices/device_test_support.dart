@@ -30,6 +30,7 @@ DeviceJoinProgress testJoinProgress({
 }
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
+  bool managementAllowed = true;
   bool? localManagementReadyOverride;
   Object? localManagementReadyError;
   @override
@@ -116,6 +117,27 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   bool? lastPresenceConfirmed;
   String? lastRevokedDeviceId;
   bool? lastRevokePresenceConfirmed;
+
+  @override
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinEmailOtp({
+    required String handle,
+    required String email,
+  }) => sendJoinSmsOtp(handle: handle, phone: email);
+
+  @override
+  Future<DeviceJoinProgress> beginDeviceJoinWithEmail({
+    required String handle,
+    required String email,
+    required String otp,
+    required String operationId,
+    required int ttlSeconds,
+  }) => beginDeviceJoinWithSms(
+    handle: handle,
+    phone: email,
+    otp: otp,
+    operationId: operationId,
+    ttlSeconds: ttlSeconds,
+  );
 
   @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
@@ -310,6 +332,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     prepareCalls += 1;
     lastPreparedSasConfirmed = sasConfirmed;
     return DeviceJoinApprovalPrompt(
+      managementAllowed: managementAllowed,
       approvalHandle: 'approval-1',
       joinSessionId: joinSessionId,
       sas: '482917',
@@ -339,10 +362,12 @@ class FakeUserPresence implements UserPresencePort {
 
   bool result;
   int calls = 0;
+  String? lastReason;
 
   @override
   Future<bool> confirm({required String reason}) async {
     calls += 1;
+    lastReason = reason;
     return result;
   }
 }

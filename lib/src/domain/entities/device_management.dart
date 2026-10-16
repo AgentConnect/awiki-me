@@ -232,6 +232,7 @@ class RootKeyTransferUiState {
 
 class DeviceJoinRequestNotice {
   const DeviceJoinRequestNotice({
+    this.joinPurpose,
     required this.eventId,
     required this.joinSessionId,
     required this.did,
@@ -244,6 +245,7 @@ class DeviceJoinRequestNotice {
     required this.canStartVerification,
   });
 
+  final String? joinPurpose;
   final String eventId;
   final String joinSessionId;
   final String did;
@@ -341,8 +343,10 @@ class DeviceJoinApprovalPrompt {
     required this.joinSessionId,
     required this.sas,
     required this.expiresAt,
+    this.managementAllowed = true,
   });
 
+  final bool managementAllowed;
   final String approvalHandle;
   final String joinSessionId;
 

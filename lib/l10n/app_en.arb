@@ -483,7 +483,8 @@
       }
     }
   },
-  "deviceJoinApprove": "Allow join and management access",
+  "deviceJoinApprove": "Review purpose and approve join",
+  "deviceJoinMessageOnlyPresenceReason": "Allow this device to join for messaging only; no root key or identity management access",
   "deviceJoinCancel": "Cancel pairing",
   "deviceJoinAuthorized": "Device added",
   "deviceJoinFinalizing": "Finishing device operation...",

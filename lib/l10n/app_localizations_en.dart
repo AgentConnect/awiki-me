@@ -1258,7 +1258,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get deviceJoinApprove => 'Allow join and management access';
+  String get deviceJoinApprove => 'Review purpose and approve join';
+
+  @override
+  String get deviceJoinMessageOnlyPresenceReason =>
+      'Allow this device to join for messaging only; no root key or identity management access';
 
   @override
   String get deviceJoinCancel => 'Cancel pairing';

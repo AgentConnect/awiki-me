@@ -2349,8 +2349,14 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinApprove.
   ///
   /// In zh, this message translates to:
-  /// **'允许加入并成为管理设备'**
+  /// **'核对用途并批准加入'**
   String get deviceJoinApprove;
+
+  /// No description provided for @deviceJoinMessageOnlyPresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许该设备仅用于消息通信，不授予根密钥或身份管理权限'**
+  String get deviceJoinMessageOnlyPresenceReason;
 
   /// No description provided for @deviceJoinCancel.
   ///
