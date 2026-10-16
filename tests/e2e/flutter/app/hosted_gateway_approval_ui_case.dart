@@ -93,9 +93,11 @@ void registerHostedGatewayApprovalCase() {
           tester,
           () => onboarding.read(onboardingProvider).serverInfo != null,
         );
-        phase = 'phone_registration_ui';
+        phase = 'phone_handle_input';
         await input(tester, 'e2e-handle-input', gateway.handle);
+        phase = 'phone_contact_input';
         await input(tester, 'e2e-phone-input', gateway.contact);
+        phase = 'phone_send_otp';
         await tester.tap(find.bySemanticsIdentifier('e2e-send-otp-button'));
         await until(
           tester,
@@ -103,10 +105,15 @@ void registerHostedGatewayApprovalCase() {
               onboarding.read(onboardingProvider).otpTargetFullHandle ==
               '${gateway!.handle}.$hostedDomain',
         );
-        await input(tester, 'e2e-otp-input', fixture.code);
+        phase = 'phone_registration_ui';
+        final code = await gateway.otp('register', gateway.handle);
+        phase = 'phone_otp_input';
+        await input(tester, 'e2e-otp-input', code);
+        phase = 'phone_submit';
         await tester.tap(
           find.byKey(const Key('onboarding-mac-phone-submit-action')),
         );
+        phase = 'phone_activation';
         await until(tester, () => find.byType(AppShell).evaluate().length == 1);
         final active = ProviderScope.containerOf(
           tester.element(find.byType(AppShell)),
@@ -235,10 +242,10 @@ void registerHostedGatewayApprovalCase() {
             'recovery_material_retained',
           ],
         );
-      } on Object {
+      } on Object catch (error, stack) {
         await E2eCaseAttestationWriter.markFailed(_caseId, phase: phase);
         fail(
-          'Hosted App approval failed; exact private fixture and device state retained.',
+          'Hosted App approval failed at $phase (${hostedFailureCode(error)} ${hostedFailureLocation(stack)}); private device state retained.',
         );
       }
     },

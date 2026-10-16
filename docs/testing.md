@@ -1686,3 +1686,10 @@ fixture、App 状态和远程设备保留用于本轮恢复与联调，ledger �
 生物识别。两个场景均须真实执行才可记录通过，独立保留 App 根目录及设备恢复材料。
 
 Mac 联调使用 `scripts/build_manual_dual_macos_apps.sh`，显式传入两个不同的 `ai.awiki.awikime.dev.*` bundle ID 和完整测试 tenant JSON。只选择隔离测试 primary；secondary 使用不可解析的 `.invalid` 占位，避免默认连到生产。原生库使用 Core 已提交的本地联调来源及产物 manifest 校验，不改变正式推荐版本。
+
+
+Hosted Gateway runner 的构建工作目录与 fresh 设备目录分离。手机号用例先经真实 UI 请求验证码，
+随后在固定隔离实例为当前用途和 Handle 准备有效的短期测试验证码，不复用构建前已过期的值。
+邮箱 Join 在公开设备请求列表出现精确会话后才配对；读取不创建新会话。
+失败仅输出闭合诊断码/HTTP 状态及 owning 测试源码行，不输出 OTP、SAS、响应正文、令牌或密钥。
+失败后的真实设备材料保留；后续执行前对账已创建的 Join，不以新目录掩盖未确认的远端结果。

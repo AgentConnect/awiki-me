@@ -58,7 +58,9 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
       environment: {
         'AWIKI_HOSTED_FIXTURE_PATH': fixture,
         'AWIKI_HOSTED_PHONE_FIXTURE_PATH': phoneFixture,
-        'AWIKI_HOSTED_APP_STATE_ROOT': appStateRootDir.path,
+        // The executable builder creates its state root. Product fixtures need
+        // their own untouched device roots underneath that runner-owned root.
+        'AWIKI_HOSTED_APP_STATE_ROOT': '${appStateRootDir.path}/joining-device',
       },
     );
   }

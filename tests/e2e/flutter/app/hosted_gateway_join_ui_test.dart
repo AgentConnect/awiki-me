@@ -126,6 +126,8 @@ void main() {
           'handle': '${fixture.handle}.$hostedDomain',
           'join_session_id': join.joinSessionId,
         };
+        phase = 'request_delivery';
+        await fixture.waitForJoinRequest(join.joinSessionId);
         phase = 'pairing';
         await fixture.post('pair-device', arguments);
         await until(
@@ -202,10 +204,10 @@ void main() {
             'recovery_material_retained',
           ],
         );
-      } on Object {
+      } on Object catch (error, stack) {
         await E2eCaseAttestationWriter.markFailed(caseId, phase: phase);
         fail(
-          'Hosted App Join failed; private fixture and device state retained.',
+          'Hosted App Join failed at $phase (${hostedFailureCode(error)} ${hostedFailureLocation(stack)}); private device state retained.',
         );
       }
     },

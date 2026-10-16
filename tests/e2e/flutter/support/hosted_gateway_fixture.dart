@@ -87,6 +87,23 @@ class HostedGatewayFixture {
     );
   }
 
+  Future<void> waitForJoinRequest(String session) async {
+    for (var attempt = 0; attempt < 30; attempt++) {
+      final value = await post('device-requests', {
+        'handle': '$handle.$hostedDomain',
+      });
+      final requests = value['requests'];
+      if (requests is! List) throw StateError('hosted_response_invalid');
+      if (requests.any(
+        (value) => value is Map && value['join_session_id'] == session,
+      )) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    throw StateError('hosted_request_delivery_deadline');
+  }
+
   void close() => _client.close();
 
   Future<String> otp(String purpose, String target) async {
@@ -153,7 +170,7 @@ class HostedGatewayFixture {
         .send(request)
         .timeout(const Duration(seconds: 40));
     if (response.statusCode != expectedStatus) {
-      throw StateError('hosted_http_failed');
+      throw StateError('hosted_http_status_${response.statusCode}');
     }
     final bytes = <int>[];
     await for (final chunk in response.stream.timeout(

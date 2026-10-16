@@ -8,6 +8,36 @@ import 'package:http/testing.dart';
 import 'flutter/support/hosted_gateway_fixture.dart';
 
 void main() {
+  test(
+    'pairing waits for the exact signed request to become available',
+    () async {
+      var polls = 0;
+      final fixture = HostedGatewayFixture(
+        'synthetic',
+        'synthetic',
+        'synthetic',
+        client: MockClient((request) async {
+          if (request.url.path == '/connect/state') {
+            return http.Response('{"csrf":"synthetic"}', 200);
+          }
+          expect(request.url.path, '/connect/device-requests');
+          polls++;
+          return http.Response(
+            jsonEncode({
+              'requests': [
+                {'join_session_id': polls == 1 ? 'unrelated' : 'expected'},
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(fixture.close);
+      await fixture.waitForJoinRequest('expected');
+      expect(polls, 2);
+    },
+  );
+
   test('fixed fixture target and private source file are required', () async {
     final root = await Directory.systemTemp.createTemp(
       'hosted-fixture-contract-',
