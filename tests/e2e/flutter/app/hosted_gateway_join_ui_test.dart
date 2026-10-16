@@ -141,10 +141,7 @@ void main() {
           tester,
           find.byKey(const Key('device-join-sas')),
         );
-        final paired = await fixture.post('pair-device', {
-          ...arguments,
-          'refresh': true,
-        });
+        final paired = await fixture.waitForPairingResponse(join.joinSessionId);
         if (paired['sas'] != sas) throw StateError('hosted_pairing_mismatch');
         phase = 'approve';
         await fixture.post('approve-device', {
@@ -152,7 +149,7 @@ void main() {
           'displayed_sas': sas,
           'sas_confirmed': true,
           'grant_management': true,
-          'operation_id': fixture.operationId(),
+          'operation_id': fixture.managementOperationId(join.joinSessionId),
         });
         await until(
           tester,
@@ -174,23 +171,29 @@ void main() {
           throw StateError('hosted_app_wrong_identity');
         }
         phase = 'local_activation';
-        final devices = bootstrap.deviceManagementCorePort!;
-        var ready = false;
+        // Messaging activation precedes root import, token replacement and
+        // Registry convergence. Wait on the same readiness used by the UI.
         for (var attempt = 0; attempt < 120; attempt++) {
-          final registry = await devices.identityDeviceRegistry(fixture.did);
-          final device = registry.currentDevice;
-          if (device != null &&
-              device.canManageDevices &&
-              await devices.localManagementReady(
-                selector: fixture.did,
-                protocolDeviceId: device.protocolDeviceId,
-              )) {
-            ready = true;
-            break;
-          }
+          await active
+              .read(devicesProvider.notifier)
+              .refreshManagementProgress();
+          if (active.read(devicesProvider).currentDeviceCanManage) break;
           await tester.pump(const Duration(seconds: 1));
         }
-        if (!ready) throw StateError('hosted_local_management_deadline');
+        if (!active.read(devicesProvider).currentDeviceCanManage) {
+          throw StateError('hosted_local_management_deadline');
+        }
+        final devices = active.read(deviceManagementCorePortProvider);
+        final registry = await devices.identityDeviceRegistry(fixture.did);
+        final device = registry.currentDevice;
+        if (device == null ||
+            !device.canManageDevices ||
+            !await devices.localManagementReady(
+              selector: fixture.did,
+              protocolDeviceId: device.protocolDeviceId,
+            )) {
+          throw StateError('hosted_local_management_deadline');
+        }
         phase = 'root_operation';
         final documents = active.read(identityDocumentCorePortProvider);
         final before = await documents.identityServices(fixture.did);

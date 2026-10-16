@@ -24,6 +24,18 @@ class HostedGatewayFixture {
   String _cookie = '';
   final http.Client _client;
 
+  String managementOperationId(String session) {
+    final bytes = sha256
+        .convert(utf8.encode('hosted-app-management:$did:$session'))
+        .bytes
+        .take(16)
+        .toList();
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
   String operationId() {
     final random = Random.secure();
     final bytes = List.generate(16, (_) => random.nextInt(256));
@@ -85,6 +97,22 @@ class HostedGatewayFixture {
       ),
       code: value['code'] as String,
     );
+  }
+
+  Future<Map<String, dynamic>> waitForPairingResponse(String session) async {
+    for (var attempt = 0; attempt < 30; attempt++) {
+      try {
+        return await post('pair-device', {
+          'handle': '$handle.$hostedDomain',
+          'join_session_id': session,
+          'refresh': true,
+        });
+      } on StateError catch (error) {
+        if (error.message != 'hosted_pairing_response_pending') rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    }
+    throw StateError('hosted_pairing_response_deadline');
   }
 
   Future<void> waitForJoinRequest(String session) async {
@@ -169,9 +197,6 @@ class HostedGatewayFixture {
     final response = await _client
         .send(request)
         .timeout(const Duration(seconds: 40));
-    if (response.statusCode != expectedStatus) {
-      throw StateError('hosted_http_status_${response.statusCode}');
-    }
     final bytes = <int>[];
     await for (final chunk in response.stream.timeout(
       const Duration(seconds: 40),
@@ -180,6 +205,19 @@ class HostedGatewayFixture {
       if (bytes.length > 2 * 1024 * 1024) {
         throw StateError('hosted_response_limit');
       }
+    }
+    if (response.statusCode != expectedStatus) {
+      if (path == '/connect/pair-device' &&
+          body?['refresh'] == true &&
+          response.statusCode == 409) {
+        final value = jsonDecode(utf8.decode(bytes));
+        if (value is Map &&
+            value['error'] == 'device_join_notice_missing' &&
+            value['retryable'] == true) {
+          throw StateError('hosted_pairing_response_pending');
+        }
+      }
+      throw StateError('hosted_http_status_${response.statusCode}');
     }
     final cookie = response.headers['set-cookie'];
     if (cookie != null) {

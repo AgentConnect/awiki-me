@@ -40,7 +40,10 @@ String hostedFailureCode(Object error) {
     'identity_binding_conflict',
     'remote_error',
     'protocol_error',
-    'internal',
+    'internal_error',
+    'service_error',
+    'object_closed',
+    'identity_custody_unavailable',
   };
   if (error is core.AwikiImCoreException && coreCodes.contains(error.code)) {
     return 'core_${error.code}';
@@ -57,6 +60,7 @@ String hostedFailureCode(Object error) {
     'hosted_fixture_target',
     'hosted_fixture_identity',
     'hosted_pairing_mismatch',
+    'hosted_pairing_response_deadline',
     'hosted_app_wrong_identity',
     'hosted_local_management_deadline',
     'hosted_root_authorized_update_failed',

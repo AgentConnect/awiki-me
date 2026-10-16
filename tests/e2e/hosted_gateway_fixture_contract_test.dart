@@ -8,6 +8,53 @@ import 'package:http/testing.dart';
 import 'flutter/support/hosted_gateway_fixture.dart';
 
 void main() {
+  test('pairing waits only for a retryable missing response notice', () async {
+    var polls = 0;
+    var rejection = false;
+    final fixture = HostedGatewayFixture(
+      'synthetic',
+      'synthetic',
+      'synthetic',
+      client: MockClient((request) async {
+        if (request.url.path == '/connect/state') {
+          return http.Response('{"csrf":"synthetic"}', 200);
+        }
+        expect(jsonDecode(request.body)['refresh'], true);
+        polls++;
+        if (rejection) {
+          return http.Response(
+            '{"error":"operation_conflict","retryable":false}',
+            409,
+          );
+        }
+        if (polls == 1) {
+          return http.Response(
+            '{"error":"device_join_notice_missing","retryable":true}',
+            409,
+          );
+        }
+        return http.Response('{"sas":"123456"}', 200);
+      }),
+    );
+    addTearDown(fixture.close);
+    expect(
+      fixture.managementOperationId('expected'),
+      fixture.managementOperationId('expected'),
+    );
+    expect(
+      fixture.managementOperationId('expected'),
+      isNot(fixture.managementOperationId('other')),
+    );
+    expect((await fixture.waitForPairingResponse('expected'))['sas'], '123456');
+    expect(polls, 2);
+    rejection = true;
+    await expectLater(
+      fixture.waitForPairingResponse('expected'),
+      throwsStateError,
+    );
+    expect(polls, 3);
+  });
+
   test(
     'pairing waits for the exact signed request to become available',
     () async {

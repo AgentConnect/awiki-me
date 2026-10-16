@@ -1705,3 +1705,10 @@ Hosted Gateway runner 的构建工作目录与 fresh 设备目录分离。手机
 `hosted-gateway-email-join` 复用邮箱加入的原 case ID 和断言，仅准备一个新的接收设备，
 沿用受保护 fixture 的既有账号/身份；不执行手机号注册和反向批准。适合在手机号用例通过后
 定向复核邮箱首次激活边界。它不是已加入设备的重试入口；已有状态的检查使用上述 resume。
+
+邮箱配对刷新仅对409 `device_join_notice_missing` 且retryable=true等待，最多30次/500ms；
+其它409、拒绝及签名不一致立即失败。接收端显示SAS不能替代Gateway已经收到验证响应。
+管理批准操作号绑定同一身份与Join，响应丢失重试复用原标识。
+
+邮箱加入的消息身份激活早于根导入/管理令牌替换。验收先等待产品devicesProvider的
+currentDeviceCanManage，再独立核对Registry与本地根能力并执行根签名操作，不把AppShell当管理完成。
