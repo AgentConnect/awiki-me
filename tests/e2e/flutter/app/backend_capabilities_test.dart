@@ -70,6 +70,7 @@ void main() {
     }
 
     await initializeBuiltinTenantCatalog();
+    debugPrint('Capability E2E: starting production bootstrap');
     final bootstrap = await AppBootstrap.create(
       environment: AwikiEnvironmentConfig(
         baseUrl: origin,
@@ -81,7 +82,8 @@ void main() {
         anpServiceDid: 'did:wba:openserver-adapt.anpclaw.com',
       ),
       appStateRoot: '${root.path}/app',
-    );
+    ).timeout(const Duration(seconds: 45));
+    debugPrint('Capability E2E: production bootstrap ready');
     const capture = Key('capability-native-capture');
     try {
       await tester.binding.setSurfaceSize(const Size(1200, 860));
@@ -250,8 +252,25 @@ void main() {
       );
       await until(
         tester,
-        () => find.text(nickname).evaluate().isNotEmpty,
+        () =>
+            find.byKey(const Key('profile-edit-dialog')).evaluate().isEmpty &&
+            find
+                .byKey(const Key('profile-display-name'))
+                .evaluate()
+                .any((element) => (element.widget as Text).data == nickname),
         'basic profile saved',
+      );
+      final remoteProfile = await cli([
+        'id',
+        'profile',
+        'get',
+        '--did',
+        appDid,
+      ]);
+      expect(
+        jsonEncode(remoteProfile),
+        contains(nickname),
+        reason: 'Independent peer must read the persisted profile',
       );
       await captureImage(tester, capture, root, 'basic-profile-edited');
       await tester.tap(find.byKey(const Key('desktop-current-identity-close')));

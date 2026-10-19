@@ -75,6 +75,7 @@ MACOSX_DEPLOYMENT_TARGET = 15.0
       'macos',
       'integration_test/backend_capabilities_test.dart',
       '--dart-define=AWIKI_E2E=true',
+      '--dart-define=AWIKI_PERF_LOG_LEVEL=summary',
       '--dart-define=AWIKI_CAPABILITY_FIXTURE=${fixture.path}',
       '--dart-define=AWIKI_BUILTIN_TENANTS_BASE64=${base64Encode(catalog)}',
       '--dart-define=AWIKI_BUILTIN_TENANTS_SHA256=$catalogHash',
