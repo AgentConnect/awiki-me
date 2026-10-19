@@ -23,6 +23,15 @@ window activation through `AWIKI_E2E_MACOS_FOREGROUND`. Use the explicit
 is forwarded by `full`, and is rejected for Linux targets. Disabling activation
 does not guarantee that an occluded macOS App continues rendering frames.
 
+On a shared Mac, losing input focus while the test window remains visible is
+supported: Flutter's `inactive` state still schedules frames, and WidgetTester
+dispatches test input inside the App. Do not conflate this with `hidden`, which
+can stop UI frames. Acceptance wrappers must not add `--macos-foreground`
+automatically, including as a timeout retry. Use it only when the operator
+explicitly requests foreground debugging for that invocation. A frame timeout
+must retain its lifecycle/frames-enabled diagnostic instead of enabling an
+activation loop or synthesizing a resumed lifecycle.
+
 Use the smallest deterministic test that answers the question:
 
 | Directory | Answers | Uses real backend/devices? | Put these tests here |

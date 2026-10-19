@@ -436,4 +436,6 @@ System Test 现有 exact ID、唯一字段、严格数字递增和 stability-win
 
 仅在本次命令显式指定 `--macos-foreground` 时，prepared integration 拥有方 runner 才持续激活其启动的测试 App PID，结束时停止辅助进程；`full` 会将该选项传给子场景。默认关闭，旧环境变量 `AWIKI_E2E_MACOS_FOREGROUND` 不再启用它，Linux 目标拒绝此选项。
 
+验收包装脚本不得固定添加该选项，也不得在超时后自动开启；仅在操作者明确要求本轮前台调试时使用。窗口失焦但仍可见时，`inactive` 继续产帧，WidgetTester 的应用内输入不依赖系统当前焦点；完全隐藏或遮挡进入 `hidden` 是另一种状态。共享 Mac 验收保留默认不持续激活，停帧时报告真实生命周期与帧状态，不自动夺回焦点。
+
 此调试模式适用于窗口遮挡导致 Flutter `hidden`、帧停止的桌面环境，会占用前台。日常通用 UI 测试使用 Linux＋Xvfb；macOS 专属验证使用独立测试会话或 CI。默认关闭持续激活不等于 macOS App 不会首次显示窗口，也不保证被遮挡时仍能正常产帧。UI 帧等待有独立时限，不能用伪造 resumed 生命周期或放宽业务断言掩盖停帧。后台/重启专门用例继续使用各自明确的生命周期操作。

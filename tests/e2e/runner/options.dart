@@ -165,6 +165,7 @@ Options:
   --prepare-only               Prepare selected leaf prerequisites; never attest a pass.
   --macos-foreground           Debug only: repeatedly activate the owned macOS test App.
                                Off by default; legacy foreground environment is ignored.
+                               Acceptance wrappers must not add this automatically.
   --dry-run                    Print planned commands without side effects.
 ''');
   }

@@ -387,6 +387,17 @@ void main() {
   group('DesktopE2eOptions', () {
     test('foreground activation requires an explicit run option', () {
       expect(DesktopE2eOptions.parse([]).macosForeground, isFalse);
+      for (final scenario in ['direct', 'messaging', 'full']) {
+        final args = ['--case', scenario, '--run-id', 'sharedmac'];
+        expect(DesktopE2eOptions.parse(args).macosForeground, isFalse);
+        expect(
+          DesktopE2eOptions.parse([
+            ...args,
+            '--macos-foreground',
+          ]).macosForeground,
+          isTrue,
+        );
+      }
       expect(
         DesktopE2eOptions.parse(['--macos-foreground']).macosForeground,
         isTrue,
