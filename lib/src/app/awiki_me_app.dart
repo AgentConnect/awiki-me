@@ -1,4 +1,5 @@
 import '../presentation/server_features/new_tenant_capability_summary.dart';
+import '../presentation/server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 
 import 'app_appearance.dart';
@@ -309,6 +310,12 @@ class AwikiMeApp extends StatelessWidget {
                 delegate: profiles,
                 mutations: accountState as AccountStateProfileMutationPort,
                 sessionProvider: () => ref.read(sessionProvider).session,
+                accountStateSupported: () =>
+                    ref
+                        .read(backendFeaturesProvider)
+                        .valueOrNull
+                        ?.supports('account.state_sync') ==
+                    true,
               );
             }
             return profiles;
@@ -470,7 +477,9 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
                   child: material.Theme(
                     data: appTheme.materialTheme,
                     child: AppOrientationScope(
-                      child: NewTenantCapabilitySummary(child: child ?? const SizedBox.shrink()),
+                      child: NewTenantCapabilitySummary(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),

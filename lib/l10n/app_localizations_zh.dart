@@ -4116,4 +4116,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String serverFeaturesUpdatedAt(String time) {
     return '上次确认：$time';
   }
+
+  @override
+  String get serverFeaturesAccountSource => '账户与服务功能';
+
+  @override
+  String get serverFeaturesMessageSource => '聊天与加密功能';
+
+  @override
+  String get groupMemberLimitExceeded => '群人数上限超过服务器允许的范围，请调整后重试。';
 }

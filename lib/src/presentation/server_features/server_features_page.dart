@@ -63,19 +63,16 @@ class ServerFeaturesPage extends ConsumerWidget {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Text(l10n.serverFeaturesUpgradeRequired),
                     ),
-                  for (final source in features.sources.values)
-                    if (source is Map && source['fetched_at'] is int)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          l10n.serverFeaturesUpdatedAt(
-                            DateTime.fromMillisecondsSinceEpoch(
-                              (source['fetched_at'] as int) * 1000,
-                            ).toLocal().toString().split('.').first,
+                  for (final name in const ['public', 'message'])
+                    if (features.sources[name] case final Map source)
+                      if (source['fetched_at'] is int)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            '${name == 'public' ? l10n.serverFeaturesAccountSource : l10n.serverFeaturesMessageSource} · ${l10n.serverFeaturesUpdatedAt(DateTime.fromMillisecondsSinceEpoch((source['fetched_at'] as int) * 1000).toLocal().toString().split('.').first)}',
+                            style: const TextStyle(fontSize: 12),
                           ),
-                          style: const TextStyle(fontSize: 12),
                         ),
-                      ),
                   if (features.stale)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),

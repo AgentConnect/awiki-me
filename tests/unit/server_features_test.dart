@@ -22,6 +22,37 @@ class _ObservedCapabilities extends FakeIdentityCorePort
 }
 
 void main() {
+  for (final width in [390.0, 1100.0]) {
+    testWidgets(
+      'capability timestamps identify independent sources at $width',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 900);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const ServerFeaturesPage(),
+            providerOverrides: [
+              backendFeaturesProvider.overrideWithValue(
+                const AsyncData(
+                  BackendFeatures({
+                    'public': {'status': 'confirmed', 'fetched_at': 100},
+                    'message': {'status': 'stale', 'fetched_at': 200},
+                  }),
+                ),
+              ),
+            ],
+          ),
+        );
+        await tester.pump();
+        expect(find.textContaining('账户与服务功能'), findsOneWidget);
+        expect(find.textContaining('聊天与加密功能'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final pending in [false, true]) {
     for (final width in [390.0, 1100.0]) {
       testWidgets('新增租户摘要只在确认后显示 $pending $width', (tester) async {

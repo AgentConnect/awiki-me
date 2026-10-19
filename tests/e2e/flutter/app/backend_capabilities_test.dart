@@ -221,6 +221,84 @@ void main() {
         reason: 'Independent CLI must receive the outbound message',
       );
       await captureImage(tester, capture, root, 'ordinary-chat');
+      await tester.tap(find.byKey(const Key('mac-me-rail-avatar')));
+      await until(
+        tester,
+        () =>
+            find.byKey(const Key('profile-edit-button')).evaluate().isNotEmpty,
+        'basic profile loaded',
+      );
+      await captureImage(tester, capture, root, 'basic-profile');
+      await tester.tap(find.byKey(const Key('profile-edit-button')));
+      await until(
+        tester,
+        () =>
+            find.byKey(const Key('profile-edit-dialog')).evaluate().isNotEmpty,
+        'profile editor',
+      );
+      final nickname =
+          'Capability profile ${DateTime.now().millisecondsSinceEpoch}';
+      final editor = find.byKey(const Key('profile-edit-dialog'));
+      await tester.enterText(
+        find
+            .descendant(of: editor, matching: find.byType(CupertinoTextField))
+            .first,
+        nickname,
+      );
+      await tester.tap(
+        find.descendant(of: editor, matching: find.text(labels.commonSave)),
+      );
+      await until(
+        tester,
+        () => find.text(nickname).evaluate().isNotEmpty,
+        'basic profile saved',
+      );
+      await captureImage(tester, capture, root, 'basic-profile-edited');
+      await tester.tap(find.byKey(const Key('desktop-current-identity-close')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byKey(const Key('desktop-rail-contacts')));
+      await until(
+        tester,
+        () => find.byKey(const Key('friends-groups-row')).evaluate().isNotEmpty,
+        'contacts',
+      );
+      await tester.tap(find.byKey(const Key('friends-groups-row')));
+      await until(
+        tester,
+        () => find
+            .byKey(const Key('group-list-create-button'))
+            .evaluate()
+            .isNotEmpty,
+        'group list',
+      );
+      await tester.tap(find.byKey(const Key('group-list-create-button')));
+      await until(
+        tester,
+        () => find
+            .byKey(const Key('create-group-name-input'))
+            .evaluate()
+            .isNotEmpty,
+        'group editor',
+      );
+      final groupName =
+          'Default capacity ${DateTime.now().millisecondsSinceEpoch}';
+      await tester.enterText(
+        find.byKey(const Key('create-group-name-input')),
+        groupName,
+      );
+      await tester.tap(find.byKey(const Key('create-group-submit-button')));
+      await until(
+        tester,
+        () =>
+            find
+                .byKey(const Key('create-group-name-input'))
+                .evaluate()
+                .isEmpty &&
+            find.text(groupName).evaluate().isNotEmpty,
+        'default group created',
+      );
+      await captureImage(tester, capture, root, 'default-group');
+
       await tester.tap(find.byKey(const Key('desktop-rail-settings')));
       await until(
         tester,
@@ -240,6 +318,8 @@ void main() {
           'origin': origin,
           'normal_registration': true,
           'plaintext_round_trip': true,
+          'basic_profile_read_and_edit': true,
+          'default_group_creation': true,
           'encryption_selector_disabled': true,
           'automatic_state': 'retained',
           'manual_state': 'untouched',

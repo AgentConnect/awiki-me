@@ -7731,6 +7731,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'上次确认：{time}'**
   String serverFeaturesUpdatedAt(String time);
+
+  /// No description provided for @serverFeaturesAccountSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'账户与服务功能'**
+  String get serverFeaturesAccountSource;
+
+  /// No description provided for @serverFeaturesMessageSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'聊天与加密功能'**
+  String get serverFeaturesMessageSource;
+
+  /// No description provided for @groupMemberLimitExceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'群人数上限超过服务器允许的范围，请调整后重试。'**
+  String get groupMemberLimitExceeded;
 }
 
 class _AppLocalizationsDelegate

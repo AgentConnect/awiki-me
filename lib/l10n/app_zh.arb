@@ -1821,5 +1821,8 @@
         "type": "String"
       }
     }
-  }
+  },
+  "serverFeaturesAccountSource": "账户与服务功能",
+  "serverFeaturesMessageSource": "聊天与加密功能",
+  "groupMemberLimitExceeded": "群人数上限超过服务器允许的范围，请调整后重试。"
 }

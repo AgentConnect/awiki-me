@@ -4430,4 +4430,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String serverFeaturesUpdatedAt(String time) {
     return 'Last confirmed: $time';
   }
+
+  @override
+  String get serverFeaturesAccountSource => 'Account and services';
+
+  @override
+  String get serverFeaturesMessageSource => 'Chat and encryption';
+
+  @override
+  String get groupMemberLimitExceeded =>
+      'The group member limit exceeds the server limit. Adjust it and try again.';
 }

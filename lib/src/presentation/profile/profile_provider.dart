@@ -17,6 +17,7 @@ import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'profile_markdown.dart';
+import '../server_features/backend_capabilities_provider.dart';
 
 typedef HomepageMarkdownLoader = Future<String?> Function(String url);
 
@@ -45,6 +46,7 @@ class ProfileState {
   const ProfileState({
     this.profile,
     this.isLoading = false,
+    this.loadError,
     this.isSaving = false,
     this.homepageUrl,
     this.homepageMarkdown,
@@ -53,6 +55,7 @@ class ProfileState {
 
   final UserProfile? profile;
   final bool isLoading;
+  final AppMessage? loadError;
   final bool isSaving;
   final String? homepageUrl;
   final String? homepageMarkdown;
@@ -61,6 +64,8 @@ class ProfileState {
   ProfileState copyWith({
     UserProfile? profile,
     bool? isLoading,
+    AppMessage? loadError,
+    bool clearLoadError = false,
     bool? isSaving,
     String? homepageUrl,
     String? homepageMarkdown,
@@ -71,6 +76,7 @@ class ProfileState {
     return ProfileState(
       profile: clearProfile ? null : (profile ?? this.profile),
       isLoading: isLoading ?? this.isLoading,
+      loadError: clearLoadError ? null : (loadError ?? this.loadError),
       isSaving: isSaving ?? this.isSaving,
       homepageUrl: clearHomepageMarkdown
           ? null
@@ -96,25 +102,42 @@ class ProfileController extends StateNotifier<ProfileState> {
     final epoch = ref.read(sessionProvider).activeEpoch;
     final sessionBefore = ref.read(sessionProvider);
     final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
-    if (accountStateRequests.hasHandler &&
-        ref.read(sessionProvider).session?.accountBinding != null) {
-      await accountStateRequests.request('profile_manual_refresh', force: true);
-      return;
+    state = state.copyWith(isLoading: true, clearLoadError: true);
+    try {
+      if (accountStateRequests.hasHandler &&
+          sessionBefore.session?.accountBinding != null &&
+          ref
+                  .read(backendFeaturesProvider)
+                  .valueOrNull
+                  ?.supports('account.state_sync') ==
+              true) {
+        await accountStateRequests.request(
+          'profile_manual_refresh',
+          force: true,
+        );
+        return;
+      }
+      final profile = await ref
+          .read(profileApplicationServiceProvider)
+          .loadMyProfile();
+      if (!_isOperationCurrent(generation, epoch)) return;
+      state = _profileStateAfterRefresh(profile, isLoading: false);
+      await _synchronizeCurrentIdentityDisplayName(
+        profile.displayName,
+        generation: generation,
+        epoch: epoch,
+        sessionBefore: sessionBefore,
+      );
+    } catch (error) {
+      if (_isOperationCurrent(generation, epoch)) {
+        state = state.copyWith(loadError: AppMessage.fromError(error));
+      }
+      rethrow;
+    } finally {
+      if (_isOperationCurrent(generation, epoch)) {
+        state = state.copyWith(isLoading: false);
+      }
     }
-    state = state.copyWith(isLoading: true);
-    final profile = await ref
-        .read(profileApplicationServiceProvider)
-        .loadMyProfile();
-    if (!_isOperationCurrent(generation, epoch)) {
-      return;
-    }
-    state = _profileStateAfterRefresh(profile, isLoading: false);
-    await _synchronizeCurrentIdentityDisplayName(
-      profile.displayName,
-      generation: generation,
-      epoch: epoch,
-      sessionBefore: sessionBefore,
-    );
   }
 
   /// Capability discovery and reconciliation always read the current owner.
@@ -231,6 +254,18 @@ class ProfileController extends StateNotifier<ProfileState> {
   }
 
   Future<void> updateProfile(ProfilePatch patch) async {
+    final generation = _stateGeneration;
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    try {
+      await _updateProfile(patch);
+    } finally {
+      if (_isOperationCurrent(generation, epoch)) {
+        state = state.copyWith(isSaving: false);
+      }
+    }
+  }
+
+  Future<void> _updateProfile(ProfilePatch patch) async {
     final generation = _stateGeneration;
     final epoch = ref.read(sessionProvider).activeEpoch;
     final sessionBefore = ref.read(sessionProvider);

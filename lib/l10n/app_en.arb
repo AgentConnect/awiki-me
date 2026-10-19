@@ -1821,5 +1821,8 @@
         "type": "String"
       }
     }
-  }
+  },
+  "serverFeaturesAccountSource": "Account and services",
+  "serverFeaturesMessageSource": "Chat and encryption",
+  "groupMemberLimitExceeded": "The group member limit exceeds the server limit. Adjust it and try again."
 }
