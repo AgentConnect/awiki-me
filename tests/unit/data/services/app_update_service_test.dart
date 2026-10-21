@@ -16,7 +16,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('明确不提供更新政策是正常状态且保留最低版本', () async {
+  test('明确不提供更新政策后重启和离线仍保留已验证最低版本', () async {
+    final storage = _MemoryKeyValueStore();
     var unavailable = false;
     final client = MockClient(
       (_) async => http.Response(
@@ -29,15 +30,12 @@ void main() {
                     'policy': {'enabled': false, 'protocol_version': 1},
                   },
                 }
-              : _manifestJson(minimumVersion: '2.0.0'),
+              : _manifestJson(minimumVersion: '2.0.0', policyRevision: 4),
         ),
         200,
       ),
     );
-    final service = _service(
-      storage: _MemoryKeyValueStore(),
-      httpClient: client,
-    );
+    final service = _service(storage: storage, httpClient: client);
     addTearDown(service.dispose);
     expect(
       (await service.checkForUpdates(force: true)).versionUnsupported,
@@ -48,7 +46,75 @@ void main() {
     expect(result.policyUnavailable, isTrue);
     expect(result.versionUnsupported, isTrue);
     expect(result.failureReason, isNull);
+    service.dispose();
+
+    final restarted = _service(
+      storage: storage,
+      httpClient: MockClient((_) async => http.Response('offline', 503)),
+    );
+    addTearDown(restarted.dispose);
+    final cached = await restarted.loadCachedUpdate();
+    expect(cached.policyUnavailable, isTrue);
+    expect(cached.versionUnsupported, isTrue);
+    expect(cached.latestManifest?.policyRevision, 4);
+    expect(cached.usedCache, isTrue);
+    final offline = await restarted.checkForUpdates(force: true);
+    expect(offline.policyUnavailable, isTrue);
+    expect(offline.versionUnsupported, isTrue);
+    expect(offline.latestManifest?.policyRevision, 4);
+    expect(offline.usedCache, isTrue);
+    expect(offline.failureReason, isNotNull);
   });
+
+  for (final tamper in <String, void Function(Map<String, dynamic>)>{
+    'missing availability': (value) => value.remove('unavailable'),
+    'nonboolean availability': (value) => value['unavailable'] = 'true',
+    'available without manifest': (value) {
+      value['unavailable'] = false;
+      value['manifest'] = null;
+    },
+    'unavailable with wrong origin': (value) {
+      value['unavailable'] = true;
+      (value['manifest'] as Map)['policy_origin'] = 'https://other.example';
+    },
+    'unavailable with mismatched revision': (value) {
+      value['unavailable'] = true;
+      value['policy_revision'] = 99;
+    },
+  }.entries) {
+    test(
+      'rejects inconsistent persisted update policy: ${tamper.key}',
+      () async {
+        final storage = _MemoryKeyValueStore();
+        final seeded = _service(
+          storage: storage,
+          httpClient: MockClient(
+            (_) async => http.Response(
+              jsonEncode(_manifestJson(minimumVersion: '2.0.0')),
+              200,
+            ),
+          ),
+        );
+        await seeded.checkForUpdates(force: true);
+        seeded.dispose();
+        final key = storage.values.keys.singleWhere(
+          (key) => key.endsWith('_policy_v1'),
+        );
+        final record = jsonDecode(storage.values[key]!) as Map<String, dynamic>;
+        tamper.value(record);
+        storage.values[key] = jsonEncode(record);
+        final restarted = _service(
+          storage: storage,
+          httpClient: _QueueHttpClient([]),
+        );
+        addTearDown(restarted.dispose);
+        final result = await restarted.loadCachedUpdate();
+        expect(result.latestManifest, isNull);
+        expect(result.versionUnsupported, isFalse);
+        expect(result.policyUnavailable, isFalse);
+      },
+    );
+  }
 
   test(
     'cached minimum survives TLS failure with typed redacted diagnostics',

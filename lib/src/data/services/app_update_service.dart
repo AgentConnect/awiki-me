@@ -172,9 +172,16 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
     }
     try {
       _validateNetworkUri(_policyUri, label: 'update policy');
-      final response = await _sendBounded(_policyUri.path.endsWith('/server-info')
-          ? _policyUri.replace(queryParameters: {..._policyUri.queryParameters, 'capabilities_version': '1'})
-          : _policyUri);
+      final response = await _sendBounded(
+        _policyUri.path.endsWith('/server-info')
+            ? _policyUri.replace(
+                queryParameters: {
+                  ..._policyUri.queryParameters,
+                  'capabilities_version': '1',
+                },
+              )
+            : _policyUri,
+      );
       if (_disposed) throw StateError('Update service disposed.');
       if (response.statusCode == 404 && !officialTenant) {
         return _acceptPolicy(
@@ -486,12 +493,14 @@ class AppUpdateService implements UpdateService, DisposableUpdateService {
             }
             _validateManifestUris(manifest);
           }
-          if (value['unavailable'] != (manifest == null)) {
+          // Source availability and a retained verified minimum are independent.
+          final unavailable = value['unavailable'];
+          if (unavailable is! bool || (!unavailable && manifest == null)) {
             throw const FormatException('Inconsistent cached policy state.');
           }
           cached = _CachedUpdatePolicy(
             manifest: manifest,
-            unavailable: manifest == null,
+            unavailable: unavailable,
             revision: value['policy_revision'] as int,
             cachedAt: DateTime.tryParse(value['cached_at']?.toString() ?? ''),
           );
