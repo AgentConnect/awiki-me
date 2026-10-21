@@ -1725,3 +1725,12 @@ Hosted Gateway runner 的构建工作目录与 fresh 设备目录分离。手机
 
 邮箱加入的消息身份激活早于根导入/管理令牌替换。验收先等待产品devicesProvider的
 currentDeviceCanManage，再独立核对Registry与本地根能力并执行根签名操作，不把AppShell当管理完成。
+
+
+## OAuth 与能力适配整合后的依赖输入
+
+仓库不再携带本次开发候选的 `dependencies.source.json` 或配套临时锁文件。
+正式依赖版本和锁文件由既有 registry 发布入口维护；源码验证须显式提供开发输入，
+不能把相邻 checkout 或历史候选固定提交自动当作正式 SDK。App 的 Dart wrapper
+与 Core 共仓绑定源码按现有构建关系消费；Node/原生制品发布仍使用版本化发布流程。
+本次 PR 整合不执行公共包发布，也不把源码验证记为已发布 SDK 验证。
