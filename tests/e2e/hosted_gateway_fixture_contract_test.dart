@@ -16,7 +16,7 @@ void main() {
       'synthetic',
       'synthetic',
       client: MockClient((request) async {
-        if (request.url.path == '/connect/state') {
+        if (request.url.path == '/_awiki/mcp/connect/state') {
           return http.Response('{"csrf":"synthetic"}', 200);
         }
         expect(jsonDecode(request.body)['refresh'], true);
@@ -64,10 +64,10 @@ void main() {
         'synthetic',
         'synthetic',
         client: MockClient((request) async {
-          if (request.url.path == '/connect/state') {
+          if (request.url.path == '/_awiki/mcp/connect/state') {
             return http.Response('{"csrf":"synthetic"}', 200);
           }
-          expect(request.url.path, '/connect/device-requests');
+          expect(request.url.path, '/_awiki/mcp/connect/device-requests');
           polls++;
           return http.Response(
             jsonEncode({
@@ -174,10 +174,10 @@ void main() {
         '',
         client: MockClient(
           (request) async => http.Response(
-            request.url.path == '/connect/state'
+            request.url.path == '/_awiki/mcp/connect/state'
                 ? '{"csrf":"synthetic"}'
                 : '{"error":"root_key_not_hosted","retryable":false}',
-            request.url.path == '/connect/state' ? 200 : status,
+            request.url.path == '/_awiki/mcp/connect/state' ? 200 : status,
           ),
         ),
       );
@@ -216,7 +216,10 @@ void main() {
         }),
       );
       addTearDown(fixture.close);
-      await expectLater(fixture.request('/connect'), throwsStateError);
+      await expectLater(
+        fixture.request('/_awiki/mcp/connect'),
+        throwsStateError,
+      );
       await expectLater(fixture.request('//other.test'), throwsStateError);
       expect(requests, 1);
     },
@@ -247,8 +250,8 @@ void main() {
         }),
       );
       addTearDown(fixture.close);
-      await fixture.request('/connect');
-      await fixture.request('/connect/state');
+      await fixture.request('/_awiki/mcp/connect');
+      await fixture.request('/_awiki/mcp/connect/state');
       final operations = List.generate(20, (_) => fixture.operationId());
       expect(operations.toSet().length, 20);
       for (final value in operations) {

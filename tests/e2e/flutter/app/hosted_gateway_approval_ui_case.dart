@@ -142,7 +142,8 @@ void registerHostedGatewayApprovalCase() {
         }
         Future<Map<String, dynamic>> task() async {
           final tasks =
-              (await gateway!.request('/connect/state'))['tasks'] as List;
+              (await gateway!.request('/_awiki/mcp/connect/state'))['tasks']
+                  as List;
           final matches = tasks
               .where((value) => value['id'] == selected['task_id'])
               .toList();

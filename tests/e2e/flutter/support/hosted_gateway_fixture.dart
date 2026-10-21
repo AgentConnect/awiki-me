@@ -177,7 +177,7 @@ class HostedGatewayFixture {
     Map<String, dynamic>? body,
     int expectedStatus = 200,
   ]) async {
-    if (!RegExp(r'^/connect(?:/[a-z-]+)?$').hasMatch(path)) {
+    if (!RegExp(r'^/_awiki/mcp/connect(?:/[a-z-]+)?$').hasMatch(path)) {
       throw StateError('hosted_path_invalid');
     }
     final headers = {
@@ -207,7 +207,7 @@ class HostedGatewayFixture {
       }
     }
     if (response.statusCode != expectedStatus) {
-      if (path == '/connect/pair-device' &&
+      if (path == '/_awiki/mcp/connect/pair-device' &&
           body?['refresh'] == true &&
           response.statusCode == 409) {
         final value = jsonDecode(utf8.decode(bytes));
@@ -230,7 +230,7 @@ class HostedGatewayFixture {
       }
       _cookie = parsed.value;
     }
-    if (path == '/connect') return {};
+    if (path == '/_awiki/mcp/connect') return {};
     return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 
@@ -239,15 +239,15 @@ class HostedGatewayFixture {
     Map<String, dynamic> body, {
     int expectedStatus = 200,
   }) async {
-    final state = await request('/connect/state');
-    return request('/connect/$action', {
+    final state = await request('/_awiki/mcp/connect/state');
+    return request('/_awiki/mcp/connect/$action', {
       ...body,
       'csrf': state['csrf'],
     }, expectedStatus);
   }
 
   Future<void> login() async {
-    await request('/connect');
+    await request('/_awiki/mcp/connect');
     final code = await otp(
       'gateway',
       sha256.convert(utf8.encode(_cookie)).toString(),
@@ -257,7 +257,7 @@ class HostedGatewayFixture {
       'contact': contact,
       'code': code,
     });
-    if ((await request('/connect/state'))['logged_in'] != true) {
+    if ((await request('/_awiki/mcp/connect/state'))['logged_in'] != true) {
       throw StateError('hosted_login_failed');
     }
   }
