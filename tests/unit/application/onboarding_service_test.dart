@@ -133,6 +133,26 @@ void main() {
     },
   );
 
+  test(
+    'handle-only registration reaches Core without a synthetic contact',
+    () async {
+      final identities = _FakeIdentities();
+      final sessions = _FakeSessions();
+      final service = ImCoreOnboardingService(
+        identities: identities,
+        legacyUpgrades: identities,
+        sessions: sessions,
+      );
+      final result = await service.registerHandleWithoutContactVerification(
+        phone: '',
+        handle: ' OpenAlice ',
+      );
+      expect(result.status, IdentityRegistrationStatus.registered);
+      expect(identities.lastHandle, 'openalice');
+      expect(sessions.activated.single.identityId, 'open-id');
+    },
+  );
+
   test('superseded registration cannot activate its late identity', () async {
     final identities = _FakeIdentities();
     final registration = Completer<IdentityRegistrationResult>();
@@ -312,7 +332,9 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   }
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {
@@ -365,7 +387,9 @@ class _FakeSessions
   Future<void> logout() async {}
 
   @override
-  Future<bool> hasPendingLocalIdentityRecovery(String identityIdOrAlias) async => false;
+  Future<bool> hasPendingLocalIdentityRecovery(
+    String identityIdOrAlias,
+  ) async => false;
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) {

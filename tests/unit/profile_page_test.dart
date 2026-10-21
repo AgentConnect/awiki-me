@@ -1,3 +1,5 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
@@ -26,6 +28,42 @@ Future<void> _simulateSystemBack(WidgetTester tester) {
 }
 
 void main() {
+  for (final width in [390.0, 1200.0]) {
+    testWidgets('资料加载失败后可重试且不持续转圈 $width', (tester) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = Size(width, 844);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = FakeAwikiGateway();
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const ProfilePage(), gateway: gateway),
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfilePage)),
+      );
+      await expectLater(
+        container.read(profileProvider.notifier).refresh(),
+        throwsUnimplementedError,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      expect(find.byKey(const Key('profile-load-retry')), findsOneWidget);
+      gateway.myProfile = const UserProfile(
+        did: 'did:test:retry',
+        nickName: 'Retry profile',
+        bio: '',
+        tags: [],
+        profileMarkdown: '',
+      );
+      await tester.tap(find.byKey(const Key('profile-load-retry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('profile-load-retry')), findsNothing);
+      expect(find.text('Retry profile'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('窄屏我的页面使用玻璃画布且由身份卡领起', (tester) async {
     tester.view
       ..devicePixelRatio = 1

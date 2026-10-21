@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/presentation/server_features/backend_capabilities_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -32,7 +33,67 @@ import 'package:awiki_me/src/presentation/shared/widgets/awiki_desktop.dart';
 
 import '../test_support.dart';
 
+// Existing layout scenarios start with a confirmed backend. The capability
+// scenarios below deliberately keep real asynchronous discovery.
+final _declaredAgentBackend = backendFeaturesProvider.overrideWithValue(
+  AsyncData(BackendFeatures(FakeIdentityCorePort().backendFeatureSources)),
+);
+
 void main() {
+  for (final width in [390.0, 800.0, 1200.0]) {
+    testWidgets(
+      'Daemon installation is hidden independently of Agent inventory at $width',
+      (tester) async {
+        final identities = FakeIdentityCorePort();
+        (identities.backendFeatureSources['public']['capabilities']
+            as Map)['agents.daemon'] = {
+          'support': 'unsupported',
+        };
+        final control = FakeAgentControlService();
+        tester.view.physicalSize = Size(width, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          buildLocalizedTestApp(
+            home: const AgentsWorkspacePage(),
+            session: const SessionIdentity(
+              did: 'did:human:me',
+              credentialName: 'default',
+              displayName: 'Me',
+            ),
+            providerOverrides: [
+              identityCorePortProvider.overrideWithValue(identities),
+              agentControlServiceProvider.overrideWithValue(control),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('agent-list-tile-did:agent:daemon')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('agents-install-daemon-button')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('agents-install-daemon-row')),
+          findsNothing,
+        );
+        await tester.tap(find.byKey(const Key('agents-more-actions-button')));
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const Key('agents-install-daemon-button')),
+          findsNothing,
+        );
+        expect(control.lastInstallControllerDid, isNull);
+        expect(control.lastRefreshedDaemonDid, isNull);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   for (final scale in [1.0, 2.0]) {
     testWidgets('ACP create choices fit a small phone at text scale $scale', (
       tester,
@@ -84,6 +145,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: [
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -181,6 +243,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -269,6 +332,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -392,6 +456,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentsProvider.overrideWith(
             (ref) => _NoopSeededAgentsController(
               ref,
@@ -455,6 +520,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentsProvider.overrideWith(
             (ref) => _NoopSeededAgentsController(
               ref,
@@ -554,6 +620,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -629,6 +696,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -663,6 +731,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
           agentImEnabledProvider.overrideWithValue(false),
         ],
@@ -690,6 +759,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentsProvider.overrideWith((ref) {
             controller = _NoopSeededAgentsController(
               ref,
@@ -738,6 +808,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -783,6 +854,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -818,6 +890,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentsProvider.overrideWith((ref) {
               return _NoopSeededAgentsController(
                 ref,
@@ -867,6 +940,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -912,6 +986,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -966,6 +1041,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1063,6 +1139,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1146,6 +1223,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1249,6 +1327,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1319,6 +1398,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1388,6 +1468,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1460,6 +1541,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -1535,6 +1617,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             initialDisplayScaleProvider.overrideWithValue(1.3),
             agentControlServiceProvider.overrideWithValue(control),
           ],
@@ -1600,6 +1683,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
             agentControlStatusStoreProvider.overrideWithValue(
               _CorrelatedAgentControlStatusStore(
@@ -1722,6 +1806,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -1786,6 +1871,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1876,6 +1962,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -1935,6 +2022,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -1993,6 +2081,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -2089,6 +2178,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2199,6 +2289,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2247,6 +2338,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
           agentImEnabledProvider.overrideWithValue(false),
         ],
@@ -2298,6 +2390,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
             identityCorePortProvider.overrideWithValue(identities),
             agentImEnabledProvider.overrideWithValue(true),
@@ -2382,6 +2475,7 @@ void main() {
             handle: 'me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
             agentImEnabledProvider.overrideWithValue(true),
           ],
@@ -2435,6 +2529,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2518,6 +2613,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2609,6 +2705,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2706,6 +2803,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2785,6 +2883,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2849,6 +2948,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2915,6 +3015,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -2944,6 +3045,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -3003,6 +3105,7 @@ void main() {
           handle: 'me.anpclaw.com',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -3120,6 +3223,7 @@ void main() {
                 handle: 'alice.$primaryTenantDomain',
               ),
               providerOverrides: <Override>[
+                _declaredAgentBackend,
                 agentControlServiceProvider.overrideWithValue(control),
                 awikiEnvironmentConfigProvider.overrideWithValue(
                   AwikiEnvironmentConfig(
@@ -3261,6 +3365,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -3309,6 +3414,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -3351,6 +3457,7 @@ void main() {
           displayName: 'Me',
         ),
         providerOverrides: <Override>[
+          _declaredAgentBackend,
           agentControlServiceProvider.overrideWithValue(control),
         ],
       ),
@@ -3415,6 +3522,7 @@ void main() {
             displayName: 'Me',
           ),
           providerOverrides: <Override>[
+            _declaredAgentBackend,
             agentControlServiceProvider.overrideWithValue(control),
           ],
         ),
@@ -3536,6 +3644,7 @@ Future<_PendingRefreshAgentControlService> _pumpCreateAgentDialog(
         displayName: 'Me',
       ),
       providerOverrides: <Override>[
+        _declaredAgentBackend,
         agentControlServiceProvider.overrideWithValue(control),
       ],
     ),

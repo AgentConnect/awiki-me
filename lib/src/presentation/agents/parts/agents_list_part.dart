@@ -20,7 +20,7 @@ class _AgentListPane extends StatelessWidget {
   final Widget? footer;
   final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
-  final VoidCallback onCreateDaemon;
+  final VoidCallback? onCreateDaemon;
   final VoidCallback onCreateSkill;
   final bool isCreatingSkill;
   final ValueChanged<AgentSummary> onRefreshDaemon;
@@ -108,9 +108,9 @@ class _AgentListPane extends StatelessWidget {
                     onRefreshDaemon: onRefreshDaemon,
                   ),
                 if (phone) const SizedBox(height: 14),
-                if (responsive.isCompact)
+                if (responsive.isCompact && onCreateDaemon != null)
                   _AgentInstallDaemonRow(
-                    onTap: onCreateDaemon,
+                    onTap: onCreateDaemon!,
                     disabled: state.isActionPending(
                       AgentActionKeys.installCommand,
                     ),
@@ -152,7 +152,7 @@ class _AgentListHeader extends StatelessWidget {
   final bool isInstalling;
   final VoidCallback onCreateSkill;
   final VoidCallback onRefresh;
-  final VoidCallback onInstall;
+  final VoidCallback? onInstall;
 
   @override
   Widget build(BuildContext context) {
@@ -213,13 +213,13 @@ class _AgentListHeader extends StatelessWidget {
                         ),
                 ),
                 SizedBox(width: phone ? 4 : 12),
-                if (phone)
+                if (onInstall != null && phone)
                   AwikiCircledPlusButton(
                     key: const Key('agents-install-daemon-button'),
                     onTap: isInstalling ? null : onInstall,
                     semanticsLabel: context.l10n.agentInstallTitle,
                   )
-                else
+                else if (onInstall != null)
                   TopBarActionButton(
                     key: const Key('agents-install-daemon-button'),
                     onTap: isInstalling ? null : onInstall,
@@ -275,7 +275,7 @@ class _AgentListHeader extends StatelessWidget {
   Future<void> _showExpandedAgentActions(
     BuildContext context, {
     required VoidCallback onCreateSkill,
-    required VoidCallback onInstall,
+    required VoidCallback? onInstall,
   }) {
     return showAnchoredAppDropMenu(
       context,
@@ -288,12 +288,13 @@ class _AgentListHeader extends StatelessWidget {
           icon: CupertinoIcons.command,
           onTap: isCreatingSkill ? null : onCreateSkill,
         ),
-        AppDropMenuItem(
-          buttonKey: const Key('agents-install-daemon-button'),
-          label: context.l10n.agentInstallTitle,
-          icon: CupertinoIcons.desktopcomputer,
-          onTap: isInstalling ? null : onInstall,
-        ),
+        if (onInstall != null)
+          AppDropMenuItem(
+            buttonKey: const Key('agents-install-daemon-button'),
+            label: context.l10n.agentInstallTitle,
+            icon: CupertinoIcons.desktopcomputer,
+            onTap: isInstalling ? null : onInstall,
+          ),
       ],
     );
   }

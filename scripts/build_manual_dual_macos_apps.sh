@@ -14,6 +14,7 @@ Usage:
 Environment:
   AWIKI_MANUAL_ADMIN_BUNDLE_ID        Isolated ai.awiki.awikime.dev.* admin ID
   AWIKI_MANUAL_JOINER_BUNDLE_ID       Isolated ai.awiki.awikime.dev.* joiner ID
+  AWIKI_MANUAL_STATE_ROOT             Optional absolute root for separate admin/joiner data
   AWIKI_MANUAL_DEPLOYMENT_TARGET     Optional local Xcode deployment target
   FLUTTER_BIN                         Flutter executable (default: flutter)
   AWIKI_IM_CORE_REPO_DIR              awiki-cli-rs2 checkout
@@ -177,6 +178,13 @@ trap restore_lock EXIT
 build_app() {
   local flutter_config="$1"
   local xcode_config="$2"
+  local manual_state_args=()
+  if [[ -n "${AWIKI_MANUAL_STATE_ROOT:-}" ]]; then
+    [[ "$AWIKI_MANUAL_STATE_ROOT" == /* ]] || { echo "manual state root must be absolute" >&2; return 1; }
+    local role=admin
+    [[ "$xcode_config" != *ManualJoiner* ]] || role=joiner
+    manual_state_args+=(--dart-define="AWIKI_MANUAL_APP_STATE_ROOT=$AWIKI_MANUAL_STATE_ROOT/$role")
+  fi
   LANG=en_US.UTF-8 \
   LC_ALL=en_US.UTF-8 \
   XDG_CONFIG_HOME="$flutter_config" \
@@ -185,6 +193,7 @@ build_app() {
       --debug \
       --no-pub \
       --target=lib/main.dart \
+      "${manual_state_args[@]}" \
       --dart-define="AWIKI_BUILTIN_TENANTS_BASE64=$tenant_config_base64" \
       --dart-define="AWIKI_BUILTIN_TENANTS_SHA256=$tenant_config_sha256"
 }

@@ -2792,11 +2792,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentTenantUnsupportedSubtitle =>
-      'Switch to a tenant on an approved AWiki realm to manage Daemons and Agents.';
+      'Switch to a server that supports Agent features to manage Daemons and Agents.';
 
   @override
   String get agentErrorTenantUnsupported =>
       'The current tenant does not support Agent features yet.';
+
+  @override
+  String get agentErrorDaemonUnsupported =>
+      'This server does not support Daemons yet.';
 
   @override
   String get agentErrorSelectDaemon => 'Select a running daemon.';
@@ -4367,4 +4371,77 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deviceJoinStepJoinSub =>
       'Joins as a regular device; a managing device can grant management later';
+
+  @override
+  String get serverFeaturesTitle => 'Server features';
+
+  @override
+  String get serverFeaturesSupported => 'Available';
+
+  @override
+  String get serverFeaturesUnsupported => 'Not supported by this server';
+
+  @override
+  String get serverFeaturesUnknown => 'Not confirmed yet. Please retry.';
+
+  @override
+  String get serverFeaturesStale =>
+      'Unable to refresh. Showing the last confirmed features.';
+
+  @override
+  String get serverFeaturesMessaging => 'Messaging';
+
+  @override
+  String get serverFeaturesGroups => 'Group chats';
+
+  @override
+  String get serverFeaturesAttachments => 'Attachments';
+
+  @override
+  String get serverFeaturesEncryption => 'Encrypted chats';
+
+  @override
+  String get serverFeaturesGroupEncryption => 'Encrypted groups';
+
+  @override
+  String get serverFeaturesDevices => 'Multiple devices';
+
+  @override
+  String get serverFeaturesAgents => 'Agents';
+
+  @override
+  String get serverFeaturesMail => 'Email';
+
+  @override
+  String get serverFeaturesUpdates => 'Client updates';
+
+  @override
+  String get serverFeaturesPages => 'Pages and sites';
+
+  @override
+  String get onboardingHandleOnlyHint =>
+      'Register with a username. No phone number or email is required.\nMore server features are shown after sign-in.';
+
+  @override
+  String get serverFeaturesSummaryDetail =>
+      'After signing in, see Server features for messaging and encryption.';
+
+  @override
+  String get serverFeaturesUpgradeRequired =>
+      'The server needs an upgrade to confirm its features. Local identities and history remain available.';
+
+  @override
+  String serverFeaturesUpdatedAt(String time) {
+    return 'Last confirmed: $time';
+  }
+
+  @override
+  String get serverFeaturesAccountSource => 'Account and services';
+
+  @override
+  String get serverFeaturesMessageSource => 'Chat and encryption';
+
+  @override
+  String get groupMemberLimitExceeded =>
+      'The group member limit exceeds the server limit. Adjust it and try again.';
 }

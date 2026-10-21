@@ -1,3 +1,4 @@
+import '../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 import 'package:flutter/material.dart' show Tooltip;
 import '../app_shell/providers/remote_push_coordinator_provider.dart';
@@ -1048,6 +1049,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   localRuntimeAgent: runtimeAgent,
                 ),
         );
+    ref.listen<bool>(multiDeviceGroupE2eeEnabledProvider, (previous, enabled) {
+      if (enabled && previous != true && currentConversation.isGroup) {
+        unawaited(_refreshGroupSecurity(currentConversation));
+      }
+    });
     ref.listen<ChatThreadState>(
       chatThreadProvider(displayThreadId),
       (previous, next) =>

@@ -1,6 +1,11 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:path/path.dart' as p;
+
+const String _manualAppStateRoot = String.fromEnvironment(
+  'AWIKI_MANUAL_APP_STATE_ROOT',
+);
 
 const bool _awikiE2eEnabled = bool.fromEnvironment('AWIKI_E2E');
 const String _awikiE2eAppStateRoot = String.fromEnvironment(
@@ -72,6 +77,12 @@ String normalizeAwikiE2eAppStateRootForLaunch(
 String? explicitAwikiAppStateRoot(String? appStateRoot) {
   final explicit = appStateRoot?.trim();
   if (explicit != null && explicit.isNotEmpty) return explicit;
+  if (kDebugMode && _manualAppStateRoot.isNotEmpty) {
+    if (!p.isAbsolute(_manualAppStateRoot)) {
+      throw StateError('Manual App state root must be absolute');
+    }
+    return p.normalize(_manualAppStateRoot);
+  }
   return awikiE2eAppStateRoot();
 }
 

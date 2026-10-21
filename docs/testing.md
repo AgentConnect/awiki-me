@@ -23,6 +23,15 @@ window activation through `AWIKI_E2E_MACOS_FOREGROUND`. Use the explicit
 is forwarded by `full`, and is rejected for Linux targets. Disabling activation
 does not guarantee that an occluded macOS App continues rendering frames.
 
+On a shared Mac, losing input focus while the test window remains visible is
+supported: Flutter's `inactive` state still schedules frames, and WidgetTester
+dispatches test input inside the App. Do not conflate this with `hidden`, which
+can stop UI frames. Acceptance wrappers must not add `--macos-foreground`
+automatically, including as a timeout retry. Use it only when the operator
+explicitly requests foreground debugging for that invocation. A frame timeout
+must retain its lifecycle/frames-enabled diagnostic instead of enabling an
+activation loop or synthesizing a resumed lifecycle.
+
 Use the smallest deterministic test that answers the question:
 
 | Directory | Answers | Uses real backend/devices? | Put these tests here |
@@ -915,7 +924,11 @@ explicit per-suite allowlist or the audited `configured_same_origin` policy.
 The selected YAML configuration remains the
 source of the actual target: remote compatibility runs use `awiki.info`, local
 server runs use `agentwiki.info`, and approved Singapore staging runs use
-`anpclaw.com`. They reject localhost, `awiki.test`, insecure schemes, and other
+`anpclaw.com`. The focused `direct` suite additionally accepts the isolated
+`backend-adapt.anpclaw.com` capability candidate, using its own protected OTP
+fixture, exact source-pinned CLI, fresh App/CLI state and residual ledger.
+This does not add the candidate to operator-bound Join/Recovery suites.
+They reject localhost, `awiki.test`, insecure schemes, and other
 domains before starting Flutter. A `configured_same_origin` suite still requires
 an explicit protected target config, matching HTTPS/DID origin, its capability
 and OTP gates, and exact-scope cleanup; it does not authorize an allowlisted

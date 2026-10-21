@@ -17,8 +17,111 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'package:awiki_me/src/presentation/server_features/backend_capabilities_provider.dart';
 
 void main() {
+  for (final support in ['unsupported', 'unknown', 'supported']) {
+    test('bound profile chooses available reader: $support', () async {
+      final gateway = FakeAwikiGateway()
+        ..myProfile = const UserProfile(
+          did: 'did:test:one',
+          nickName: 'Open profile',
+          bio: '',
+          tags: [],
+          profileMarkdown: '',
+        )
+        ..updatedProfile = const UserProfile(
+          did: 'did:test:one',
+          nickName: 'Open profile',
+          bio: '',
+          tags: [],
+          profileMarkdown: '',
+        );
+      final container = ProviderContainer(
+        overrides: [
+          profileApplicationServiceProvider.overrideWithValue(
+            FakeProfileApplicationService(gateway),
+          ),
+          backendFeaturesProvider.overrideWithValue(
+            AsyncData(
+              BackendFeatures({
+                'public': {
+                  'status': 'confirmed',
+                  'capabilities': {
+                    'account.state_sync': {'support': support},
+                  },
+                },
+              }),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(sessionProvider.notifier).setSession(_boundSession('one'));
+      var syncRequests = 0;
+      container.read(accountStateSyncRequestBusProvider).attach((
+        _, {
+        force = false,
+        minimumVersion,
+      }) async {
+        syncRequests++;
+      });
+      await container.read(profileProvider.notifier).refresh();
+      expect(syncRequests, support == 'supported' ? 1 : 0);
+      expect(
+        container.read(profileProvider).profile,
+        support == 'supported' ? isNull : isNotNull,
+      );
+      expect(container.read(profileProvider).isLoading, isFalse);
+    });
+  }
+  test(
+    'profile read failure ends loading and retains retryable error',
+    () async {
+      final profiles = _DelayedProfileService();
+      final container = ProviderContainer(
+        overrides: [
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+        ],
+      );
+      addTearDown(container.dispose);
+      final operation = container.read(profileProvider.notifier).refresh();
+      await profiles.started.future;
+      final assertion = expectLater(operation, throwsStateError);
+      profiles.result.completeError(StateError('profile request failed'));
+      await assertion;
+      expect(container.read(profileProvider).isLoading, isFalse);
+      expect(container.read(profileProvider).loadError, isNotNull);
+    },
+  );
+  test('bound identity without account sync edits basic profile', () async {
+    final gateway = FakeAwikiGateway()
+      ..myProfile = const UserProfile(
+        did: 'did:test:one',
+        nickName: 'Open profile',
+        bio: '',
+        tags: [],
+        profileMarkdown: '',
+      )
+      ..updatedProfile = const UserProfile(
+        did: 'did:test:one',
+        nickName: 'Open profile',
+        bio: '',
+        tags: [],
+        profileMarkdown: '',
+      );
+    final service = AccountStateProfileApplicationService(
+      delegate: FakeProfileApplicationService(gateway),
+      mutations: _UnexpectedProfileMutationPort(),
+      sessionProvider: () => _boundSession('one'),
+      accountStateSupported: () => false,
+    );
+    await service.updateProfileVersioned(
+      const ProfilePatch(displayName: 'Open profile'),
+    );
+    expect(gateway.lastProfilePatch?.displayName, 'Open profile');
+  });
+
   test('个人资料刷新后保留已加载的主页 markdown 作为可见内容', () async {
     const remoteMarkdown = '# Remote title\n\n# 如何与我通信\n\nRemote body';
     const serverProfile = UserProfile(

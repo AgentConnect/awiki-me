@@ -82,9 +82,11 @@ class AccountStateProfileApplicationService
     required ProfileApplicationService delegate,
     required AccountStateProfileMutationPort mutations,
     required SessionIdentity? Function() sessionProvider,
+    bool Function()? accountStateSupported,
   }) : _delegate = delegate,
        _mutations = mutations,
-       _sessionProvider = sessionProvider;
+       _sessionProvider = sessionProvider,
+       _accountStateSupported = accountStateSupported;
 
   final ProfileApplicationService _delegate;
 
@@ -128,6 +130,7 @@ class AccountStateProfileApplicationService
 
   final AccountStateProfileMutationPort _mutations;
   final SessionIdentity? Function() _sessionProvider;
+  final bool Function()? _accountStateSupported;
 
   @override
   Future<UserProfile> loadMyProfile() => _delegate.loadMyProfile();
@@ -146,8 +149,15 @@ class AccountStateProfileApplicationService
   ) async {
     final before = _sessionProvider();
     final binding = before?.accountBinding;
-    if (before == null || binding == null) {
+    if (before == null ||
+        binding == null ||
+        _accountStateSupported?.call() == false) {
       final profile = await _delegate.updateProfile(patch);
+      if (before != null &&
+          binding != null &&
+          !_sameProfileMutationSession(before, _sessionProvider())) {
+        throw StateError('profile_mutation_session_changed');
+      }
       return ProfileMutationResult(
         profile: profile,
         profileVersion: profile.profileVersion,

@@ -216,6 +216,11 @@ Handle 或 thread 进行猜测合并。snapshot message 自身不再独立推断
 
 ## 7. 消息类型与渲染规则
 
+附件选择器使用客户端大小上限与当前租户已确认的 `attachments.max_object_bytes`
+中的较小值，在上传前说明超限。有效旧快照继续提供该限制；未知、畸形或非正数
+限制不放宽客户端上限。租户或身份变化后重新取对应能力，最终上传授权与大小
+检查仍由 Core 和服务端负责。
+
 普通聊天 timeline 只渲染 `hasRenderableContent == true` 的消息。不同消息类型的处理规则如下：
 
 | 类型 | 映射结果 | Timeline 渲染 | Preview |

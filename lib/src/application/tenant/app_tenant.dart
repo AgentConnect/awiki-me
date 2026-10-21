@@ -113,6 +113,7 @@ class AppTenantProfile {
     required this.updatedAt,
     this.officialKey,
     this.remoteRealmId,
+    this.capabilitySummaryPending = false,
   });
 
   factory AppTenantProfile.fromJson(Map<String, Object?> json) {
@@ -129,6 +130,7 @@ class AppTenantProfile {
       backendBaseUrl: _requiredString(json, 'backend_base_url'),
       didHost: _requiredString(json, 'did_host'),
       remoteRealmId: _optionalString(json['remote_realm_id']),
+      capabilitySummaryPending: json['capability_summary_pending'] == true,
       lifecycle: AppTenantLifecycle.parse(json['lifecycle']),
       createdAt: _requiredTimestamp(json, 'created_at'),
       updatedAt: _requiredTimestamp(json, 'updated_at'),
@@ -143,6 +145,7 @@ class AppTenantProfile {
   final String backendBaseUrl;
   final String didHost;
   final String? remoteRealmId;
+  final bool capabilitySummaryPending;
   final AppTenantLifecycle lifecycle;
   final String createdAt;
   final String updatedAt;
@@ -162,6 +165,7 @@ class AppTenantProfile {
     'backend_base_url': backendBaseUrl,
     'did_host': didHost,
     'remote_realm_id': remoteRealmId,
+    'capability_summary_pending': capabilitySummaryPending,
     'lifecycle': lifecycle.wireName,
     'created_at': createdAt,
     'updated_at': updatedAt,
@@ -175,6 +179,7 @@ class AppTenantProfile {
     String? backendBaseUrl,
     String? didHost,
     String? remoteRealmId,
+    bool? capabilitySummaryPending,
     AppTenantLifecycle? lifecycle,
     String? updatedAt,
   }) => AppTenantProfile(
@@ -186,6 +191,8 @@ class AppTenantProfile {
     backendBaseUrl: backendBaseUrl ?? this.backendBaseUrl,
     didHost: didHost ?? this.didHost,
     remoteRealmId: remoteRealmId ?? this.remoteRealmId,
+    capabilitySummaryPending:
+        capabilitySummaryPending ?? this.capabilitySummaryPending,
     lifecycle: lifecycle ?? this.lifecycle,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -477,4 +484,8 @@ String? _optionalString(Object? value) {
     throw const FormatException('optional_string_invalid');
   }
   return value;
+}
+
+abstract interface class TenantCapabilitySummaryActions {
+  Future<void> markCapabilitySummarySeen(String tenantId);
 }

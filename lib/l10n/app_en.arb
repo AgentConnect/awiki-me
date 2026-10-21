@@ -4,7 +4,13 @@
   "agentLifecycleRetiredReason": "This agent's legacy integration has been retired. Its controller needs to create a new agent.",
   "agentLifecycleInactiveReason": "This agent has been disabled and cannot receive new instructions.",
   "agentLifecycleMessageNotice": "{name} is unavailable",
-  "@agentLifecycleMessageNotice": {"placeholders": {"name": {"type": "String"}}},
+  "@agentLifecycleMessageNotice": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "@@locale": "en",
   "identityMethodLabel": "Identity method",
   "identityWebAdminLimitation": "Web identities do not support account recovery, root key import, or management transfer. Keep the first administrator device safe; management access cannot be recovered if it is lost.",
@@ -1192,8 +1198,9 @@
   "agentSkillRequestFailed": "The Skill Agent instruction could not be generated. Try again.",
   "agentErrorPersonalAgentDisabled": "Personal Agent is not enabled.",
   "agentTenantUnsupportedTitle": "Agents are unavailable for this tenant",
-  "agentTenantUnsupportedSubtitle": "Switch to a tenant on an approved AWiki realm to manage Daemons and Agents.",
+  "agentTenantUnsupportedSubtitle": "Switch to a server that supports Agent features to manage Daemons and Agents.",
   "agentErrorTenantUnsupported": "The current tenant does not support Agent features yet.",
+  "agentErrorDaemonUnsupported": "This server does not support Daemons yet.",
   "agentErrorSelectDaemon": "Select a running daemon.",
   "agentErrorDaemonBootstrapMissing": "The running daemon has not reported a secure bootstrap public key yet. Refresh status first.",
   "agentErrorDaemonUnreachableDelete": "The daemon is currently unreachable and cannot be deleted yet.",
@@ -1768,14 +1775,55 @@
   "deviceJoinLocalSasLabel": "Shown on this device",
   "commonLater": "Later",
   "deviceJoinNoticeTitle": "{device} wants to join your account",
-  "@deviceJoinNoticeTitle": {"placeholders": {"device": {"type": "String"}}},
+  "@deviceJoinNoticeTitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "deviceJoinNoticeExpiry": "Valid until {time}",
-  "@deviceJoinNoticeExpiry": {"placeholders": {"time": {"type": "String"}}},
+  "@deviceJoinNoticeExpiry": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "deviceJoinStepRequest": "Send join request",
   "deviceJoinStepRequestSub": "Sent to your managing device",
   "deviceJoinStepVerify": "Managing device verifies",
   "deviceJoinStepVerifyWaiting": "Waiting for “Start verification”",
   "deviceJoinStepVerifySas": "Confirm both 6-digit codes match",
   "deviceJoinStepJoin": "Join the account",
-  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later"
+  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later",
+  "serverFeaturesTitle": "Server features",
+  "serverFeaturesSupported": "Available",
+  "serverFeaturesUnsupported": "Not supported by this server",
+  "serverFeaturesUnknown": "Not confirmed yet. Please retry.",
+  "serverFeaturesStale": "Unable to refresh. Showing the last confirmed features.",
+  "serverFeaturesMessaging": "Messaging",
+  "serverFeaturesGroups": "Group chats",
+  "serverFeaturesAttachments": "Attachments",
+  "serverFeaturesEncryption": "Encrypted chats",
+  "serverFeaturesGroupEncryption": "Encrypted groups",
+  "serverFeaturesDevices": "Multiple devices",
+  "serverFeaturesAgents": "Agents",
+  "serverFeaturesMail": "Email",
+  "serverFeaturesUpdates": "Client updates",
+  "serverFeaturesPages": "Pages and sites",
+  "onboardingHandleOnlyHint": "Register with a username. No phone number or email is required.\nMore server features are shown after sign-in.",
+  "serverFeaturesSummaryDetail": "After signing in, see Server features for messaging and encryption.",
+  "serverFeaturesUpgradeRequired": "The server needs an upgrade to confirm its features. Local identities and history remain available.",
+  "serverFeaturesUpdatedAt": "Last confirmed: {time}",
+  "@serverFeaturesUpdatedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "serverFeaturesAccountSource": "Account and services",
+  "serverFeaturesMessageSource": "Chat and encryption",
+  "groupMemberLimitExceeded": "The group member limit exceeds the server limit. Adjust it and try again."
 }

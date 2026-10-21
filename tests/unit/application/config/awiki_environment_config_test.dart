@@ -2,6 +2,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/tenant/builtin_tenant_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:awiki_me/src/presentation/server_features/backend_capabilities_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -30,7 +31,7 @@ void main() {
     expect(config.daemonDownloadBaseUrl, '$baseUrl/daemon');
     expect(
       config.updateManifestUrl,
-      '$baseUrl/user-service/v1/server-info?client_platform=app',
+      '$baseUrl/user-service/v1/server-info?client_platform=app&capabilities_version=1',
     );
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
@@ -43,38 +44,20 @@ void main() {
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
-  test('bundled realm allowlist enables Agent and Daemon capabilities', () {
-    for (final domain in agentDaemonTenantDomainAllowlist) {
-      final config = AwikiEnvironmentConfig(baseUrl: 'https://$domain');
-
-      expect(config.didDomain, domain);
-      expect(config.daemonDownloadBaseUrl, 'https://$domain/daemon');
-      expect(config.agentImEnabled, isTrue, reason: domain);
+  test('custom secure realms use discovery instead of a domain allowlist', () {
+    for (final domain in [
+      'awiki.info',
+      'example.com',
+      'backend-adapt.anpclaw.com',
+    ]) {
+      expect(
+        AwikiEnvironmentConfig(baseUrl: 'https://$domain').agentImEnabled,
+        isTrue,
+      );
     }
   });
-
-  test('compatibility realms retain Agent and Daemon capabilities', () {
-    expect(
-      agentDaemonTenantDomainAllowlist,
-      containsAll(<String>{
-        'awiki.ai',
-        'awiki.me',
-        'agent-connect.cn',
-        'awiki.info',
-        'anpclaw.com',
-      }),
-    );
-    for (final domain in agentDaemonCompatibilityTenantDomains) {
-      final config = AwikiEnvironmentConfig(baseUrl: 'https://$domain');
-
-      expect(config.didDomain, domain);
-      expect(config.agentImEnabled, isTrue, reason: domain);
-    }
-  });
-
-  test('Agent and Daemon realm allowlist fails closed', () {
+  test('Agent realm security boundaries remain enforced', () {
     for (final config in <AwikiEnvironmentConfig>[
-      AwikiEnvironmentConfig(baseUrl: 'https://example.com'),
       AwikiEnvironmentConfig(
         baseUrl: 'https://awiki.info',
         didDomain: 'awiki.ai',
@@ -82,7 +65,6 @@ void main() {
       AwikiEnvironmentConfig(baseUrl: 'http://awiki.info'),
       AwikiEnvironmentConfig(baseUrl: 'https://awiki.info:8443'),
       AwikiEnvironmentConfig(baseUrl: 'https://awiki.info/api'),
-      AwikiEnvironmentConfig(baseUrl: 'https://subdomain.awiki.info'),
     ]) {
       expect(config.agentImEnabled, isFalse, reason: config.baseUrl);
     }
@@ -101,7 +83,7 @@ void main() {
     expect(config.daemonDownloadBaseUrl, 'https://anpclaw.com/daemon');
     expect(
       config.updateManifestUrl,
-      'https://anpclaw.com/user-service/v1/server-info?client_platform=app',
+      'https://anpclaw.com/user-service/v1/server-info?client_platform=app&capabilities_version=1',
     );
     expect(config.releasesUrl, 'https://anpclaw.com/#download');
   });
@@ -201,6 +183,25 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(config),
+        backendFeaturesProvider.overrideWithValue(
+          const AsyncData(
+            BackendFeatures({
+              'public': {
+                'status': 'confirmed',
+                'capabilities': {
+                  'identity.device_revoke': {'support': 'supported'},
+                },
+              },
+              'message': {
+                'status': 'confirmed',
+                'capabilities': {
+                  'direct_e2ee': {'support': 'supported'},
+                  'group_e2ee': {'support': 'supported'},
+                },
+              },
+            }),
+          ),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -216,6 +217,25 @@ void main() {
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(config),
+        backendFeaturesProvider.overrideWithValue(
+          const AsyncData(
+            BackendFeatures({
+              'public': {
+                'status': 'confirmed',
+                'capabilities': {
+                  'identity.device_revoke': {'support': 'supported'},
+                },
+              },
+              'message': {
+                'status': 'confirmed',
+                'capabilities': {
+                  'direct_e2ee': {'support': 'supported'},
+                  'group_e2ee': {'support': 'supported'},
+                },
+              },
+            }),
+          ),
+        ),
       ],
     );
     addTearDown(container.dispose);

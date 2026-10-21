@@ -14,7 +14,7 @@ test('accepts the complete reviewed graph and distinct consumer/SDK commits', ()
 
 test('rejects missing or extra SDKs, moving refs, wrong repositories and stale cross-repo PRs', () => {
   for (const mutate of [
-    m => delete m.dependencies.anp,
+    m => delete m.dependencies['awiki-im-core'],
     m => { m.dependencies.other = {}; },
     m => { m.dependencies.anp.commit = 'release/0929'; },
     m => { m.dependencies.anp.repository = 'https://other.example/anp.git'; },
@@ -31,4 +31,12 @@ test('rejects an older consumer or mismatching nested SDK pins', () => {
     const core = manifest(); core.dependencies[name].commit = 'b'.repeat(40);
     assert.throws(() => verifyCoreCheckout(manifest(), core, 'a'.repeat(40)));
   }
+});
+
+test('Core-only source keeps unselected ANP and Identity on registry', () => {
+  const app = manifest();
+  delete app.dependencies.anp;
+  delete app.dependencies['anp-identity'];
+  verifyCoreCheckout(app, null, 'a'.repeat(40));
+  assert.throws(() => verifyCoreCheckout(app, manifest(), 'a'.repeat(40)));
 });

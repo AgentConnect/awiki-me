@@ -229,7 +229,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     required Directory homeDir,
   }) async {
     final peerConfig = _requireConfig();
-    final tenantName = _tenantName;
+    var tenantName = _tenantName;
     DesktopCliTenantConfig? existing;
     if (!options.dryRun && !commands.dryRun) {
       final list = await _cliForWorkspace(
@@ -237,7 +237,12 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         homeDir: homeDir,
         args: const <String>['--format', 'json', 'tenant', 'list'],
       );
-      existing = cliTenantConfigFromListJson(list.output, tenantName);
+      existing = cliTenantConfigFromListJson(
+        list.output,
+        tenantName,
+        backendBaseUrl: peerConfig.serviceBaseUrl,
+        didHost: peerConfig.didDomain,
+      );
     }
     if (existing == null) {
       await _cliForWorkspace(
@@ -267,6 +272,8 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
         'Existing E2E tenant does not match the selected service target.',
       );
     }
+    tenantName = existing?.name ?? tenantName;
+    _cliTenantNames[workspaceDir.absolute.path] = tenantName;
     await _cliForWorkspace(
       workspaceDir: workspaceDir,
       homeDir: homeDir,
@@ -283,7 +290,9 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
 
   Future<void> _writeCliConfig(Directory workspaceDir) async {
     final peerConfig = _requireConfig();
-    final file = File('${workspaceDir.path}/tenants/$_tenantName/config.yaml');
+    final tenantName =
+        _cliTenantNames[workspaceDir.absolute.path] ?? _tenantName;
+    final file = File('${workspaceDir.path}/tenants/$tenantName/config.yaml');
     final configMap = file.existsSync()
         ? _toStringKeyMap(loadYaml(file.readAsStringSync()), path: 'config')
         : <String, Object?>{};

@@ -275,3 +275,17 @@ are never converted to `passed`.
 
 Agent model-backed suites have been removed. Use `dart run tests/unit/runner.dart --suite acp`
 for fake-backed state, widget and chat regressions without an API key or Agent CLI.
+
+## Isolated capability candidate acceptance
+
+On native macOS, `dart run tests/e2e/run_capability_candidate.dart --run-root
+<new-automatic-state-directory> --cli <candidate-cli> --tenant-config
+<two-task-tenants.json>` runs `app/backend_capabilities_test.dart`. The catalog
+must contain only `openserver-adapt.anpclaw.com` and
+`backend-adapt.anpclaw.com`. It uses production bootstrap, normal handle-only
+registration, an independent CLI identity, real plaintext round-trip assertions,
+and screenshots of registration, chat and server features. It verifies that the
+unsupported encryption selector is disabled. E2E semantics are enabled, with no
+authentication override. The fresh automatic state is retained, separately from
+manual experience state; remote test identities are retained. This focused lane
+does not attest the full catalog, official-backend flows or other platforms.

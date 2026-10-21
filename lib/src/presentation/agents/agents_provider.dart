@@ -1,3 +1,4 @@
+import '../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
 import '../../domain/entities/agent/agent_availability.dart';
 import 'agent_availability_provider.dart';
@@ -258,10 +259,26 @@ class PendingDaemonUpgradeCancel {
 }
 
 final agentImEnabledProvider = Provider<bool>(
-  (ref) => ref.watch(awikiEnvironmentConfigProvider).agentImEnabled,
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).agentImEnabled &&
+      (ref
+              .watch(backendFeaturesProvider)
+              .valueOrNull
+              ?.supports('agents.managed_agents') ??
+          false),
 );
 
 enum AgentInventoryAutoSyncReason { backgroundDiscovery, daemonInstall }
+
+final daemonBackendEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(agentImEnabledProvider) &&
+      (ref
+              .watch(backendFeaturesProvider)
+              .valueOrNull
+              ?.supports('agents.daemon') ??
+          false),
+);
 
 class AgentsState {
   const AgentsState({
@@ -604,6 +621,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     _topologyControlOverlays.clear();
     _inventoryReconcileRequested = false;
     state = const AgentsState(error: AgentUiMessageCodes.tenantUnsupported);
+  }
+
+  void _setDaemonUnsupported({bool surfaceError = true}) {
+    _cancelStatusTimers();
+    state = state.copyWith(
+      pendingStatusQueryAtByDaemon: const <String, DateTime>{},
+      error: surfaceError ? AgentUiMessageCodes.daemonUnsupported : state.error,
+    );
   }
 
   Future<void> ensureLoaded() {
@@ -1069,8 +1094,8 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> createDaemonInstallCommand() async {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!ref.read(daemonBackendEnabledProvider)) {
+      _setDaemonUnsupported();
       return;
     }
     final session = ref.read(sessionProvider).session;
@@ -1193,8 +1218,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid, {
     bool fromAutoLoad = false,
   }) async {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!ref.read(daemonBackendEnabledProvider)) {
+      _setDaemonUnsupported(surfaceError: !fromAutoLoad);
       return;
     }
     final operation = _captureOwnerOperation();
@@ -1281,8 +1306,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     required RuntimeAgentCreateOptions options,
     String? clientRequestId,
   }) async {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!ref.read(daemonBackendEnabledProvider)) {
+      _setDaemonUnsupported();
       return;
     }
     final session = ref.read(sessionProvider).session;
@@ -1442,8 +1467,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     UserSubkeyPackage? userSubkeyPackage,
     String? appInstanceId,
   }) async {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!ref.read(daemonBackendEnabledProvider)) {
+      _setDaemonUnsupported();
       return;
     }
     final session = ref.read(sessionProvider).session;
@@ -1568,8 +1593,8 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<bool> upgradeDaemon(String daemonDid) async {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!ref.read(daemonBackendEnabledProvider)) {
+      _setDaemonUnsupported();
       return false;
     }
     if (state.isDaemonUpgradePending(daemonDid)) {
@@ -1671,8 +1696,8 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<bool> cancelDaemonUpgrade(String daemonDid) async {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!ref.read(daemonBackendEnabledProvider)) {
+      _setDaemonUnsupported();
       return false;
     }
     if (!state.isDaemonUpgradePending(daemonDid) ||

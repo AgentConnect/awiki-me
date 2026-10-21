@@ -118,7 +118,16 @@ class _ComposerState extends ConsumerState<_Composer> {
       );
       final mode = ref.watch(provider);
       final encrypted = mode.valueOrNull ?? false;
-      final label = mode.isLoading
+      final support =
+          ref
+              .watch(backendFeaturesProvider)
+              .valueOrNull
+              ?.support('direct_e2ee') ??
+          'unknown';
+      final allowed = support == 'supported';
+      final label = !allowed
+          ? '${context.l10n.serverFeaturesEncryption}: ${support == 'unsupported' ? context.l10n.serverFeaturesUnsupported : context.l10n.serverFeaturesUnknown}'
+          : mode.isLoading
           ? '正在读取消息模式'
           : mode.hasError
           ? '消息模式读取失败，点击重试'
@@ -132,7 +141,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         size: context.awikiResponsive.displayScaled(30),
         borderRadius: BorderRadius.circular(7),
         isActive: encrypted,
-        onPressed: mode.isLoading
+        onPressed: !allowed || mode.isLoading
             ? null
             : () async {
                 if (mode.hasError) {

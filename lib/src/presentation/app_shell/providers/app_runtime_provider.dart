@@ -42,6 +42,7 @@ import '../../group/group_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../profile/peer_profile_provider.dart';
 import '../../profile/profile_provider.dart';
+import '../../server_features/backend_capabilities_provider.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
@@ -953,21 +954,26 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             ref.read(agentsProvider.notifier).clear();
             ref.read(devicesProvider.notifier).clearAccountStateProjection();
           },
-        )
-      else ...<Future<bool>>[
+        ),
+      if (!hasStableAccountBinding ||
+          ref
+                  .read(backendFeaturesProvider)
+                  .valueOrNull
+                  ?.supports('account.state_sync') !=
+              true)
         _runAuthenticatedRefreshDomain(
           sessionFence,
-          label: 'app_refresh.profile_legacy_unbound',
+          label: 'app_refresh.profile_basic',
           action: () => ref.read(profileProvider.notifier).refresh(),
           clearStale: () => ref.read(profileProvider.notifier).clear(),
         ),
+      if (!hasStableAccountBinding)
         _runAuthenticatedRefreshDomain(
           sessionFence,
           label: 'app_refresh.agents_legacy_unbound',
           action: () => ref.read(agentsProvider.notifier).syncRemoteInventory(),
           clearStale: () => ref.read(agentsProvider.notifier).clear(),
         ),
-      ],
       _runAuthenticatedRefreshDomain(
         sessionFence,
         label: 'app_refresh.friends',

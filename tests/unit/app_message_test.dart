@@ -6,6 +6,25 @@ import 'package:awiki_me/src/l10n/app_message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final code in [
+    'group.max_members_exceeded',
+    'backend.groups.limit_exceeded',
+  ]) {
+    test('localizes group capacity error $code', () {
+      final message = AppMessage.fromError(
+        core.AwikiImCoreException(code: 'service_error', message: code),
+      );
+      expect(
+        message.resolve(AppLocalizationsZh()),
+        AppLocalizationsZh().groupMemberLimitExceeded,
+      );
+      expect(
+        message.resolve(AppLocalizationsEn()),
+        AppLocalizationsEn().groupMemberLimitExceeded,
+      );
+    });
+  }
+
   test('maps DID service errors to friendly localized copy', () {
     final message = AppMessage.fromError(
       const core.AwikiImCoreException(

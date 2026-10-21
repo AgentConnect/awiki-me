@@ -3,6 +3,11 @@ import 'dart:collection';
 import '../models/product_local_models.dart';
 import '../../domain/entities/profile_patch.dart';
 
+/// Stable remote rejection, without transport errors or credential material.
+class AccountStateSyncUnsupported implements Exception {
+  const AccountStateSyncUnsupported();
+}
+
 abstract interface class AccountStateSyncPort {
   Future<AccountStateManifest> loadManifest();
 

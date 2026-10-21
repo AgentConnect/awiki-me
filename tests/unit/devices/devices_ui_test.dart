@@ -1540,6 +1540,7 @@ void main() {
           ]);
       ProviderContainer container() => ProviderContainer(
         overrides: <Override>[
+      identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           handleRecoveryCorePortProvider.overrideWithValue(recovery),
           productLocalStoreProvider.overrideWithValue(local),
@@ -2996,6 +2997,7 @@ const _bobSession = SessionIdentity(
 ProviderContainer _deviceContainer(FakeDeviceManagementCore core) {
   return ProviderContainer(
     overrides: <Override>[
+      identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
       deviceManagementCorePortProvider.overrideWithValue(core),
       sessionProvider.overrideWith(
         (ref) => SessionController()..setSession(_session),
