@@ -41,6 +41,31 @@ const _daemonSubkeyProposal = <String, Object?>{
 
 void main() {
   test(
+    'disabled Daemon blocks install and status without clearing Agent inventory',
+    () async {
+      final control = FakeAgentControlService();
+      final container = _container(control, daemonEnabled: false);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+      final before = container.read(agentsProvider).agents;
+      expect(before, isNotEmpty);
+      await controller.createDaemonInstallCommand();
+      await controller.refreshDaemonStatus('did:agent:daemon');
+      await controller.bootstrapPersonalAgent(daemonDid: 'did:agent:daemon');
+      expect(control.lastInstallControllerDid, isNull);
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(control.lastRefreshedDaemonDid, isNull);
+      expect(container.read(agentsProvider).installCommand, isNull);
+      expect(container.read(agentsProvider).agents, before);
+      expect(
+        container.read(agentsProvider).error,
+        AgentUiMessageCodes.daemonUnsupported,
+      );
+    },
+  );
+
+  test(
     'late avatar reads do not replace a newer committed projection or invent membership',
     () async {
       final container = _container(FakeAgentControlService());
@@ -5311,6 +5336,7 @@ ProviderContainer _container(
   DirectoryApplicationService? directory,
   AgentsController Function(Ref ref)? controllerFactory,
   bool agentImEnabled = true,
+  bool daemonEnabled = true,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
     credentialName: 'default',
@@ -5338,6 +5364,9 @@ ProviderContainer _container(
       if (controllerFactory != null)
         agentsProvider.overrideWith(controllerFactory),
       agentImEnabledProvider.overrideWithValue(agentImEnabled),
+      daemonBackendEnabledProvider.overrideWithValue(
+        agentImEnabled && daemonEnabled,
+      ),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
       }),

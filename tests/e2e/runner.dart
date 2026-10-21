@@ -44,6 +44,7 @@ export 'runner/redaction.dart';
 part 'runner/scenarios/app_pair.dart';
 part 'runner/scenarios/desktop_peer.dart';
 part 'runner/scenarios/join.dart';
+part 'runner/scenarios/hosted_gateway.dart';
 part 'runner/scenarios/recovery.dart';
 part 'runner/cli_artifact.dart';
 part 'runner/config.dart';
@@ -425,6 +426,7 @@ class DesktopE2eRunner {
 
   DesktopE2eFileConfig fileConfig = const DesktopE2eFileConfig.empty();
   DesktopCliPeerConfig? config;
+  final Map<String, String> _cliTenantNames = <String, String>{};
   RemoteMultiDeviceJoinConfig? remoteMultiDeviceJoinConfig;
   RemoteHandleRecoveryConfig? remoteHandleRecoveryConfig;
   RemoteMultiDeviceAppPairConfig? remoteMultiDeviceAppPairConfig;
@@ -718,6 +720,11 @@ class DesktopE2eRunner {
           await _runRemoteRegistrationAccountFirst();
         case DesktopE2eCase.registrationDomainDiscovery:
           await _runRemoteRegistrationDomainDiscovery();
+        case DesktopE2eCase.hostedGatewayResume:
+          await _runHostedGatewayResume();
+        case DesktopE2eCase.hostedGatewayEmailJoin:
+        case DesktopE2eCase.hostedGatewayJoin:
+          await _runHostedGatewayJoin();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.multiDeviceRemoteRecovery:
@@ -1408,18 +1415,22 @@ bool isAuditableGitSha(String value) {
 
 class DesktopCliTenantConfig {
   const DesktopCliTenantConfig({
+    required this.name,
     required this.backendBaseUrl,
     required this.didHost,
   });
 
+  final String name;
   final String backendBaseUrl;
   final String didHost;
 }
 
 DesktopCliTenantConfig? cliTenantConfigFromListJson(
   String output,
-  String tenantName,
-) {
+  String tenantName, {
+  String? backendBaseUrl,
+  String? didHost,
+}) {
   Object? decoded;
   try {
     decoded = jsonDecode(output);
@@ -1432,27 +1443,48 @@ DesktopCliTenantConfig? cliTenantConfigFromListJson(
     throw E2eFailure('CLI tenant preflight omitted the tenant list.');
   }
   DesktopCliTenantConfig? result;
+  DesktopCliTenantConfig? endpointMatch;
   for (final value in tenants) {
-    if (value is! Map || value['name'] != tenantName) {
+    if (value is! Map) {
       continue;
     }
-    if (result != null) {
+    final name = value['name'];
+    final matchesName = name == tenantName;
+    if (matchesName && result != null) {
       throw E2eFailure('CLI tenant preflight returned duplicate tenant names.');
     }
-    final backendBaseUrl = value['backend_base_url'];
-    final didHost = value['did_host'];
-    if (backendBaseUrl is! String ||
-        backendBaseUrl.trim().isEmpty ||
-        didHost is! String ||
-        didHost.trim().isEmpty) {
+    final endpoint = value['backend_base_url'];
+    final domain = value['did_host'];
+    if (name is! String ||
+        name.trim().isEmpty ||
+        endpoint is! String ||
+        endpoint.trim().isEmpty ||
+        domain is! String ||
+        domain.trim().isEmpty) {
+      if (!matchesName) continue;
       throw E2eFailure('CLI tenant preflight returned incomplete target data.');
     }
-    result = DesktopCliTenantConfig(
-      backendBaseUrl: backendBaseUrl.trim(),
-      didHost: didHost.trim(),
+    final candidate = DesktopCliTenantConfig(
+      name: name,
+      backendBaseUrl: endpoint.trim(),
+      didHost: domain.trim(),
     );
+    if (matchesName) result = candidate;
+    if (backendBaseUrl != null &&
+        didHost != null &&
+        _sameHttpEndpoint(endpoint, backendBaseUrl) &&
+        _normalizedDomain(domain) == _normalizedDomain(didHost)) {
+      if (endpointMatch != null) {
+        throw E2eFailure(
+          'CLI tenant preflight returned duplicate target endpoints.',
+        );
+      }
+      endpointMatch = candidate;
+    }
   }
-  return result;
+  // A conflicting requested name must be rejected by preflight, even when
+  // another tenant happens to match the endpoint.
+  return result ?? endpointMatch;
 }
 
 bool cliCurrentIdentityReadyForHandle(

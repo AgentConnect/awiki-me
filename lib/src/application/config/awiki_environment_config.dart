@@ -31,16 +31,6 @@ const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   'AWIKI_SYNC_V2_READ',
   defaultValue: true,
 );
-const Set<String> agentDaemonCompatibilityTenantDomains = <String>{
-  'agent-connect.cn',
-  'awiki.info',
-  'anpclaw.com',
-};
-Set<String> get agentDaemonTenantDomainAllowlist => <String>{
-  builtinTenantCatalog.primary.didHost,
-  builtinTenantCatalog.secondary.didHost,
-  ...agentDaemonCompatibilityTenantDomains,
-};
 
 class AwikiEnvironmentConfig {
   AwikiEnvironmentConfig({
@@ -96,7 +86,7 @@ class AwikiEnvironmentConfig {
       updateManifestUrl,
       fallback: _joinUrl(
         normalizedBase,
-        '/user-service/v1/server-info?client_platform=app',
+        '/user-service/v1/server-info?client_platform=app&capabilities_version=1',
       ),
     );
     this.releasesUrl = _normalizeBaseUrl(
@@ -106,7 +96,7 @@ class AwikiEnvironmentConfig {
     this.agentImEnabled =
         agentImEnabled ??
         isAgentDaemonTenantRealmAllowed(
-          backendBaseUrl: normalizedBase,
+          backendBaseUrl: this.userServiceUrl,
           didHost: this.didDomain,
         );
     this.multiDeviceDeviceRevokeEnabled =
@@ -185,8 +175,7 @@ bool isAgentDaemonTenantRealmAllowed({
       .trim()
       .replaceAll(RegExp(r'^\.+|\.+$'), '')
       .toLowerCase();
-  return backendHost == normalizedDidHost &&
-      agentDaemonTenantDomainAllowlist.contains(backendHost);
+  return backendHost == normalizedDidHost;
 }
 
 String _normalizeBaseUrl(String? value, {required String fallback}) {

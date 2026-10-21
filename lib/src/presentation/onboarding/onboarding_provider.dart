@@ -344,8 +344,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       return;
     }
     final requestRevision = ++_serverInfoRevision;
+    if (state.existingAccountMethods != existingAccount) {
+      state = state.copyWith(serverInfo: null);
+    }
     state = state.copyWith(
-      serverInfoStatus: OnboardingServerInfoStatus.loading,
+      serverInfoStatus: state.serverInfo == null
+          ? OnboardingServerInfoStatus.loading
+          : OnboardingServerInfoStatus.ready,
       existingAccountMethods: existingAccount,
       serverInfoError: null,
     );
@@ -375,14 +380,18 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     } on TimeoutException {
       if (!mounted || requestRevision != _serverInfoRevision) return;
       state = state.copyWith(
-        serverInfoStatus: OnboardingServerInfoStatus.failed,
+        serverInfoStatus: state.serverInfo == null
+            ? OnboardingServerInfoStatus.failed
+            : OnboardingServerInfoStatus.ready,
         serverInfoError: 'request_timeout_retry',
       );
     } catch (error) {
       if (!mounted || requestRevision != _serverInfoRevision) return;
       state = state.copyWith(
-        serverInfoStatus: OnboardingServerInfoStatus.failed,
-        serverInfoError: error.toString(),
+        serverInfoStatus: state.serverInfo == null
+            ? OnboardingServerInfoStatus.failed
+            : OnboardingServerInfoStatus.ready,
+        serverInfoError: 'server_info_unavailable',
       );
     }
   }
@@ -747,7 +756,8 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     if (state.isBusy) {
       return null;
     }
-    if (!state.supportsPhoneNoVerificationRegistration ||
+    if (!(state.supportsPhoneNoVerificationRegistration ||
+            (state.serverInfo?.supportsHandleOnlyRegistration ?? false)) ||
         !state.canRegisterSelectedDidMethod) {
       ref
           .read(uiFeedbackProvider.notifier)

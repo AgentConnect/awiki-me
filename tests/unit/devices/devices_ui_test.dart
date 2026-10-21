@@ -319,7 +319,7 @@ void main() {
     await container.read(devicesProvider.notifier).loadManagement();
     await tester.tap(find.byKey(const Key('device-sas-confirmation')));
     await tester.pump();
-    await tester.tap(find.text('允许加入并成为管理设备'));
+    await tester.tap(find.text('核对用途并批准加入'));
     await tester.pump();
     expect(core.started.isCompleted, isTrue);
     core.joinRequests = [
@@ -450,7 +450,7 @@ void main() {
     expect(core.started.isCompleted, isTrue);
     await tester.tap(find.byKey(const Key('device-sas-confirmation')));
     await tester.pump();
-    await tester.tap(find.text('允许加入并成为管理设备'));
+    await tester.tap(find.text('核对用途并批准加入'));
     await tester.pumpAndSettle();
     expect(
       container.read(devicesProvider).activeJoin?.phase,
@@ -1540,6 +1540,7 @@ void main() {
           ]);
       ProviderContainer container() => ProviderContainer(
         overrides: <Override>[
+      identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           handleRecoveryCorePortProvider.overrideWithValue(recovery),
           productLocalStoreProvider.overrideWithValue(local),
@@ -2127,7 +2128,7 @@ void main() {
 
       await tester.tap(switches.first);
       await tester.pump();
-      await tester.tap(find.text('允许加入并成为管理设备'));
+      await tester.tap(find.text('核对用途并批准加入'));
       await tester.pumpAndSettle();
 
       expect(core.lastPreparedSasConfirmed, isTrue);
@@ -2135,7 +2136,7 @@ void main() {
       expect(presence.calls, 1);
       expect(find.text('设备已加入'), findsOneWidget);
       expect(find.text('完成'), findsOneWidget);
-      expect(find.text('允许加入并成为管理设备'), findsNothing);
+      expect(find.text('核对用途并批准加入'), findsNothing);
       expect(find.text('验证码不一致'), findsNothing);
       expect(find.text('拒绝设备'), findsNothing);
 
@@ -2215,7 +2216,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('device-sas-confirmation')));
       await tester.pump();
-      await tester.tap(find.text('允许加入并成为管理设备'));
+      await tester.tap(find.text('核对用途并批准加入'));
       await tester.pumpAndSettle();
       final container = ProviderScope.containerOf(
         tester.element(find.byKey(const Key('device-join-approval-sheet'))),
@@ -2590,7 +2591,7 @@ void main() {
 
     expect(find.text('另一台管理设备正在处理此请求'), findsOneWidget);
     expect(find.text('开始验证'), findsNothing);
-    expect(find.text('允许加入并成为管理设备'), findsNothing);
+    expect(find.text('核对用途并批准加入'), findsNothing);
     expect(core.startVerificationCalls, 0);
     expect(core.localVerificationCalls, 0);
   });
@@ -2663,6 +2664,43 @@ void main() {
     expect(core.confirmCalls, 0);
   });
 
+  testWidgets(
+    'message-only purpose is visible and reaches localized confirmation',
+    (tester) async {
+      final request = _request(
+        joinPurpose: 'messages_only',
+        state: DeviceJoinRemoteState.responseVerified,
+        claimedByCurrentDevice: true,
+        canStartVerification: false,
+      );
+      final core = FakeDeviceManagementCore()
+        ..managementAllowed = false
+        ..verificationProgress = testJoinProgress();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          DeviceJoinApprovalSheet(request: request),
+          core,
+          presence: presence,
+        ),
+      );
+      await tester.pumpAndSettle();
+      const expected = '允许该设备仅用于消息通信，不授予根密钥或身份管理权限';
+      expect(
+        tester
+            .widget<Text>(find.byKey(const Key('device-approval-purpose')))
+            .data,
+        expected,
+      );
+      await tester.tap(find.byKey(const Key('device-sas-confirmation')));
+      await tester.pump();
+      await tester.tap(find.text('核对用途并批准加入'));
+      await tester.pumpAndSettle();
+      expect(presence.lastReason, expected);
+      expect(core.lastPresenceConfirmed, isTrue);
+    },
+  );
+
   testWidgets('user-presence rejection never authorizes the device', (
     tester,
   ) async {
@@ -2680,7 +2718,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('device-sas-confirmation')));
     await tester.pump();
-    await tester.tap(find.text('允许加入并成为管理设备'));
+    await tester.tap(find.text('核对用途并批准加入'));
     await tester.pumpAndSettle();
 
     expect(core.lastPresenceConfirmed, isFalse);
@@ -2959,6 +2997,7 @@ const _bobSession = SessionIdentity(
 ProviderContainer _deviceContainer(FakeDeviceManagementCore core) {
   return ProviderContainer(
     overrides: <Override>[
+      identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
       deviceManagementCorePortProvider.overrideWithValue(core),
       sessionProvider.overrideWith(
         (ref) => SessionController()..setSession(_session),
@@ -2968,12 +3007,14 @@ ProviderContainer _deviceContainer(FakeDeviceManagementCore core) {
 }
 
 DeviceJoinRequestNotice _request({
+  String? joinPurpose,
   String joinSessionId = 'join-1',
   String protocolDeviceId = 'device-new',
   DeviceJoinRemoteState state = DeviceJoinRemoteState.pending,
   bool claimedByCurrentDevice = false,
   bool canStartVerification = true,
 }) => DeviceJoinRequestNotice(
+  joinPurpose: joinPurpose,
   eventId: 'event-$joinSessionId',
   joinSessionId: joinSessionId,
   did: testDid,

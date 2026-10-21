@@ -387,6 +387,17 @@ void main() {
   group('DesktopE2eOptions', () {
     test('foreground activation requires an explicit run option', () {
       expect(DesktopE2eOptions.parse([]).macosForeground, isFalse);
+      for (final scenario in ['direct', 'messaging', 'full']) {
+        final args = ['--case', scenario, '--run-id', 'sharedmac'];
+        expect(DesktopE2eOptions.parse(args).macosForeground, isFalse);
+        expect(
+          DesktopE2eOptions.parse([
+            ...args,
+            '--macos-foreground',
+          ]).macosForeground,
+          isTrue,
+        );
+      }
       expect(
         DesktopE2eOptions.parse(['--macos-foreground']).macosForeground,
         isTrue,
@@ -1746,6 +1757,52 @@ void main() {
       );
     });
 
+    test(
+      'reuses an existing endpoint without overriding a conflicting name',
+      () {
+        String listing(List<Map<String, String>> tenants) => jsonEncode({
+          'data': {'tenants': tenants},
+        });
+        const builtin = <String, String>{
+          'name': 'builtin',
+          'backend_base_url': 'https://candidate.example/',
+          'did_host': 'candidate.example',
+        };
+        DesktopCliTenantConfig? select(List<Map<String, String>> tenants) =>
+            cliTenantConfigFromListJson(
+              listing(tenants),
+              'e2e-run',
+              backendBaseUrl: 'https://candidate.example',
+              didHost: 'candidate.example',
+            );
+        expect(select([builtin])?.name, 'builtin');
+        expect(
+          select([
+            {...builtin, 'did_host': 'other.example'},
+          ]),
+          isNull,
+        );
+        expect(
+          select([
+            builtin,
+            {
+              ...builtin,
+              'name': 'e2e-run',
+              'backend_base_url': 'https://other.example',
+            },
+          ])?.backendBaseUrl,
+          'https://other.example',
+        );
+        expect(
+          () => select([
+            builtin,
+            {...builtin, 'name': 'duplicate'},
+          ]),
+          throwsA(isA<E2eFailure>()),
+        );
+      },
+    );
+
     test('rejects malformed or duplicate targets', () {
       expect(
         () => cliTenantConfigFromListJson('{}', 'e2e-run'),
@@ -2397,14 +2454,31 @@ cliHandle: legacy-cli
         for (final e2eCase in DesktopE2eCase.values) {
           final definition = manifest.definitionFor(e2eCase);
           if (definition.allowedHosts.isEmpty) continue;
+          final domain =
+              (e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+                  e2eCase == DesktopE2eCase.hostedGatewayEmailJoin ||
+                  e2eCase == DesktopE2eCase.hostedGatewayResume)
+              ? 'mcp-adapt.anpclaw.com'
+              : 'test-fix.anpclaw.com';
           expect(
             () => definition.validateRemoteTargetValues(
-              didDomain: 'test-fix.anpclaw.com',
-              serviceUrls: ['https://test-fix.anpclaw.com'],
+              didDomain: domain,
+              serviceUrls: ['https://$domain'],
             ),
             returnsNormally,
             reason: e2eCase.name,
           );
+          if ((e2eCase == DesktopE2eCase.hostedGatewayJoin ||
+              e2eCase == DesktopE2eCase.hostedGatewayEmailJoin ||
+              e2eCase == DesktopE2eCase.hostedGatewayResume)) {
+            expect(
+              () => definition.validateRemoteTargetValues(
+                didDomain: 'test-fix.anpclaw.com',
+                serviceUrls: ['https://test-fix.anpclaw.com'],
+              ),
+              throwsA(isA<E2eFailure>()),
+            );
+          }
           expect(
             () => definition.validateRemoteTargetValues(
               didDomain: 'test-fix.anpclaw.com',

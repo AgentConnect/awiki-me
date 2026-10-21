@@ -165,6 +165,12 @@ class OnboardingServerInfo {
         !phone.verification.required;
   }
 
+  bool get supportsHandleOnlyRegistration {
+    final method = registrationMethod(OnboardingIdentityMethodId.handleOnly);
+    return method != null && !method.verification.required &&
+        method.verification.type == OnboardingVerificationType.none;
+  }
+
   bool get supportsPhoneHandleRecovery =>
       identity.handleRecovery.supportsPhoneOtp;
 }

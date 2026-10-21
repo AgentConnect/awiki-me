@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "default_slot": "primary",
+  "tenants": {
+    "primary": {
+      "display_name": {
+        "zh-CN": "MCP 新加坡联调",
+        "en": "MCP Singapore Test"
+      },
+      "backend_origin": "https://mcp-adapt.anpclaw.com",
+      "did_host": "mcp-adapt.anpclaw.com"
+    },
+    "secondary": {
+      "display_name": {
+        "zh-CN": "未配置（测试占位）",
+        "en": "Unconfigured test slot"
+      },
+      "backend_origin": "https://mcp-adapt-disabled.invalid",
+      "did_host": "mcp-adapt-disabled.invalid"
+    }
+  }
+}

@@ -88,7 +88,30 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final state = ref.watch(profileProvider);
     final profile = state.profile;
     if (profile == null) {
-      return const Center(child: CupertinoActivityIndicator());
+      return Center(
+        child: state.isLoading
+            ? const CupertinoActivityIndicator()
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    (state.loadError ?? AppMessage.operationFailedRetry())
+                        .resolve(context.l10n),
+                  ),
+                  CupertinoButton(
+                    key: const Key('profile-load-retry'),
+                    onPressed: () async {
+                      try {
+                        await ref.read(profileProvider.notifier).refresh();
+                      } catch (_) {
+                        // The provider retains a localized error for retry.
+                      }
+                    },
+                    child: Text(context.l10n.commonRetry),
+                  ),
+                ],
+              ),
+      );
     }
     _syncHomepage(profile);
     _syncRelationshipCounts();

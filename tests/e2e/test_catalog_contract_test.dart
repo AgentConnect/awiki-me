@@ -6,6 +6,27 @@ import 'test_catalog.dart';
 import 'runner/manifest.dart';
 
 void main() {
+  test('capability candidate is an explicit direct target only', () {
+    final suites = DesktopE2eSuiteManifest.load(Directory.current).definitions;
+    const domain = 'backend-adapt.anpclaw.com';
+    expect(
+      () => suites['direct']!.validateRemoteTargetValues(
+        didDomain: domain,
+        serviceUrls: const ['https://$domain'],
+      ),
+      returnsNormally,
+    );
+    for (final suite in ['group', 'multi-device-remote-join']) {
+      expect(suites[suite]!.allowedDidDomains, isNot(contains(domain)));
+    }
+    expect(
+      () => suites['direct']!.validateRemoteTargetValues(
+        didDomain: domain,
+        serviceUrls: const ['http://$domain'],
+      ),
+      throwsA(isA<Exception>()),
+    );
+  });
   test(
     'full E2E entry covers all active oracles without duplicate execution',
     () {

@@ -2349,8 +2349,14 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinApprove.
   ///
   /// In zh, this message translates to:
-  /// **'允许加入并成为管理设备'**
+  /// **'核对用途并批准加入'**
   String get deviceJoinApprove;
+
+  /// No description provided for @deviceJoinMessageOnlyPresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许该设备仅用于消息通信，不授予根密钥或身份管理权限'**
+  String get deviceJoinMessageOnlyPresenceReason;
 
   /// No description provided for @deviceJoinCancel.
   ///
@@ -4971,7 +4977,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentTenantUnsupportedSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'请回到登录页切换到已批准 AWiki 域名的租户后，再管理 Daemon 和智能体。'**
+  /// **'请切换到支持智能体功能的服务器后，再管理 Daemon 和智能体。'**
   String get agentTenantUnsupportedSubtitle;
 
   /// No description provided for @agentErrorTenantUnsupported.
@@ -4979,6 +4985,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前租户暂不支持智能体功能。'**
   String get agentErrorTenantUnsupported;
+
+  /// No description provided for @agentErrorDaemonUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'此服务器暂不支持 Daemon。'**
+  String get agentErrorDaemonUnsupported;
 
   /// No description provided for @agentErrorSelectDaemon.
   ///
@@ -7611,6 +7623,138 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'作为普通设备加入，之后可由管理设备授予管理权限'**
   String get deviceJoinStepJoinSub;
+
+  /// No description provided for @serverFeaturesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器功能'**
+  String get serverFeaturesTitle;
+
+  /// No description provided for @serverFeaturesSupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'可用'**
+  String get serverFeaturesSupported;
+
+  /// No description provided for @serverFeaturesUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'此服务器暂不支持'**
+  String get serverFeaturesUnsupported;
+
+  /// No description provided for @serverFeaturesUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未确认，请稍后重试'**
+  String get serverFeaturesUnknown;
+
+  /// No description provided for @serverFeaturesStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法更新，正在显示最近确认的功能。'**
+  String get serverFeaturesStale;
+
+  /// No description provided for @serverFeaturesMessaging.
+  ///
+  /// In zh, this message translates to:
+  /// **'普通聊天'**
+  String get serverFeaturesMessaging;
+
+  /// No description provided for @serverFeaturesGroups.
+  ///
+  /// In zh, this message translates to:
+  /// **'群聊'**
+  String get serverFeaturesGroups;
+
+  /// No description provided for @serverFeaturesAttachments.
+  ///
+  /// In zh, this message translates to:
+  /// **'附件'**
+  String get serverFeaturesAttachments;
+
+  /// No description provided for @serverFeaturesEncryption.
+  ///
+  /// In zh, this message translates to:
+  /// **'私聊加密'**
+  String get serverFeaturesEncryption;
+
+  /// No description provided for @serverFeaturesGroupEncryption.
+  ///
+  /// In zh, this message translates to:
+  /// **'加密群'**
+  String get serverFeaturesGroupEncryption;
+
+  /// No description provided for @serverFeaturesDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'多设备登录'**
+  String get serverFeaturesDevices;
+
+  /// No description provided for @serverFeaturesAgents.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agent'**
+  String get serverFeaturesAgents;
+
+  /// No description provided for @serverFeaturesMail.
+  ///
+  /// In zh, this message translates to:
+  /// **'邮件'**
+  String get serverFeaturesMail;
+
+  /// No description provided for @serverFeaturesUpdates.
+  ///
+  /// In zh, this message translates to:
+  /// **'客户端更新'**
+  String get serverFeaturesUpdates;
+
+  /// No description provided for @serverFeaturesPages.
+  ///
+  /// In zh, this message translates to:
+  /// **'内容与站点'**
+  String get serverFeaturesPages;
+
+  /// No description provided for @onboardingHandleOnlyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'此服务器可直接使用用户名注册，无需手机号或邮箱。\n登录后可查看聊天等功能的支持情况。'**
+  String get onboardingHandleOnlyHint;
+
+  /// No description provided for @serverFeaturesSummaryDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录后可在“服务器功能”查看聊天与加密能力。'**
+  String get serverFeaturesSummaryDetail;
+
+  /// No description provided for @serverFeaturesUpgradeRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器需要升级后才能确认功能。本机身份与历史仍可使用。'**
+  String get serverFeaturesUpgradeRequired;
+
+  /// No description provided for @serverFeaturesUpdatedAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次确认：{time}'**
+  String serverFeaturesUpdatedAt(String time);
+
+  /// No description provided for @serverFeaturesAccountSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'账户与服务功能'**
+  String get serverFeaturesAccountSource;
+
+  /// No description provided for @serverFeaturesMessageSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'聊天与加密功能'**
+  String get serverFeaturesMessageSource;
+
+  /// No description provided for @groupMemberLimitExceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'群人数上限超过服务器允许的范围，请调整后重试。'**
+  String get groupMemberLimitExceeded;
 }
 
 class _AppLocalizationsDelegate

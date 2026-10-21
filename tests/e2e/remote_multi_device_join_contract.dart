@@ -11,7 +11,9 @@ const String _cliApprovalSasPrefix =
 const String _cliApprovalSasInputPrompt =
     'Type the same 6-digit SAS to continue: ';
 const String _cliApprovalConfirmationPrompt =
-    'Type APPROVE to allow this device to join and become a management device: ';
+    'Type APPROVE to join and configure identity management on this device: ';
+const String _cliMessageOnlyConfirmationPrompt =
+    'Type APPROVE to join for messaging only (no root key or management permission): ';
 
 Duration remoteMultiDeviceOtpRetryDelay(String? retryAfter) {
   final parsed = int.tryParse(retryAfter?.trim() ?? '');
@@ -96,8 +98,18 @@ String? _cliSasAfterPrefix(List<int> transcript, String promptPrefix) {
 bool remoteMultiDeviceCliRequestsSasInput(List<int> transcript) =>
     _indexOfBytes(transcript, _cliApprovalSasInputPrompt.codeUnits) >= 0;
 
-bool remoteMultiDeviceCliRequestsApproval(List<int> transcript) =>
-    _indexOfBytes(transcript, _cliApprovalConfirmationPrompt.codeUnits) >= 0;
+bool remoteMultiDeviceCliRequestsApproval(
+  List<int> transcript, {
+  bool managementAllowed = true,
+}) =>
+    _indexOfBytes(
+      transcript,
+      (managementAllowed
+              ? _cliApprovalConfirmationPrompt
+              : _cliMessageOnlyConfirmationPrompt)
+          .codeUnits,
+    ) >=
+    0;
 
 int _indexOfBytes(List<int> haystack, List<int> needle) {
   if (needle.isEmpty || haystack.length < needle.length) {

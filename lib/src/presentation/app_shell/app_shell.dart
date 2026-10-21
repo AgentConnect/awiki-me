@@ -151,6 +151,7 @@ class _AppShellState extends ConsumerState<AppShell> {
           orElse: () => RealtimeConnectionStatus.idle,
         );
     final responsive = context.awikiResponsive;
+    final agentsEnabled = ref.watch(agentImEnabledProvider);
     final selectedDestination = ref.watch(shellDestinationProvider);
     final navigationController = ref.read(shellDestinationProvider.notifier);
     final visibleConversations = personalAgentVisibleConversations(
@@ -215,6 +216,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     _retainedDestinations.add(destination);
 
     final bottomNav = _BottomNavBar(
+      agentsEnabled: agentsEnabled,
       currentDestination: destination,
       unreadCount: unreadCount,
       onTap: (next) {
@@ -258,6 +260,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         };
     final content = expanded
         ? _DesktopShell(
+            agentsEnabled: agentsEnabled,
             currentDestination: destination,
             unreadCount: unreadCount,
             session: session.session,
@@ -732,6 +735,7 @@ class _RetainedDestinationPage extends StatelessWidget {
 class _DesktopShell extends StatelessWidget {
   const _DesktopShell({
     required this.currentDestination,
+    required this.agentsEnabled,
     required this.unreadCount,
     required this.session,
     required this.profile,
@@ -742,6 +746,7 @@ class _DesktopShell extends StatelessWidget {
   });
 
   final ShellDestination currentDestination;
+  final bool agentsEnabled;
   final int unreadCount;
   final SessionIdentity? session;
   final UserProfile? profile;
@@ -763,6 +768,7 @@ class _DesktopShell extends StatelessWidget {
           key: const Key('mac-desktop-rail-slot'),
           width: railWidth,
           child: _DesktopRail(
+            agentsEnabled: agentsEnabled,
             currentDestination: currentDestination,
             unreadCount: unreadCount,
             session: session,
@@ -846,6 +852,7 @@ class _MacWindowChromeSyncState extends State<_MacWindowChromeSync> {
 class _DesktopRail extends StatelessWidget {
   const _DesktopRail({
     required this.currentDestination,
+    required this.agentsEnabled,
     required this.unreadCount,
     required this.session,
     required this.profile,
@@ -855,6 +862,7 @@ class _DesktopRail extends StatelessWidget {
   });
 
   final ShellDestination currentDestination;
+  final bool agentsEnabled;
   final int unreadCount;
   final SessionIdentity? session;
   final UserProfile? profile;
@@ -923,15 +931,16 @@ class _DesktopRail extends StatelessWidget {
                           onTap: () => onTap(ShellDestination.messages),
                         ),
                         SizedBox(height: gap),
-                        _DesktopRailItem(
-                          key: const Key('desktop-rail-agents'),
-                          role: AwikiMeIconRole.agents,
-                          label: context.l10n.shellNavAgents,
-                          selected:
-                              currentDestination == ShellDestination.agents,
-                          semanticsIdentifier: 'e2e-agents-tab',
-                          onTap: () => onTap(ShellDestination.agents),
-                        ),
+                        if (agentsEnabled)
+                          _DesktopRailItem(
+                            key: const Key('desktop-rail-agents'),
+                            role: AwikiMeIconRole.agents,
+                            label: context.l10n.shellNavAgents,
+                            selected:
+                                currentDestination == ShellDestination.agents,
+                            semanticsIdentifier: 'e2e-agents-tab',
+                            onTap: () => onTap(ShellDestination.agents),
+                          ),
                         SizedBox(height: gap),
                         _DesktopRailItem(
                           key: const Key('desktop-rail-contacts'),
@@ -1282,6 +1291,7 @@ double _compactTabBarInset(BuildContext context) =>
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
     required this.currentDestination,
+    required this.agentsEnabled,
     required this.unreadCount,
     required this.onTap,
   });
@@ -1294,13 +1304,17 @@ class _BottomNavBar extends StatelessWidget {
   ];
 
   final ShellDestination currentDestination;
+  final bool agentsEnabled;
   final int unreadCount;
   final ValueChanged<ShellDestination> onTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final selectedIndex = _order.indexOf(currentDestination);
+    final order = _order
+        .where((item) => agentsEnabled || item != ShellDestination.agents)
+        .toList(growable: false);
+    final selectedIndex = order.indexOf(currentDestination);
     const radius = BorderRadius.all(Radius.circular(_compactTabBarHeight / 2));
     return Padding(
       padding: EdgeInsets.fromLTRB(14, 0, 14, _compactTabBarGap(context)),
@@ -1312,7 +1326,7 @@ class _BottomNavBar extends StatelessWidget {
           padding: const EdgeInsets.all(5),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final slot = constraints.maxWidth / _order.length;
+              final slot = constraints.maxWidth / order.length;
               return Stack(
                 children: <Widget>[
                   if (selectedIndex >= 0)
@@ -1337,7 +1351,7 @@ class _BottomNavBar extends StatelessWidget {
                     ),
                   Row(
                     children: <Widget>[
-                      for (final destination in _order)
+                      for (final destination in order)
                         Expanded(
                           child: switch (destination) {
                             ShellDestination.messages => _BottomNavItem(

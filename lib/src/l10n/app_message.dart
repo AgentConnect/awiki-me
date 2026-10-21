@@ -323,6 +323,10 @@ class AppMessage {
         break;
     }
 
+    if (raw.contains('group.max_members_exceeded') ||
+        raw.contains('backend.groups.limit_exceeded')) {
+      return const AppMessage._('groupMemberLimitExceeded');
+    }
     if (raw == 'email_not_activated' || raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
       return AppMessage.emailNotActivatedClickLink();
     }
@@ -541,6 +545,8 @@ class AppMessage {
         return l10n.identityDeletionConflict;
       case 'handleRecoveryUnavailable':
         return l10n.handleRecoveryUnavailable;
+      case 'groupMemberLimitExceeded':
+        return l10n.groupMemberLimitExceeded;
       case 'sessionExpiredRelogin':
         return l10n.sessionExpiredRelogin;
       case 'didNotFoundOrRevoked':

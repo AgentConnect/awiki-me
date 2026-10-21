@@ -68,6 +68,8 @@ class JoinAdminResponseGateService extends DeviceManagementService {
     required String displayedSas,
     required bool sasConfirmed,
     required String presenceReason,
+    String messageOnlyPresenceReason =
+        'Allow this device to join for messaging only; no root key or management access',
   }) async {
     final response = await super.approveAsMember(
       selector: selector,
@@ -75,6 +77,7 @@ class JoinAdminResponseGateService extends DeviceManagementService {
       displayedSas: displayedSas,
       sasConfirmed: sasConfirmed,
       presenceReason: presenceReason,
+      messageOnlyPresenceReason: messageOnlyPresenceReason,
     );
     final release = _releaseApproval;
     if (release != null && !approvalCaptured) {

@@ -1,3 +1,4 @@
+import '../server_features/backend_capabilities_provider.dart';
 // [INPUT]: Session identity with exact local ID, Device Registry/Join/revoke services, root-transfer service, and UI intents.
 // [OUTPUT]: Secret-free device list, Join continuity, revoke, and admin-readiness presentation state.
 // [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
@@ -225,6 +226,30 @@ class DevicesController extends StateNotifier<DevicesState> {
       appLifecycleProvider,
       _handleLifecycleChanged,
     );
+    _capabilitySubscription = ref.listen<AsyncValue<BackendFeatures>>(
+      backendFeaturesProvider,
+      (previous, next) {
+        final wasSupported =
+            previous?.valueOrNull?.supports('identity.multi_device') ?? false;
+        final supported =
+            next.valueOrNull?.supports('identity.multi_device') ?? false;
+        final epoch = _sessionEpoch;
+        scheduleMicrotask(() {
+          if (!mounted || epoch != _sessionEpoch) return;
+          if (supported &&
+              !wasSupported &&
+              _managementRequested &&
+              (_managementPaused || !_managementAttempted)) {
+            _managementPaused = false;
+            unawaited(loadManagement());
+          } else if (!supported && wasSupported && _managementRequested) {
+            _managementPaused = true;
+            _generation += 1;
+            state = state.copyWith(isLoading: false);
+          }
+        });
+      },
+    );
   }
 
   final Ref ref;
@@ -241,6 +266,8 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool _revokeRpcCompleted = false;
   late String _sessionKey;
   late final ProviderSubscription<SessionState> _sessionSubscription;
+  late final ProviderSubscription<AsyncValue<BackendFeatures>>
+  _capabilitySubscription;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   String? _selectedAdminJoinSessionId;
 
@@ -263,6 +290,10 @@ class DevicesController extends StateNotifier<DevicesState> {
     if (nextKey == _sessionKey) return;
     _sessionKey = nextKey;
     _sessionEpoch += 1;
+    _managementLoad = null;
+    _managementRequested = false;
+    _managementAttempted = false;
+    _managementPaused = false;
     _generation += 1;
     _registryReadGeneration += 1;
     _lastAppliedRegistryReadGeneration = 0;
@@ -302,16 +333,40 @@ class DevicesController extends StateNotifier<DevicesState> {
   @override
   void dispose() {
     _sessionSubscription.close();
+    _capabilitySubscription.close();
     _lifecycleSubscription.close();
     super.dispose();
   }
 
-  Future<void> loadManagement() async {
+  Future<void>? _managementLoad;
+  bool _managementRequested = false;
+  bool _managementAttempted = false;
+  bool _managementPaused = false;
+  Future<void> loadManagement() {
+    _managementRequested = true;
+    final active = _managementLoad;
+    if (active != null) return active;
+    final operation = _loadManagement();
+    _managementLoad = operation;
+    return operation.whenComplete(() {
+      if (identical(_managementLoad, operation)) _managementLoad = null;
+    });
+  }
+
+  Future<void> _loadManagement() async {
+    final capabilityEpoch = _sessionEpoch;
+    final features = await ref.read(backendFeaturesFutureProvider);
+    if (!mounted ||
+        capabilityEpoch != _sessionEpoch ||
+        !features.supports('identity.multi_device')) {
+      return;
+    }
     final selector = _selector;
     if (selector == null) {
       state = state.copyWith(error: DeviceManagementErrorKind.unavailable);
       return;
     }
+    _managementAttempted = true;
     final generation = ++_generation;
     final registryReadGeneration = ++_registryReadGeneration;
     final hadAuthoritativeRegistry = state.registry != null;
@@ -593,6 +648,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   Future<bool> beginNewDeviceJoin({
     required String handle,
     required String phone,
+    String? email,
     required String otp,
     String presenceReason = 'Confirm Handle Recovery authorized Join',
   }) async {
@@ -607,7 +663,19 @@ class DevicesController extends StateNotifier<DevicesState> {
       final deviceService = ref.read(deviceManagementServiceProvider);
       final operationId = _newOperationId('join');
       final recoveryScope = _recoveryScopeForHandle(handle);
-      final progress = recoveryScope == null
+      if (email != null && recoveryScope != null) {
+        throw const DeviceManagementException(
+          'email_recovery_join_not_supported',
+        );
+      }
+      final progress = email != null
+          ? await deviceService.beginNewDeviceJoinWithEmail(
+              handle: handle,
+              email: email,
+              otp: otp,
+              operationId: operationId,
+            )
+          : recoveryScope == null
           ? await deviceService.beginNewDeviceJoinWithSms(
               handle: handle,
               phone: phone,
@@ -770,6 +838,13 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool _managementProgressPending = false;
 
   Future<void> refreshManagementProgress() async {
+    final capabilityEpoch = _sessionEpoch;
+    final features = await ref.read(backendFeaturesFutureProvider);
+    if (!mounted ||
+        capabilityEpoch != _sessionEpoch ||
+        !features.supports('identity.multi_device')) {
+      return;
+    }
     if (_managementProgressPending ||
         state.isLoading ||
         state.isActionPending) {
@@ -867,6 +942,8 @@ class DevicesController extends StateNotifier<DevicesState> {
   Future<bool> approveActiveAsMember({
     required bool sasConfirmed,
     required String presenceReason,
+    String messageOnlyPresenceReason =
+        "Allow messaging only; no identity management access",
   }) async {
     final selector = _selector;
     final progress = state.activeJoin;
@@ -883,6 +960,7 @@ class DevicesController extends StateNotifier<DevicesState> {
             displayedSas: progress.sas!,
             sasConfirmed: sasConfirmed,
             presenceReason: presenceReason,
+            messageOnlyPresenceReason: messageOnlyPresenceReason,
           );
       if (!mounted) return false;
       state = state.copyWith(activeJoin: next);

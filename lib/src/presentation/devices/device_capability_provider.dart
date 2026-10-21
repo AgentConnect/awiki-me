@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../server_features/backend_capabilities_provider.dart';
 import '../../application/ports/device_capability_upgrade_port.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -22,6 +23,10 @@ final deviceCapabilityProvider =
       }
       var current = true;
       ref.onDispose(() => current = false);
+      final features = await ref.watch(backendFeaturesFutureProvider);
+      if (!current || !features.supports('identity.capability_upgrade')) {
+        return null;
+      }
       final upgrades = port as DeviceCapabilityUpgradePort;
       var status = await upgrades.inspectDeviceCapabilities(
         identityId,

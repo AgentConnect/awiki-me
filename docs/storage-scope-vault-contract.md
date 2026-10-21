@@ -589,3 +589,31 @@ Onboarding support 与 bootstrap 的有效 environment 绑定，`server-info` �
 返回的有效 phone/email 方法，最终注册准入仍由 Core 调用 User Service 原子执行。
 
 对于联系人类型受限的客户域，已有账号入口先对精确 Handle 做公开 existing 检查，再读取未带 registration_domain 的部署验证渠道，以保留既有登录/Join 的正常因子。该显示路径不授予身份或新建资格；发送与注册前仍复核 existing 分支，服务端保留最终域策略。切换 Handle 时恢复域名注册发现，异步结果用请求 revision 防止旧加载覆盖新模式。
+
+## 能力发现的租户隔离
+
+后端能力由 Core 提供，APP 通过 BackendCapabilitiesPort 消费安全投影。
+backendFeaturesProvider 以当前 Core port 与 session generation 选择独立异步提供者，
+切换后不沿用上一租户 AsyncValue 的 data。运行时再次核对客户端实例，迟到响应拒绝更新。
+同上下文刷新沿用 Core 的 confirmed/stale 状态；注册发现也只保留相同流程上下文的旧结果。
+
+服务器功能页面使用同一投影展示已确认、关闭和未确认状态；独立 Agent 入口、设备操作、
+加密选项与账户同步按声明判断。关闭账户同步时仍发布本地缓存，不伪造远端 reconcile 成功。
+明确没有更新政策是正常状态，已缓存最低版本仍有效。持久化的 `unavailable` 表示当前
+政策来源未提供政策，与是否持有已验证 manifest 相互独立；允许 unavailable 与旧 manifest
+同时存在。重启读取必须恢复这两个事实，离线刷新仍执行缓存最低版本限制。来源、revision
+及 URI 校验继续生效；非布尔 availability、可用但没有 manifest 等不一致记录不能作为
+已验证政策。调整最低版本要求需通过既有权威政策替换路径，不能由能力关闭标志隐式撤销。
+状态变化不删除身份、历史或草稿。
+
+
+### 能力缓存恢复与新增租户摘要
+
+APP 从 Core 的只读快照及独立公开/消息状态流恢复展示，刷新不销毁已有能力或本地会话。
+未确认只显示局部连接状态；设备页不因加载状态跳到功能页。能力变化补启动 Agent、账户
+同步、设备读取及加密群状态，异步结果继续受租户/会话代次约束。账户同步暂停保留版本
+要求及未完成工作，不写完成时间。普通发现故障只在主动打开的服务器功能页显示。
+
+新增自定义租户以 `capability_summary_pending` 标记首次连接摘要；旧 profile 缺省为 false，
+不因升级重跑新增流程。公开能力确认后显示两行非模态摘要并记录已展示；登录后的消息
+能力只在功能页补齐，不追加弹窗。该标记是租户展示元数据，不涉及 Core 身份/消息 schema。

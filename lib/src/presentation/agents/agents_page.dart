@@ -107,7 +107,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       return;
     }
     await _agentsController.ensureLoaded();
-    if (_disposed || !mounted) {
+    if (_disposed || !mounted || !ref.read(agentImEnabledProvider)) {
       return;
     }
     _agentsController.startInventoryObservation();
@@ -134,10 +134,22 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(agentImEnabledProvider, (previous, enabled) {
+      scheduleMicrotask(() {
+        if (_disposed || !mounted) return;
+        if (enabled) {
+          unawaited(_ensureLoadedAndWatchForHostInstall());
+        } else {
+          _agentsController.stopInventoryAutoSync();
+          _agentsController.stopInventoryObservation();
+        }
+      });
+    });
     final agentsEnabled = ref.watch(agentImEnabledProvider);
     if (!agentsEnabled) {
       return const _AgentsTenantUnsupportedView();
     }
+    final daemonEnabled = ref.watch(daemonBackendEnabledProvider);
     final personalAgentVisible = ref.watch(personalAgentFeatureVisibleProvider);
     ref.listen<AgentsState>(agentsProvider, (previous, next) {
       final command = next.installCommand;
@@ -189,8 +201,9 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       footer: widget.listFooter,
       pendingAgentDids: pendingAgentDids,
       selectedAgentDid: selectedAgentDidForList,
-      onCreateDaemon: () =>
-          ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
+      onCreateDaemon: daemonEnabled
+          ? () => ref.read(agentsProvider.notifier).createDaemonInstallCommand()
+          : null,
       onCreateSkill: () {
         if (_skillDialogOpen) {
           return;
@@ -224,8 +237,9 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
         agent,
         state.runtimesFor(agent.agentDid),
       ),
-      onInstallDaemon: () =>
-          ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
+      onInstallDaemon: daemonEnabled
+          ? () => ref.read(agentsProvider.notifier).createDaemonInstallCommand()
+          : null,
       onOpenChat: (agent) => _openRuntimeChat(context, ref, agent),
       onRename: (agent) => _showRenameAgentDialog(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),

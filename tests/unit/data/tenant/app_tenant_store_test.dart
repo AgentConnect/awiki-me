@@ -67,6 +67,36 @@ void main() {
     },
   );
 
+  test(
+    'only newly added tenants persist a pending capability summary',
+    () async {
+      final initial = await store.loadRegistry();
+      expect(
+        initial.tenants.every((tenant) => !tenant.capabilitySummaryPending),
+        isTrue,
+      );
+      final created = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Capability tenant',
+          backendBaseUrl: 'https://capability.example',
+          didHost: 'capability.example',
+        ),
+      );
+      final added = created.tenants.singleWhere(
+        (tenant) => tenant.name == 'Capability tenant',
+      );
+      expect(added.capabilitySummaryPending, isTrue);
+      final seen = await store.markCapabilitySummarySeen(added.id);
+      expect(seen.activeTenant.id, initial.activeTenant.id);
+      expect(
+        (await store.loadRegistry()).tenants
+            .singleWhere((tenant) => tenant.id == added.id)
+            .capabilitySummaryPending,
+        isFalse,
+      );
+    },
+  );
+
   test('explicit test realm binds the fresh built-in scope manifest', () async {
     store = AppTenantStore(
       appStateRoot: root.path,

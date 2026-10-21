@@ -146,7 +146,7 @@ class ImCoreOnboardingService implements OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   }) async {
-    _normalizePhone(phone);
+    if (phone.trim().isNotEmpty) _normalizePhone(phone);
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
       final result = await _identities.registerHandleWithoutContactVerification(
