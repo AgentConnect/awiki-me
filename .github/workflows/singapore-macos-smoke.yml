@@ -165,10 +165,12 @@ jobs:
           adb logcat -c
           adb shell monkey -p ai.awiki.awikime -c android.intent.category.LAUNCHER 1
           sleep 15
+          # Capture startup/crash output even when the process already died.
+          adb logcat -d > "$RUNNER_TEMP/app-startup.log"
           pid=$(adb shell pidof ai.awiki.awikime | tr -d '\r')
           test -n "$pid"
-          adb logcat -d --pid="$pid" > "$RUNNER_TEMP/app-startup.log"
-          if grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGSEGV|UnsatisfiedLink|dlopen failed|native crash' "$RUNNER_TEMP/app-startup.log"; then exit 1; fi
+          adb logcat -d --pid="$pid" > "$RUNNER_TEMP/app-current-process.log"
+          if grep -Ei 'FATAL EXCEPTION|Fatal signal|SIGSEGV|UnsatisfiedLink|dlopen failed|native crash' "$RUNNER_TEMP/app-current-process.log"; then exit 1; fi
           adb shell am force-stop ai.awiki.awikime
           adb uninstall ai.awiki.awikime
           echo 'Exact signed arm64 APK installed and started through Android ARM native bridge; physical-device acceptance remains manual.'
