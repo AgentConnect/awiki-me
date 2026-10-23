@@ -1,3 +1,4 @@
+import 'network_settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,6 +28,7 @@ class _SettingsWorkspacePageState extends ConsumerState<SettingsWorkspacePage> {
     final content = switch (_selected) {
       SettingsDetail.serverFeatures => const ServerFeaturesPage(embedded: true),
       SettingsDetail.devices => const DevicesPage(embedded: true),
+      SettingsDetail.network => const NetworkSettingsPage(embedded: true),
       SettingsDetail.language => const LanguageSelectionPage(embedded: true),
       _ => const DisplaySettingsPage(embedded: true),
     };

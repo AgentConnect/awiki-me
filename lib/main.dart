@@ -1,3 +1,4 @@
+import 'src/data/services/desktop_network_preference.dart';
 import 'dart:async';
 import 'src/data/avatar/avatar_picker_recovery.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   unawaited(AvatarPickerRecovery.instance.initialize());
   await initializeBuiltinTenantCatalog();
+  if (supportsDesktopNetwork)
+    await DesktopNetworkPreference.instance.initialize();
   AwikiPerformanceLogger.registerFrameTimings();
   AwikiPerformanceLogger.log(
     'main.start',

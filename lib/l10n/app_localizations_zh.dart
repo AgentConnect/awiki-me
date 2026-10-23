@@ -4129,4 +4129,25 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get groupMemberLimitExceeded => '群人数上限超过服务器允许的范围，请调整后重试。';
+
+  @override
+  String get settingsNetwork => '网络';
+
+  @override
+  String get settingsUseSystemProxy => '使用系统代理';
+
+  @override
+  String get settingsSystemProxyDescription => '优先使用系统代理，不可用时尝试直接连接。';
+
+  @override
+  String get settingsNetworkSystemProxy => '系统代理';
+
+  @override
+  String get settingsNetworkDirect => '直接连接';
+
+  @override
+  String get settingsNetworkFallback => '代理不可用已回退';
+
+  @override
+  String get settingsNetworkSaveFailed => '网络设置保存失败，请重试。';
 }

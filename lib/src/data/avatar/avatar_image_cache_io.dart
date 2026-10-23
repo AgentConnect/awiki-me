@@ -1,3 +1,6 @@
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
+import '../services/app_http_client.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -48,9 +51,7 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
     HttpClient? client,
     Directory? directory,
   }) : _owner = sha256.convert(utf8.encode(owner)).toString(),
-       _http =
-           client ??
-           (HttpClient()..connectionTimeout = const Duration(seconds: 8)),
+       _http = client != null ? IOClient(client) : createAppHttpClient(),
        _root = directory == null ? null : Future.value(directory) {
     _epoch = _ownerEpochs[_owner] ?? 0;
   }
@@ -71,7 +72,7 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
   }
 
   final String _owner;
-  final HttpClient _http;
+  final http.Client _http;
   final _memory = <String, _DecodedAvatar>{};
   final _pending = <String, Future<ui.Image?>>{};
   final _bytePending = <String, Future<(Uint8List, DateTime, String?, bool)>>{};
@@ -332,79 +333,82 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
     int byteLimit = _downloadLimit,
     bool allowGif = false,
   }) async {
-    HttpClientRequest? active;
+    Completer<void>? active;
     var expired = false;
     final timeout = Timer(const Duration(seconds: 20), () {
       expired = true;
-      active?.abort(const FormatException('avatar.timeout'));
+      if (active?.isCompleted == false) active!.complete();
     });
     try {
       for (var redirects = 0; redirects <= 3; redirects++) {
         if (_inactive || expired || safeAvatarUri(uri.toString()) == null) {
           throw const FormatException('avatar.uri');
         }
-        final request = await _http.getUrl(uri);
-        active = request;
+        final abort = Completer<void>();
+        active = abort;
+        final request = http.AbortableRequest(
+          'GET',
+          uri,
+          abortTrigger: abort.future,
+        )..followRedirects = false;
         if (expired) {
-          request.abort();
+          abort.complete();
           throw const FormatException('avatar.timeout');
         }
-        request.followRedirects = false;
-        request.headers.set(
-          HttpHeaders.acceptHeader,
-          allowGif
-              ? 'image/gif,image/jpeg,image/png,image/webp'
-              : 'image/jpeg,image/png,image/webp',
-        );
+        request.headers[HttpHeaders.acceptHeader] = allowGif
+            ? 'image/gif,image/jpeg,image/png,image/webp'
+            : 'image/jpeg,image/png,image/webp';
         if (previous != null && etag != null && etag.length <= 512) {
-          request.headers.set(HttpHeaders.ifNoneMatchHeader, etag);
+          request.headers[HttpHeaders.ifNoneMatchHeader] = etag;
         }
-        final response = await request.close();
+        final response = await _http.send(request);
         if ([301, 302, 303, 307, 308].contains(response.statusCode)) {
-          final location = response.headers.value(HttpHeaders.locationHeader);
-          await response.detachSocket().then((socket) => socket.destroy());
+          final location = response.headers[HttpHeaders.locationHeader];
+          await response.stream.listen(null).cancel();
           if (location == null) throw const FormatException('avatar.redirect');
           uri = uri.resolve(location);
-          // Validators belong to the exact origin resource.
           etag = null;
           previous = null;
           continue;
         }
         final policy =
-            response.headers
-                .value(HttpHeaders.cacheControlHeader)
-                ?.toLowerCase() ??
+            response.headers[HttpHeaders.cacheControlHeader]?.toLowerCase() ??
             '';
         final maxAge = int.tryParse(
           RegExp(r'(?:^|[,\s])max-age=(\d+)').firstMatch(policy)?.group(1) ??
               '',
         );
-        final age = int.tryParse(response.headers.value('age') ?? '') ?? 0;
+        final age = int.tryParse(response.headers['age'] ?? '') ?? 0;
         final canStore = !policy.contains('no-store');
         final ttl = !canStore || policy.contains('no-cache')
             ? 0
             : ((maxAge ?? 300) - age).clamp(0, 604800);
         final until = DateTime.now().add(Duration(seconds: ttl));
         final nextEtag =
-            response.headers.value(HttpHeaders.etagHeader) ??
+            response.headers[HttpHeaders.etagHeader] ??
             (response.statusCode == 304 ? etag : null);
         if (response.statusCode == 304 && previous != null) {
-          await response.drain<void>();
+          await response.stream.drain<void>();
           return (previous, until, nextEtag, canStore);
         }
         if (response.statusCode != 200 ||
-            response.contentLength > byteLimit ||
+            (response.contentLength ?? -1) > byteLimit ||
             !{
               'image/jpeg',
               'image/png',
               'image/webp',
               if (allowGif) 'image/gif',
-            }.contains(response.headers.contentType?.mimeType)) {
-          await response.detachSocket().then((socket) => socket.destroy());
+            }.contains(
+              response.headers[HttpHeaders.contentTypeHeader]
+                  ?.split(';')
+                  .first
+                  .trim(),
+            )) {
+          await response.stream.listen(null).cancel();
           throw const FormatException('avatar.response');
         }
         final bytes = BytesBuilder(copy: false);
-        await for (final chunk in response) {
+        await for (final chunk in response.stream) {
           if (bytes.length + chunk.length > byteLimit) {
             throw const FormatException('avatar.byte_limit');
           }
@@ -461,7 +465,7 @@ class PlatformAvatarImageCache implements AvatarImageCache, AvatarByteCache {
   @override
   void dispose() {
     _disposed = true;
-    _http.close(force: true);
+    _http.close();
     for (final entry in _memory.values) {
       entry.image.dispose();
     }

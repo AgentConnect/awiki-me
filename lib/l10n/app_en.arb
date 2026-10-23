@@ -1825,5 +1825,12 @@
   },
   "serverFeaturesAccountSource": "Account and services",
   "serverFeaturesMessageSource": "Chat and encryption",
-  "groupMemberLimitExceeded": "The group member limit exceeds the server limit. Adjust it and try again."
+  "groupMemberLimitExceeded": "The group member limit exceeds the server limit. Adjust it and try again.",
+  "settingsNetwork": "Network",
+  "settingsUseSystemProxy": "Use system proxy",
+  "settingsSystemProxyDescription": "Prefer the system proxy and try a direct connection if unavailable.",
+  "settingsNetworkSystemProxy": "System proxy",
+  "settingsNetworkDirect": "Direct connection",
+  "settingsNetworkFallback": "Proxy unavailable; using direct connection",
+  "settingsNetworkSaveFailed": "Could not save network settings. Try again."
 }

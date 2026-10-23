@@ -4444,4 +4444,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get groupMemberLimitExceeded =>
       'The group member limit exceeds the server limit. Adjust it and try again.';
+
+  @override
+  String get settingsNetwork => 'Network';
+
+  @override
+  String get settingsUseSystemProxy => 'Use system proxy';
+
+  @override
+  String get settingsSystemProxyDescription =>
+      'Prefer the system proxy and try a direct connection if unavailable.';
+
+  @override
+  String get settingsNetworkSystemProxy => 'System proxy';
+
+  @override
+  String get settingsNetworkDirect => 'Direct connection';
+
+  @override
+  String get settingsNetworkFallback =>
+      'Proxy unavailable; using direct connection';
+
+  @override
+  String get settingsNetworkSaveFailed =>
+      'Could not save network settings. Try again.';
 }
