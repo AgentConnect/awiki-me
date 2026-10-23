@@ -40,6 +40,7 @@ import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/chat/message_security_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
@@ -76,6 +77,17 @@ import 'acp_runtime_test.dart' show RecordingControl;
 Uint8List _tinyPngBytes() => base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
 );
+
+class _ControlledMessageSecurityController extends MessageSecurityController {
+  Completer<bool> result = Completer<bool>();
+  int buildCount = 0;
+
+  @override
+  Future<bool> build(String conversationId) {
+    buildCount++;
+    return result.future;
+  }
+}
 
 Future<void> _dismissCopyToast(WidgetTester tester) async {
   await tester.pump(const Duration(seconds: 8));
@@ -1427,6 +1439,203 @@ void main() {
           .onPressed,
       isNotNull,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final width in [320.0, 360.0, 390.0, 430.0]) {
+    for (final scale in [1.0, AwikiDisplayScale.max]) {
+      for (final brightness in Brightness.values) {
+        testWidgets('compact 加密按钮并入工具组 width=$width scale=$scale $brightness', (
+          tester,
+        ) async {
+          tester.view
+            ..devicePixelRatio = 1
+            ..physicalSize = Size(width, 844);
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          final conversation = _scrollConversation('dm:compact-security');
+          final theme = AwikiMeTheme.forPlatform(
+            TargetPlatform.android,
+            brightness: brightness,
+          );
+          await tester.pumpWidget(
+            buildLocalizedTestApp(
+              home: Theme(
+                data: theme.materialTheme,
+                child: CupertinoPageScaffold(
+                  child: ChatView(conversation: conversation, embedded: false),
+                ),
+              ),
+              session: const SessionIdentity(
+                did: 'did:test:me',
+                credentialName: 'default',
+                displayName: 'Me',
+              ),
+              applyDisplayScale: true,
+              providerOverrides: [
+                initialDisplayScaleProvider.overrideWithValue(scale),
+                backendFeaturesProvider.overrideWithValue(
+                  const AsyncData(
+                    BackendFeatures({
+                      'message': {
+                        'status': 'confirmed',
+                        'capabilities': {
+                          'direct_e2ee': {'support': 'supported'},
+                        },
+                      },
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          final tools = find.byKey(const Key('chat-compact-composer-tools'));
+          final security = find.byKey(const Key('chat-message-security'));
+          final emoji = find.byKey(const Key('chat-emoji-button'));
+          final input = find.byKey(
+            const Key('chat-compact-composer-input-shell'),
+          );
+          final send = find.byKey(const Key('chat-send-button'));
+          final field = find.byType(CupertinoTextField);
+          final effectiveScale = AwikiDisplayScale.effective(scale);
+
+          expect(
+            find.descendant(of: tools, matching: security),
+            findsOneWidget,
+          );
+          expect(tester.getSize(security), tester.getSize(emoji));
+          expect(tester.getSize(security), Size.square(40 * effectiveScale));
+          expect(
+            tester.getRect(security).center.dy,
+            closeTo(tester.getRect(tools).center.dy, 0.01),
+          );
+          expect(
+            tester.getRect(emoji).right,
+            lessThanOrEqualTo(tester.getRect(security).left),
+          );
+          expect(
+            tester.getRect(tools).right,
+            lessThan(tester.getRect(input).left),
+          );
+          expect(
+            tester.getRect(input).right,
+            lessThan(tester.getRect(send).left),
+          );
+          expect(tester.getRect(input).width, greaterThan(0));
+          // The placeholder itself can wrap at 320 px with maximum scaling.
+          await tester.enterText(field, 'a');
+          await tester.pumpAndSettle();
+          final singleLineHeight = tester.getSize(input).height;
+          var button = tester.widget<AppIconButton>(security);
+          expect(button.isActive, isFalse);
+          expect(
+            tester
+                .widget<Icon>(
+                  find.descendant(
+                    of: security,
+                    matching: find.byIcon(CupertinoIcons.lock_open),
+                  ),
+                )
+                .color,
+            theme.tokens.title,
+          );
+
+          await tester.enterText(field, '保留草稿');
+          await tester.tap(security);
+          await tester.pumpAndSettle();
+          button = tester.widget<AppIconButton>(security);
+          expect(button.isActive, isTrue);
+          expect(button.semanticLabel, '端到端加密，点击关闭');
+          expect(
+            tester
+                .widget<Icon>(
+                  find.descendant(
+                    of: security,
+                    matching: find.byIcon(CupertinoIcons.lock),
+                  ),
+                )
+                .color,
+            theme.tokens.primary,
+          );
+          expect(
+            tester.widget<CupertinoTextField>(field).controller!.text,
+            '保留草稿',
+          );
+
+          await tester.enterText(field, '这是一段自动换行的长草稿。' * 12);
+          await tester.pumpAndSettle();
+          expect(tester.getSize(input).height, greaterThan(singleLineHeight));
+          expect(
+            tester.getRect(tools).bottom,
+            closeTo(tester.getRect(input).bottom, 0.01),
+          );
+          expect(
+            tester.getRect(send).bottom,
+            closeTo(tester.getRect(input).bottom, 0.01),
+          );
+          await tester.tap(emoji);
+          await tester.pumpAndSettle();
+          expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+  }
+
+  testWidgets('compact 加密按钮加载和读取失败时保留组内位置及重试', (tester) async {
+    final conversation = _scrollConversation('dm:compact-security-loading');
+    final controller = _ControlledMessageSecurityController();
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        session: const SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: [
+          messageSecurityProvider.overrideWith(() => controller),
+          backendFeaturesProvider.overrideWithValue(
+            const AsyncData(
+              BackendFeatures({
+                'message': {
+                  'status': 'confirmed',
+                  'capabilities': {
+                    'direct_e2ee': {'support': 'supported'},
+                  },
+                },
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    final security = find.byKey(const Key('chat-message-security'));
+    final loadingRect = tester.getRect(security);
+    var button = tester.widget<AppIconButton>(security);
+    expect(button.isLoading, isTrue);
+    expect(button.onPressed, isNull);
+    expect(button.semanticLabel, '正在读取消息模式');
+    controller.result.completeError(StateError('test read failure'));
+    await tester.pumpAndSettle();
+    button = tester.widget<AppIconButton>(security);
+    expect(button.isLoading, isFalse);
+    expect(button.onPressed, isNotNull);
+    expect(button.semanticLabel, '消息模式读取失败，点击重试');
+    expect(tester.getRect(security), loadingRect);
+    controller.result = Completer<bool>();
+    await tester.tap(security);
+    await tester.pump();
+    expect(controller.buildCount, 2);
+    expect(tester.widget<AppIconButton>(security).isLoading, isTrue);
+    controller.result.complete(false);
+    await tester.pumpAndSettle();
+    expect(tester.widget<AppIconButton>(security).isLoading, isFalse);
     expect(tester.takeException(), isNull);
   });
 
@@ -9374,6 +9583,7 @@ void main() {
       'chat-attachment-button',
       'chat-emoji-button',
       'chat-screenshot-button',
+      'chat-message-security',
     ]) {
       final size = tester.getSize(find.byKey(Key(key)));
       expect(

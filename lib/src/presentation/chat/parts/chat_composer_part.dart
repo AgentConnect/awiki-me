@@ -111,7 +111,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         ref.watch(agentsProvider).agents,
       );
 
-  Widget _securitySelector() => Consumer(
+  Widget _securitySelector({bool compact = false}) => Consumer(
     builder: (context, ref, _) {
       final provider = messageSecurityProvider(
         widget.conversation.conversationId,
@@ -134,6 +134,38 @@ class _ComposerState extends ConsumerState<_Composer> {
           : encrypted
           ? '端到端加密，点击关闭'
           : '普通消息，点击开启端到端加密';
+      final VoidCallback? onPressed = !allowed || mode.isLoading
+          ? null
+          : () async {
+              if (mode.hasError) {
+                ref.invalidate(provider);
+                return;
+              }
+              try {
+                await setMessageSecurity(
+                  ref,
+                  widget.conversation.conversationId,
+                  !encrypted,
+                );
+              } catch (error) {
+                if (mounted) {
+                  ref
+                      .read(uiFeedbackProvider.notifier)
+                      .showError(AppMessage.fromError(error));
+                }
+              }
+            };
+      final icon = encrypted ? CupertinoIcons.lock : CupertinoIcons.lock_open;
+      if (compact) {
+        return _CompactComposerTool(
+          toolKey: const Key('chat-message-security'),
+          onPressed: onPressed,
+          label: label,
+          icon: icon,
+          active: encrypted,
+          isLoading: mode.isLoading,
+        );
+      }
       return AppIconButton(
         key: const Key('chat-message-security'),
         semanticLabel: label,
@@ -141,34 +173,10 @@ class _ComposerState extends ConsumerState<_Composer> {
         size: context.awikiResponsive.displayScaled(30),
         borderRadius: BorderRadius.circular(7),
         isActive: encrypted,
-        onPressed: !allowed || mode.isLoading
-            ? null
-            : () async {
-                if (mode.hasError) {
-                  ref.invalidate(provider);
-                  return;
-                }
-                try {
-                  await setMessageSecurity(
-                    ref,
-                    widget.conversation.conversationId,
-                    !encrypted,
-                  );
-                } catch (error) {
-                  if (mounted) {
-                    ref
-                        .read(uiFeedbackProvider.notifier)
-                        .showError(AppMessage.fromError(error));
-                  }
-                }
-              },
+        onPressed: onPressed,
         child: mode.isLoading
             ? const CupertinoActivityIndicator(radius: 7)
-            : Icon(
-                encrypted ? CupertinoIcons.lock : CupertinoIcons.lock_open,
-                size: 17,
-                color: context.awikiTheme.secondaryText,
-              ),
+            : Icon(icon, size: 17, color: context.awikiTheme.secondaryText),
       );
     },
   );
@@ -961,11 +969,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                                 active: _showEmojiPicker,
                               ),
                             ),
+                            if (showSecuritySelector)
+                              _securitySelector(compact: true),
                           ],
                         ),
                       ),
                     ),
-                    if (showSecuritySelector) _securitySelector(),
                     SizedBox(width: responsive.spacing(6)),
                     Expanded(
                       child: AwikiGlassSurface(
@@ -1061,6 +1070,7 @@ class _CompactComposerTool extends StatelessWidget {
     required this.label,
     required this.icon,
     this.active = false,
+    this.isLoading = false,
   });
 
   /// Stable key kept on the button itself for tests and platform drivers.
@@ -1069,6 +1079,7 @@ class _CompactComposerTool extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool active;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -1081,6 +1092,7 @@ class _CompactComposerTool extends StatelessWidget {
       tooltip: label,
       size: responsive.displayScaled(40),
       isActive: active,
+      isLoading: isLoading,
       borderRadius: BorderRadius.circular(999),
       child: Icon(
         icon,
