@@ -194,6 +194,12 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
 
 GroupMemberAdmissionException? mapCoreGroupMemberAdmissionError(Object error) {
   if (error is core.AwikiImCoreException &&
+      error.serviceCode == 'group.e2ee.state_not_ready') {
+    return const GroupMemberAdmissionException(
+      GroupMemberAdmissionDenialReason.groupEncryptionMaintenance,
+    );
+  }
+  if (error is core.AwikiImCoreException &&
       error.serviceCode == 'group.member_encryption_not_ready') {
     return const GroupMemberAdmissionException(
       GroupMemberAdmissionDenialReason.encryptionNotReady,

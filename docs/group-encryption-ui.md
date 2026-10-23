@@ -22,6 +22,11 @@
 环境不具备群加密能力时显示“暂不可用”。重试只调用 IM Core 的公共群安全修复入口，
 随后重新读取 Core 状态；App 不执行 Add、Welcome、Commit、Remove，也不自行推进 epoch。
 
+邀请时若 Core 返回 `group.e2ee.state_not_ready`，成员仍未加入，弹窗保留并提示
+“尚未加入：群聊正在更新成员的加密身份，请保持群主客户端在线，完成后重试”。
+该状态单独映射为 `groupEncryptionMaintenance`，不归因于被邀请人尚未准备加密或 Agent
+准入失败。群主 Core 根据权威状态完成接续；App 不绕过成员门禁或代替 Core 修复 MLS。
+
 ## 安全与启用边界
 
 编译期开关 `AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED` 默认保留 P6 capability，但它不是
@@ -53,3 +58,10 @@ dart run tests/e2e/runner.dart --case multi-device-remote-mls \
 `multi-device-remote-mls` suite：真实 AWiki Me owner 与独立 CLI Core root 覆盖
 Add/Welcome、未来文本和附件、精确设备 Remove。代码可执行不等于已有远端通过证据；
 rollout 或操作员前置条件未就绪时不得标记为 pass，Widget fake 也不能替代该证据。
+
+Recovery 群邀请回归需在配套新服务与新 Core 的候选中单独验证：既有加密群成员恢复身份，
+接续完成前再 Join 一台设备（覆盖新设备排序在冻结设备之前），保持原群主客户端在线；
+确认无需人工修改数据库即可先完成冻结设备 Add、旧 DID Remove，随后新增设备就绪。
+此期间邀请应明确显示“尚未加入”，收敛后重试可成功邀请 DSH 身份并双向解密群消息。
+再覆盖群主离线/重开、重复提示、冻结设备撤销时停止，不得把旧版本运行结果记为新代码通过。
+该链路涉及 Message Service、Core 和 App/DSH，单元/Widget 通过不能代替定向 System 与产品 E2E。

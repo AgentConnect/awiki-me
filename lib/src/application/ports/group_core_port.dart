@@ -9,6 +9,7 @@ enum GroupMemberAdmissionDenialReason {
   federatedGroupDenied,
   identityUnavailable,
   encryptionNotReady,
+  groupEncryptionMaintenance,
   unspecified,
 }
 
