@@ -1,10 +1,10 @@
-name: Singapore packaged app installation
+name: Packaged app installation smoke
 # Manual artifact verification only; does not build or publish products.
 on:
   workflow_dispatch:
     inputs:
       package_smoke_target:
-        description: Select only an outstanding artifact smoke target
+        description: Select an artifact installation smoke target
         required: false
         default: all
         type: choice
