@@ -1579,6 +1579,8 @@ void main() {
   });
 
   for (final entry in <GroupMemberAdmissionDenialReason, String>{
+    GroupMemberAdmissionDenialReason.groupEncryptionMaintenance:
+        '尚未加入：群聊正在更新成员的加密身份，请保持群主客户端在线，完成后重试',
     GroupMemberAdmissionDenialReason.unspecified: '服务器不允许此身份加入群聊',
     GroupMemberAdmissionDenialReason.federatedGroupDenied: '服务器策略不允许该外域身份加入群聊',
   }.entries) {

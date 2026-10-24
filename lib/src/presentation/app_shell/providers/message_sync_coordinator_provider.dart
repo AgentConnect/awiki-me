@@ -2184,10 +2184,19 @@ Set<String> _committedPushReferences(CommittedIncomingMessage message) {
   return references;
 }
 
+/// Bounded scheduler evidence; payloads, identity and credentials are excluded.
+final _messageSyncDiagnosticStages = <({String stage, DateTime at})>[];
+List<({String stage, DateTime at})> messageSyncDiagnosticStages() =>
+    List.unmodifiable(_messageSyncDiagnosticStages);
+
 void _messageSyncTrace(
   String event, {
   Map<String, Object?> fields = const <String, Object?>{},
 }) {
+  if (_messageSyncDiagnosticStages.length == 128) {
+    _messageSyncDiagnosticStages.removeAt(0);
+  }
+  _messageSyncDiagnosticStages.add((stage: event, at: DateTime.now().toUtc()));
   if (!_messageSyncCoordinatorTraceEnabled) {
     return;
   }

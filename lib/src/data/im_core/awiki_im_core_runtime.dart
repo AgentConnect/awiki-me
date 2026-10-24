@@ -1,3 +1,4 @@
+import '../services/desktop_network_preference.dart';
 // [INPUT]: Owner-scoped IM Core paths, Vault secret provider, endpoints, and optional capability gates.
 // [OUTPUT]: One validated native IM Core runtime and identity-scoped clients.
 // [POS]: AWiki Me's lifecycle owner for native Core; Handle Recovery is a product baseline.
@@ -53,6 +54,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
        _scopeId = scopeId,
        _vaultSecretProvider = vaultSecretProvider,
        multiDeviceAudience = _validatedMultiDeviceAudience(multiDeviceAudience),
+       _usesNativeCore = openCore == null,
        _openCore = openCore ?? core.AwikiImCore.open,
        _inspectLocalStateUpgrade =
            inspectLocalStateUpgrade ?? _inspectLocalStateUpgradeWithSdk,
@@ -68,6 +70,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final bool multiDeviceGroupE2eeEnabled;
   final String multiDeviceAudience;
   final AwikiImCoreOpen _openCore;
+  final bool _usesNativeCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
   final void Function(AwikiImCoreRuntimeProgress progress)? _onProgress;
@@ -133,6 +136,9 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     // required upgrade, it returns the stable alias mapping that lets the App
     // resume its independent overlay migration after a process crash.
     _localStateUpgradeResult = await _upgradeLocalState(corePaths);
+    if (_usesNativeCore && supportsDesktopNetwork) {
+      await DesktopNetworkPreference.instance.initialize();
+    }
     final opened = await _openCore(
       config: _config.toCoreConfig(),
       paths: corePaths,

@@ -1508,6 +1508,8 @@ String _groupInviteFailureText(
         l10n.groupInviteFederatedDenied,
       GroupMemberAdmissionDenialReason.encryptionNotReady =>
         '尚未加入：对方尚未完成加密准备，请对方打开客户端后重试',
+      GroupMemberAdmissionDenialReason.groupEncryptionMaintenance =>
+        '尚未加入：群聊正在更新成员的加密身份，请保持群主客户端在线，完成后重试',
       GroupMemberAdmissionDenialReason.identityUnavailable =>
         l10n.groupInviteIdentityUnavailable,
       _ => l10n.groupInviteAdmissionDenied,
