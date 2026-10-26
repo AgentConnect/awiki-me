@@ -857,6 +857,9 @@ Compact 输入栏将该按钮放在附件、表情之后，三者共用现有 44
 
 ### 加密群准备与建群弹窗（2026-10-10）
 
+成员邀请成功后的成员／Profile 投影刷新由 `GroupController.addGroupMember` 统一完成一次；
+邀请弹窗复用该结果，不在关闭前再串行执行同一成员刷新。Core 的准备状态与错误语义保持不变。
+
 建群窗口只拥有本次草稿；取消、Esc、蒙版和关闭均重置为空白普通群。已提交操作由 Core 持久化并续接，旧 UI preference 仅保留原 slug 交给 Core，不能恢复冻结的新表单。异步结果必须同时匹配 mounted 与 session epoch。
 
 创建返回后进入既有群，按 Core `secureStatus` 自动刷新。输入区内部的紧凑状态卡展示准备、等待成员/原群主、可恢复失败；就绪移除卡片，正常过程不显示刷新按钮。成员变更使旧发送许可立即失效，即使随后列表只带新成员版本而未带 secureStatus，也不能沿用旧许可。邀请 `operationJson` 映射为脱敏 GroupOperationSummary，用于区分尚未加入与已加入仍在准备；UI 不处理 MLS。

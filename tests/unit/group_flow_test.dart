@@ -74,6 +74,21 @@ class _AdmissionDeniedGroupService extends FakeGroupApplicationService {
   }
 }
 
+class _CountingMemberGroupService extends FakeGroupApplicationService {
+  _CountingMemberGroupService(super.gateway);
+  int listMembersCalls = 0;
+
+  @override
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
+    String groupDid, {
+    int limit = 100,
+    String? cursor,
+  }) {
+    listMembersCalls++;
+    return super.listMembers(groupDid, limit: limit, cursor: cursor);
+  }
+}
+
 class _DelayedRefreshGroupService extends FakeGroupApplicationService {
   _DelayedRefreshGroupService(super.gateway);
 
@@ -1133,11 +1148,15 @@ void main() {
         ],
       };
 
+    final service = _CountingMemberGroupService(gateway);
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: GroupDetailPage(initialGroup: gateway.groups.first),
         gateway: gateway,
         session: session,
+        providerOverrides: <Override>[
+          groupApplicationServiceProvider.overrideWithValue(service),
+        ],
       ),
     );
     await tester.pumpAndSettle();
@@ -1182,6 +1201,7 @@ void main() {
 
     await tester.tap(find.text('Bob'));
     await tester.pumpAndSettle();
+    final beforeInvite = service.listMembersCalls;
     await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
     await tester.pumpAndSettle();
 
@@ -1190,6 +1210,12 @@ void main() {
     expect(find.text('Bob'), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
+    expect(
+      service.listMembersCalls - beforeInvite,
+      1,
+      reason:
+          'the mutation owner refreshes members once; the dialog reuses that result',
+    );
   });
 
   testWidgets('群详情添加成员弹窗展示本地身份并支持多选确认', (tester) async {

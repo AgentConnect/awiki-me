@@ -266,12 +266,8 @@ class _GroupMemberInviteDialogState
     }
     if (latestGroup != null) {
       widget.onGroupUpdated(latestGroup);
-      try {
-        await ref.read(groupProvider.notifier).loadGroupMembers(widget.groupId);
-      } catch (_) {
-        // The updated group count is already available; member refresh is a
-        // best-effort follow-up so the dialog flow is not blocked by it.
-      }
+      // GroupController.addGroupMember already refreshes the member/Profile
+      // projection. Reuse it instead of serializing another identical read.
     }
     if (!mounted) {
       return;
