@@ -12,6 +12,35 @@ import 'package:flutter_test/flutter_test.dart';
 const scopeValue = '22222222-2222-4222-8222-222222222222';
 
 void main() {
+  test('concurrent and repeated callers reuse one tenant Core', () async {
+    final opened = _LateOpenCore();
+    final started = Completer<void>();
+    final release = Completer<core.AwikiImCore>();
+    var opens = 0;
+    final runtime = await _startupRuntime(
+      opened,
+      openCore: ({required config, required paths, openOptions}) {
+        opens++;
+        if (!started.isCompleted) started.complete();
+        return release.future;
+      },
+    );
+    final opening = runtime.open();
+    await started.future;
+    final waiting = List.generate(4, (_) => runtime.coreInstance());
+    release.complete(opened);
+    await opening;
+    for (final instance in await Future.wait(waiting)) {
+      expect(instance, same(opened));
+    }
+    for (var i = 0; i < 10; i++) {
+      await runtime.open();
+      expect(await runtime.coreInstance(), same(opened));
+    }
+    expect(opens, 1);
+    expect(opened.disposes, 0);
+  });
+
   test('Handle Recovery runtime requires an explicit valid audience', () {
     final layout = AwikiImCorePathLayout.fromRoots(
       appSupportRoot: '/tmp/awiki-runtime-audience-support',
@@ -568,7 +597,10 @@ void main() {
   });
 }
 
-Future<AwikiImCoreRuntime> _startupRuntime(core.AwikiImCore opened) async {
+Future<AwikiImCoreRuntime> _startupRuntime(
+  core.AwikiImCore opened, {
+  AwikiImCoreOpen? openCore,
+}) async {
   final root = await Directory.systemTemp.createTemp('awiki_startup_recovery_');
   addTearDown(() => root.delete(recursive: true));
   final scopeId = StorageScopeId.parse(scopeValue);
@@ -604,7 +636,9 @@ Future<AwikiImCoreRuntime> _startupRuntime(core.AwikiImCore opened) async {
       sourceSchemaVersion: 41,
       targetSchemaVersion: 41,
     ),
-    openCore: ({required config, required paths, openOptions}) async => opened,
+    openCore:
+        openCore ??
+        ({required config, required paths, openOptions}) async => opened,
   );
   addTearDown(runtime.dispose);
   return runtime;
