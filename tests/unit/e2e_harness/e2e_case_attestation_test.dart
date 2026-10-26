@@ -6,6 +6,54 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/case_attestation.dart';
 
 void main() {
+  test(
+    'scenario timing is additive, bounded, and preserves earlier phases',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki-progress-timing-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final attestation = File('${root.path}/case_attestation.json');
+      final environment = <String, String>{
+        e2eCaseAttestationPathDefine: attestation.path,
+        e2eCaseScenarioDefine: 'direct',
+        e2eCaseRunIdDefine: 'timing-fixture',
+        'UNRELATED_SECRET': 'must-not-enter-progress',
+      };
+      final progress = e2eScenarioProgressFileForAttestation(attestation);
+      await E2eScenarioProgressWriter.record(
+        'started',
+        environment: environment,
+      );
+      final first = jsonDecode(await progress.readAsString()) as Map;
+      final firstPhase = (first['phases'] as List).single as Map;
+      expect(firstPhase.keys, unorderedEquals(<String>['phase', 'at']));
+      await E2eScenarioProgressWriter.record(
+        'direct_encrypted_app_send_to_sent_visible',
+        elapsed: const Duration(microseconds: 12500),
+        environment: environment,
+      );
+      final encoded = await progress.readAsString();
+      final decoded = jsonDecode(encoded) as Map;
+      final phases = decoded['phases'] as List;
+      expect(decoded['schemaVersion'], 1);
+      expect(phases, hasLength(2));
+      expect(phases.first, firstPhase);
+      expect((phases.last as Map)['elapsedMs'], 12);
+      expect(encoded, isNot(contains('must-not-enter-progress')));
+      expect(encoded, isNot(contains('UNRELATED_SECRET')));
+      await expectLater(
+        E2eScenarioProgressWriter.record(
+          'invalid',
+          elapsed: const Duration(milliseconds: -1),
+          environment: environment,
+        ),
+        throwsArgumentError,
+      );
+      expect(await progress.readAsString(), encoded);
+    },
+  );
+
   test('mobile fixture and attestation follow the current data container', () {
     final root = Directory.systemTemp.createTempSync('mobile-e2e-paths-');
     addTearDown(() => root.deleteSync(recursive: true));

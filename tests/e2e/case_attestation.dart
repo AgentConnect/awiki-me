@@ -756,18 +756,28 @@ class E2eCaseAttestationWriter {
 class E2eScenarioProgressWriter {
   E2eScenarioProgressWriter._();
 
-  static Future<void> record(String phase) async {
+  static Future<void> record(
+    String phase, {
+    Duration? elapsed,
+    Map<String, String>? environment,
+  }) async {
+    if (elapsed != null && elapsed.isNegative) {
+      throw ArgumentError.value(elapsed, 'elapsed', 'must not be negative');
+    }
     final attestationPath = e2eInvocationValue(
       e2eCaseAttestationPathDefine,
       compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
+      environment: environment,
     );
     final scenario = e2eInvocationValue(
       e2eCaseScenarioDefine,
       compiledValue: const String.fromEnvironment(e2eCaseScenarioDefine),
+      environment: environment,
     );
     final runId = e2eInvocationValue(
       e2eCaseRunIdDefine,
       compiledValue: const String.fromEnvironment(e2eCaseRunIdDefine),
+      environment: environment,
     );
     final normalized = phase.trim();
     if (attestationPath.trim().isEmpty ||
@@ -795,6 +805,7 @@ class E2eScenarioProgressWriter {
     phases.add(<String, Object?>{
       'phase': normalized,
       'at': DateTime.now().toUtc().toIso8601String(),
+      if (elapsed != null) 'elapsedMs': elapsed.inMilliseconds,
     });
     await file.parent.create(recursive: true);
     final temporary = File('${file.path}.tmp');

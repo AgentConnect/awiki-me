@@ -284,7 +284,10 @@ class _DesktopAppRobot {
     }
   }
 
-  Future<void> sendTextWithKeyboardAction(String content) async {
+  Future<void> sendTextWithKeyboardAction(
+    String content, {
+    VoidCallback? beforeSubmit,
+  }) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
     await pumpUntilFinder(input, description: 'chat input');
     final inputField = find.descendant(
@@ -301,6 +304,7 @@ class _DesktopAppRobot {
       content,
       description: 'chat message input',
     );
+    beforeSubmit?.call();
     await tester.testTextInput.receiveAction(TextInputAction.send);
     await _pumpFrame();
     await _waitForComposerClear(input, description: 'text send completion');

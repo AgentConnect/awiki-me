@@ -155,7 +155,11 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     'group_empty_member_restart_exact_one',
   );
 
-  await robot.sendTextWithKeyboardAction(appGroupText);
+  final groupSendTimer = Stopwatch();
+  await robot.sendTextWithKeyboardAction(
+    appGroupText,
+    beforeSubmit: groupSendTimer.start,
+  );
   final appGroupMessage = await _waitForUiMessage(
     robot: robot,
     conversationId: conversation.conversationId,
@@ -167,6 +171,13 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   expect(appGroupMessage.groupId, groupDid);
   if (encrypted) expect(appGroupMessage.isEncrypted, isTrue);
   await robot.expectMessageContentVisible(appGroupMessage);
+  groupSendTimer.stop();
+  if (encrypted) {
+    await E2eScenarioProgressWriter.record(
+      'group_encrypted_keyboard_send_to_sent_visible',
+      elapsed: groupSendTimer.elapsed,
+    );
+  }
   await _waitForGroupMessages(
     groups: groups,
     groupDid: groupDid,

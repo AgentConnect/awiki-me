@@ -604,6 +604,7 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     robot.tester.widget<CupertinoTextField>(input).controller!.text,
     secret,
   );
+  final encryptedSendTimer = Stopwatch()..start();
   await robot.tapOne(
     find.bySemanticsIdentifier('e2e-chat-send-button'),
     description: 'encrypted send',
@@ -617,6 +618,11 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   );
   expect(encrypted.isEncrypted, isTrue);
   await robot.expectMessageContentVisible(encrypted);
+  encryptedSendTimer.stop();
+  await E2eScenarioProgressWriter.record(
+    'direct_encrypted_app_send_to_sent_visible',
+    elapsed: encryptedSendTimer.elapsed,
+  );
   expect(find.byTooltip('端到端加密'), findsWidgets);
   await _waitForCliInbox(
     config: config,
@@ -671,6 +677,7 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     description: 'ordinary mode',
   );
   final reply = 'e2e encrypted reply ${config.runId} $nonce';
+  final encryptedReceiveTimer = Stopwatch()..start();
   final replyId = await _cliSendDirectText(
     config: config,
     text: reply,
@@ -685,6 +692,11 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   );
   expect(receivedEncrypted.isEncrypted, isTrue);
   await robot.expectMessageContentVisible(receivedEncrypted);
+  encryptedReceiveTimer.stop();
+  await E2eScenarioProgressWriter.record(
+    'direct_encrypted_cli_send_to_app_visible',
+    elapsed: encryptedReceiveTimer.elapsed,
+  );
   await E2eScenarioProgressWriter.record(
     'direct_mixed_encryption_and_restart_verified',
   );

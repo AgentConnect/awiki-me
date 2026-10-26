@@ -1098,6 +1098,15 @@ directory. The Flutter scenario also writes `scenario_progress.json` after
 major Direct phases. Progress is diagnostic only and can never replace the
 strict case attestation required for a passing result.
 
+Encrypted Direct and Group flows also append an optional monotonic `elapsedMs`
+to their existing progress records. Direct measures App send activation until
+the sent message is visible, and CLI send invocation until the encrypted reply
+is visible in the App. Group measures the keyboard send action until the sent
+encrypted message is visible; composer entry is outside that interval. These
+are individual UI observations, not a latency distribution or an optimistic
+pending-bubble measurement. Older phase/UTC records remain valid, and progress
+still contains no message text, identity, key, or request payload.
+
 When redacted child output contains an explicit remote 5xx or transport
 unavailable error, the outer report classifies it as
 `remote_service_unavailable` instead of the generic `flutter_product_failed`.
