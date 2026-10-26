@@ -39,3 +39,8 @@
 本目录是说明书。只有执行 computer-use 时才打开 App、发送验证码或安装 Daemon。默认验证已发布 Daemon；正式发布是另一项需要明确请求的操作，会更新正式渠道的 `latest`。
 
 每轮按 playbook 记录 `passed / failed / blocked / not-run`，并单独记录资源收尾及残留。关闭 App 不会停止 Daemon；本目录也不会自动生成 Dart E2E 的 resource ledger。
+
+## 候选专项门禁
+
+[桌面代理与私聊验证](desktop-network-private-chat.md) 在下一次明确获准测试发布后执行，
+覆盖 macOS／Windows 原生代理与手机、电脑前台延迟对照；未执行前不得签为性能通过。

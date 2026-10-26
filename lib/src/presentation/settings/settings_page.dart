@@ -1,3 +1,4 @@
+import 'network_settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +35,7 @@ import 'notify_settings.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
-enum SettingsDetail { devices, language, display, serverFeatures }
+enum SettingsDetail { devices, language, display, serverFeatures, network }
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
@@ -127,6 +128,17 @@ class SettingsPage extends ConsumerWidget {
       _SettingsSection(
         key: const Key('settings-general-section'),
         children: <Widget>[
+          if (isDesktopPlatform && !kIsWeb) ...[
+            AppListTile(
+              key: const Key('settings-network-row'),
+              title: l10n.settingsNetwork,
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const NetworkSettingsPage(),
+              ),
+            ),
+            const AppSectionDivider(),
+          ],
           AppListTile(
             key: const Key('settings-server-features-row'),
             title: l10n.serverFeaturesTitle,
@@ -349,6 +361,17 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const ServerFeaturesPage(),
               ),
             ),
+            if (isDesktopPlatform && !kIsWeb)
+              _DesktopSettingsRow(
+                key: const Key('settings-network-row'),
+                title: l10n.settingsNetwork,
+                selected: selectedDetail == SettingsDetail.network,
+                onTap: () => _openDetail(
+                  context,
+                  SettingsDetail.network,
+                  (_) => const NetworkSettingsPage(),
+                ),
+              ),
             _DesktopSettingsRow(
               key: const Key('settings-current-version-row'),
               title: l10n.settingsCurrentVersion,
@@ -538,6 +561,17 @@ class SettingsPage extends ConsumerWidget {
             height: sectionTitleHeight,
           ),
           children: <Widget>[
+            if (isDesktopPlatform && !kIsWeb)
+              _QuietSettingsRow(
+                key: const Key('settings-network-row'),
+                icon: CupertinoIcons.wifi,
+                title: l10n.settingsNetwork,
+                height: optionRowHeight,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const NetworkSettingsPage(),
+                ),
+              ),
             _QuietSettingsRow(
               key: const Key('settings-current-version-row'),
               icon: CupertinoIcons.info_circle,

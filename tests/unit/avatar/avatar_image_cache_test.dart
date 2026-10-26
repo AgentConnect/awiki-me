@@ -13,6 +13,11 @@ class Headers extends Fake implements HttpHeaders {
   }
 
   @override
+  void forEach(void Function(String, List<String>) action) {
+    values.forEach((name, value) => action(name, [value]));
+  }
+
+  @override
   String? value(String name) => values[name.toLowerCase()];
   @override
   ContentType? get contentType => value('content-type') == null
@@ -34,6 +39,14 @@ class Response extends Stream<List<int>> implements HttpClientResponse {
   }
   final Uint8List body;
   final Duration bodyDelay;
+  @override
+  bool get isRedirect => [301, 302, 303, 307, 308].contains(statusCode);
+  @override
+  List<RedirectInfo> get redirects => const [];
+  @override
+  bool get persistentConnection => true;
+  @override
+  String get reasonPhrase => 'test';
   @override
   final int statusCode;
   @override
@@ -77,6 +90,17 @@ class Request extends Fake implements HttpClientRequest {
   @override
   bool followRedirects = true;
   @override
+  int maxRedirects = 5;
+  @override
+  int contentLength = 0;
+  @override
+  bool persistentConnection = true;
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await stream.drain<void>();
+  }
+
+  @override
   Future<HttpClientResponse> close() => response();
   @override
   void abort([Object? exception, StackTrace? stackTrace]) {}
@@ -87,6 +111,8 @@ class Client extends Fake implements HttpClient {
   final Future<HttpClientResponse> Function(Uri) respond;
   final requests = <Request>[];
   final urls = <Uri>[];
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri uri) => getUrl(uri);
   @override
   Future<HttpClientRequest> getUrl(Uri uri) async {
     urls.add(uri);

@@ -1,3 +1,5 @@
+import '../settings/network_settings_page.dart';
+import '../../data/services/desktop_network_preference.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';

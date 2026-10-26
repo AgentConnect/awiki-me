@@ -7755,6 +7755,48 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'群人数上限超过服务器允许的范围，请调整后重试。'**
   String get groupMemberLimitExceeded;
+
+  /// No description provided for @settingsNetwork.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络'**
+  String get settingsNetwork;
+
+  /// No description provided for @settingsUseSystemProxy.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用系统代理'**
+  String get settingsUseSystemProxy;
+
+  /// No description provided for @settingsSystemProxyDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'优先使用系统代理，不可用时尝试直接连接。'**
+  String get settingsSystemProxyDescription;
+
+  /// No description provided for @settingsNetworkSystemProxy.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统代理'**
+  String get settingsNetworkSystemProxy;
+
+  /// No description provided for @settingsNetworkDirect.
+  ///
+  /// In zh, this message translates to:
+  /// **'直接连接'**
+  String get settingsNetworkDirect;
+
+  /// No description provided for @settingsNetworkFallback.
+  ///
+  /// In zh, this message translates to:
+  /// **'代理不可用已回退'**
+  String get settingsNetworkFallback;
+
+  /// No description provided for @settingsNetworkSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络设置保存失败，请重试。'**
+  String get settingsNetworkSaveFailed;
 }
 
 class _AppLocalizationsDelegate

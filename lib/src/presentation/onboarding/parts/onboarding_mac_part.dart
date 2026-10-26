@@ -80,7 +80,24 @@ class _MacOnboardingScaffold extends StatelessWidget {
                   onTap: () => onLanguagePressed(anchorContext),
                 ),
               );
-              final languageButton = languageButtonFor(showChevron: true);
+              final languageButton = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (supportsDesktopNetwork)
+                    _MacFooterButton(
+                      key: const Key('onboarding-network-settings-button'),
+                      icon: CupertinoIcons.wifi,
+                      label: context.l10n.settingsNetwork,
+                      tooltip: context.l10n.settingsNetwork,
+                      onTap: () => Navigator.of(context).push(
+                        CupertinoPageRoute<void>(
+                          builder: (_) => const NetworkSettingsPage(),
+                        ),
+                      ),
+                    ),
+                  languageButtonFor(showChevron: true),
+                ],
+              );
               final form = Expanded(
                 child: ColoredBox(
                   color: phone ? const Color(0x00000000) : theme.surface,

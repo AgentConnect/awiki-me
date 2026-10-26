@@ -6,6 +6,22 @@ import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'pending group transition is not mistaken for an unprepared invitee',
+    () {
+      final mapped = mapCoreGroupMemberAdmissionError(
+        const core.AwikiImCoreException(
+          code: 'service_error',
+          message: 'raw remote diagnostic is not UI copy',
+          serviceCode: 'group.e2ee.state_not_ready',
+        ),
+      );
+      expect(
+        mapped?.reason,
+        GroupMemberAdmissionDenialReason.groupEncryptionMaintenance,
+      );
+    },
+  );
   test('unprepared encrypted member remains unjoined with stable reason', () {
     final mapped = mapCoreGroupMemberAdmissionError(
       const core.AwikiImCoreException(

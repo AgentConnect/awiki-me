@@ -1825,5 +1825,12 @@
   },
   "serverFeaturesAccountSource": "账户与服务功能",
   "serverFeaturesMessageSource": "聊天与加密功能",
-  "groupMemberLimitExceeded": "群人数上限超过服务器允许的范围，请调整后重试。"
+  "groupMemberLimitExceeded": "群人数上限超过服务器允许的范围，请调整后重试。",
+  "settingsNetwork": "网络",
+  "settingsUseSystemProxy": "使用系统代理",
+  "settingsSystemProxyDescription": "优先使用系统代理，不可用时尝试直接连接。",
+  "settingsNetworkSystemProxy": "系统代理",
+  "settingsNetworkDirect": "直接连接",
+  "settingsNetworkFallback": "代理不可用已回退",
+  "settingsNetworkSaveFailed": "网络设置保存失败，请重试。"
 }

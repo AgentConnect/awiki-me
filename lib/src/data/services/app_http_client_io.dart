@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'package:path_provider/path_provider.dart';
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'desktop_network_preference.dart';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -17,8 +21,9 @@ const windowsCaBundleSha256 =
 
 Future<Uint8List>? _bundleBytes;
 
-http.Client createAppHttpClient() =>
-    Platform.isWindows ? WindowsTrustHttpClient() : http.Client();
+http.Client createAppHttpClient() => (Platform.isMacOS || Platform.isWindows)
+    ? DesktopRuntimeHttpClient()
+    : http.Client();
 
 Future<Uint8List> _readBundle(AssetBundle bundle) async {
   final data = await bundle.load(windowsCaBundleAsset);
@@ -123,4 +128,106 @@ class WindowsTrustHttpClient extends http.BaseClient {
     _client = null;
     // Pending initialization closes its client before any request is sent.
   }
+}
+
+/// Thin transport adapter; User Service authentication and protocol stay in Dart.
+typedef DesktopNetworkSend =
+    Future<core.AwikiNetworkResponse> Function({
+      required String method,
+      required String url,
+      required Map<String, String> headers,
+      required List<int> body,
+      bool followRedirects,
+      Future<void>? abortTrigger,
+    });
+
+class DesktopRuntimeHttpClient extends http.BaseClient {
+  DesktopRuntimeHttpClient()
+    : _initialize = DesktopNetworkPreference.instance.initialize,
+      _transmit = core.AwikiDesktopNetwork.send;
+  @visibleForTesting
+  DesktopRuntimeHttpClient.forTesting({
+    required Future<void> Function() initialize,
+    required DesktopNetworkSend transmit,
+  }) : _initialize = initialize,
+       _transmit = transmit;
+  final Future<void> Function() _initialize;
+  final DesktopNetworkSend _transmit;
+  bool _closed = false;
+  final Set<Completer<void>> _aborters = {};
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (_closed) throw http.ClientException('Client closed');
+    final abort = Completer<void>();
+    _aborters.add(abort);
+    if (request case http.Abortable(:final abortTrigger?)) {
+      unawaited(
+        abortTrigger.then((_) {
+          if (!abort.isCompleted) abort.complete();
+        }),
+      );
+    }
+    try {
+      await _initialize();
+      final body = await request.finalize().toBytes();
+      if (_closed || abort.isCompleted) {
+        throw http.RequestAbortedException(request.url);
+      }
+      final response = await _transmit(
+        method: request.method,
+        url: request.url.toString(),
+        headers: request.headers,
+        body: body,
+        followRedirects: request.followRedirects,
+        abortTrigger: abort.future,
+      );
+      Stream<List<int>> chunks() async* {
+        try {
+          yield* response.body;
+        } catch (_) {
+          if (abort.isCompleted) {
+            throw http.RequestAbortedException(request.url);
+          }
+          rethrow;
+        } finally {
+          _aborters.remove(abort);
+          await response.close();
+        }
+      }
+
+      return http.StreamedResponse(
+        chunks(),
+        response.statusCode,
+        headers: response.headers,
+        contentLength: int.tryParse(response.headers['content-length'] ?? ''),
+        request: request,
+      );
+    } catch (_) {
+      _aborters.remove(abort);
+      if (abort.isCompleted) throw http.RequestAbortedException(request.url);
+      rethrow;
+    }
+  }
+
+  @override
+  void close() {
+    _closed = true;
+    for (final abort in _aborters.toList()) {
+      if (!abort.isCompleted) abort.complete();
+    }
+    _aborters.clear();
+  }
+}
+
+Future<String?> prepareWindowsNetworkCaBundle() async {
+  final bytes = await (_bundleBytes ??= _readBundle(rootBundle));
+  final root = await getApplicationSupportDirectory();
+  final file = File('${root.path}/security/$windowsCaBundleVersion.pem');
+  await file.parent.create(recursive: true);
+  if (!await file.exists() ||
+      sha256.convert(await file.readAsBytes()).toString() !=
+          windowsCaBundleSha256) {
+    await file.writeAsBytes(bytes, flush: true);
+  }
+  return file.path;
 }
