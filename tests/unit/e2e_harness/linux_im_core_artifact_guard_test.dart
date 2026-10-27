@@ -2,6 +2,7 @@
 // [OUTPUT]: Fail-closed freshness decisions for Linux desktop E2E.
 // [POS]: Unit contract for rejecting stale native Core artifacts before E2E.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,90 @@ void main() {
       '/workspace/app/.e2e/native-core/linux-im-core-provenance.json',
     ),
   );
+
+  test('local Core uses its owning builder and keeps other SDKs in registry', () {
+    final directory = Directory.systemTemp.createTempSync('awiki-local-core-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final config = File('${directory.path}/selection.json');
+    config.writeAsStringSync(
+      jsonEncode({
+        'schema_version': 1,
+        'dependencies': {
+          'awiki-im-core': {'path': layout.sourceRepository.absolute.path},
+        },
+      }),
+    );
+    final environment = {'AWIKI_LINUX_LOCAL_CORE_CONFIG': config.path};
+    final plan = linuxImCoreBuildPlan(
+      layout,
+      debugBuild: true,
+      environment: environment,
+    );
+    expect(
+      plan.command,
+      containsAllInOrder([
+        '--deps',
+        'local',
+        '--local-config',
+        config.absolute.path,
+        '--package',
+        'im-core-dart',
+      ]),
+    );
+    expect(plan.command, contains('--no-default-features'));
+    expect(
+      plan.artifactToCopy!.path,
+      '/workspace/core/.artifacts/dependencies/local/target/debug/libawiki_im_core.so',
+    );
+    expect(
+      () => linuxImCoreBuildPlan(
+        layout,
+        debugBuild: false,
+        environment: environment,
+      ),
+      throwsA(isA<LinuxImCoreArtifactException>()),
+    );
+    for (final conflict in [
+      'AWIKI_SOURCE_INTEGRATION',
+      'AWIKI_RELEASE_REGISTRY',
+    ]) {
+      expect(
+        () => linuxImCoreBuildPlan(
+          layout,
+          debugBuild: true,
+          environment: {...environment, conflict: '1'},
+        ),
+        throwsA(isA<LinuxImCoreArtifactException>()),
+      );
+    }
+    for (final dependencies in [
+      {
+        'awiki-im-core': {'path': '/another/checkout'},
+      },
+      {
+        'awiki-im-core': {'path': layout.sourceRepository.absolute.path},
+        'anp': {'path': '/another/sdk'},
+      },
+      {
+        'awiki-im-core': {
+          'path': layout.sourceRepository.absolute.path,
+          'commit': 'unreviewed',
+        },
+      },
+    ]) {
+      config.writeAsStringSync(
+        jsonEncode({'schema_version': 1, 'dependencies': dependencies}),
+      );
+      expect(
+        () => linuxImCoreBuildPlan(
+          layout,
+          debugBuild: true,
+          environment: environment,
+        ),
+        throwsA(isA<LinuxImCoreArtifactException>()),
+      );
+    }
+  });
 
   test(
     'source builds use isolated locked outputs for Debug and optimized SDK',

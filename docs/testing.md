@@ -1549,6 +1549,17 @@ the App does not bind the build to an obsolete container UUID. Relative traversa
 outside that directory is rejected; desktop absolute paths retain their meaning.
 Do not compile phone numbers, OTPs, invitation codes or fixture JSON into the App.
 
+### Linux 当前 Core 的本机集成验证
+
+尚未发布的当前 Core 可通过 `AWIKI_LINUX_LOCAL_CORE_CONFIG` 显式选择本机 Debug 集成。
+配置使用现有消费者构建器的 schema 1 JSON，dependencies 只能包含
+`"awiki-im-core": {"path": "<当前 awiki-cli-rs2 checkout 的绝对路径>"}`。
+执行 `dart run tool/ensure_linux_im_core.dart --debug`，随后保持同一变量运行 E2E。
+构建复用 `scripts/dependencies/build.py --deps local`，ANP／Identity 保持固定 registry
+来源，库取自 `.artifacts/dependencies/local/target/debug`。选择文件内容加入来源摘要，
+切换回 registry/source 模式会使旧凭据失效；该模式与正式 registry release/source manifest
+模式互斥，不改变默认构建入口，不表示正式 SDK 已发布。
+
 ### 按需运行的 source CI
 
 用户于 2026-09-24 决定：提交、更新或合并 PR 不自动运行本仓 `ci.yml` 与

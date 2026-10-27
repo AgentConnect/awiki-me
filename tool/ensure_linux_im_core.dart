@@ -45,6 +45,12 @@ class LinuxImCoreArtifactGuard {
       );
     }
     final layout = await LinuxImCoreLayout.resolve(projectRoot);
+    if (!debugBuild &&
+        linuxLocalCoreConfiguration(layout, Platform.environment) != null) {
+      throw const LinuxImCoreArtifactException(
+        'Local Core integration requires a Debug build.',
+      );
+    }
     final before = await _inspect(layout);
     if (before.issues.isEmpty) {
       return LinuxImCoreArtifactResult(
@@ -215,6 +221,12 @@ class LinuxImCoreArtifactGuard {
         'registry=${Platform.environment['AWIKI_RELEASE_REGISTRY'] == '1'};',
       ),
     );
+    final localCore = linuxLocalCoreConfiguration(layout, Platform.environment);
+    inputSink.add(utf8.encode('local_core=${localCore != null};'));
+    if (localCore != null) {
+      inputSink.add(await localCore.readAsBytes());
+      inputSink.add(const <int>[0]);
+    }
     for (final path in paths) {
       inputSink.add(utf8.encode('$path\u0000'));
       final file = File('${layout.sourceRepository.path}/$path');
@@ -241,6 +253,32 @@ class LinuxImCoreArtifactGuard {
   required bool debugBuild,
   required Map<String, String> environment,
 }) {
+  final localCore = linuxLocalCoreConfiguration(layout, environment);
+  if (localCore != null) {
+    if (!debugBuild) {
+      throw const LinuxImCoreArtifactException(
+        'Local Core integration requires a Debug build.',
+      );
+    }
+    return (
+      command: <String>[
+        'python3',
+        '${layout.sourceRepository.path}/scripts/dependencies/build.py',
+        '--deps',
+        'local',
+        '--local-config',
+        localCore.path,
+        '--package',
+        'im-core-dart',
+        '--no-default-features',
+        '--features',
+        'blocking,sqlite,http,linux,group-e2ee,secure-direct,identity-native-anp',
+      ],
+      artifactToCopy: File(
+        '${layout.sourceRepository.path}/.artifacts/dependencies/local/target/debug/libawiki_im_core.so',
+      ),
+    );
+  }
   final sourceIntegration = environment['AWIKI_SOURCE_INTEGRATION'] == '1';
   if (sourceIntegration && environment['AWIKI_RELEASE_REGISTRY'] == '1') {
     throw const LinuxImCoreArtifactException(
@@ -300,6 +338,43 @@ class LinuxImCoreArtifactGuard {
     ],
     artifactToCopy: File('$targetPath/debug/libawiki_im_core.so'),
   );
+}
+
+/// This mode selects only the current Core checkout. ANP and Identity retain
+/// the owning dependency builder's fixed registry inputs.
+File? linuxLocalCoreConfiguration(
+  LinuxImCoreLayout layout,
+  Map<String, String> environment,
+) {
+  final selected = environment['AWIKI_LINUX_LOCAL_CORE_CONFIG']?.trim() ?? '';
+  if (selected.isEmpty) return null;
+  if (environment['AWIKI_SOURCE_INTEGRATION'] == '1' ||
+      environment['AWIKI_RELEASE_REGISTRY'] == '1') {
+    throw const LinuxImCoreArtifactException(
+      'Local Core, source manifest and registry release modes are mutually exclusive.',
+    );
+  }
+  try {
+    final file = File(selected).absolute;
+    final value = jsonDecode(file.readAsStringSync());
+    final dependencies = value is Map ? value['dependencies'] : null;
+    final core = dependencies is Map ? dependencies['awiki-im-core'] : null;
+    if (value is! Map ||
+        value.length != 2 ||
+        value['schema_version'] != 1 ||
+        dependencies is! Map ||
+        dependencies.length != 1 ||
+        core is! Map ||
+        core.length != 1 ||
+        core['path'] != layout.sourceRepository.absolute.path) {
+      throw const FormatException('invalid local Core selection');
+    }
+    return file;
+  } on Object {
+    throw const LinuxImCoreArtifactException(
+      'Local Core configuration must select only this checkout by its absolute repository path.',
+    );
+  }
 }
 
 class LinuxImCoreLayout {
