@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/group_encryption_core_port.dart';
 import 'package:awiki_me/src/domain/entities/group_encryption_status.dart';
+import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/presentation/group/group_encryption_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_encryption_status_card.dart';
 import 'package:flutter/cupertino.dart';
@@ -13,6 +14,60 @@ import 'test_support.dart';
 
 void main() {
   const groupDid = 'did:wba:awiki.info:group:e1_group';
+
+  test(
+    'local readiness cannot change group role or grant an inconsistent Ready',
+    () {
+      const group = GroupSummary(
+        conversationId: 'group-conversation',
+        groupId: groupDid,
+        description: '',
+        memberCount: 2,
+        lastMessageAt: null,
+        groupStateVersion: '3',
+        myRole: 'member',
+        membershipStatus: 'active',
+        encrypted: true,
+        canSendSecure: false,
+        secureProblem: 'old problem',
+      );
+      final ready = applyGroupEncryptionStatus(
+        group,
+        const GroupEncryptionStatus(
+          groupDid: groupDid,
+          readiness: GroupEncryptionReadiness.ready,
+          canSendSecure: true,
+          retryable: false,
+        ),
+      );
+      expect(ready.canSendSecure, isTrue);
+      expect(ready.myRole, 'member');
+      expect(ready.groupStateVersion, '3');
+      expect(ready.secureProblem, isEmpty);
+      final inconsistent = applyGroupEncryptionStatus(
+        group,
+        const GroupEncryptionStatus(
+          groupDid: groupDid,
+          readiness: GroupEncryptionReadiness.preparing,
+          canSendSecure: true,
+          retryable: false,
+        ),
+      );
+      expect(inconsistent.canSendSecure, isFalse);
+      expect(
+        () => applyGroupEncryptionStatus(
+          group,
+          const GroupEncryptionStatus(
+            groupDid: 'did:example:other',
+            readiness: GroupEncryptionReadiness.ready,
+            canSendSecure: true,
+            retryable: false,
+          ),
+        ),
+        throwsStateError,
+      );
+    },
+  );
 
   testWidgets('default-off gate hides status and does not call Core', (
     tester,

@@ -1,5 +1,6 @@
 import '../server_features/backend_capabilities_provider.dart';
 import 'dart:async';
+import '../../domain/entities/group_encryption_status.dart';
 import 'package:flutter/material.dart' show Tooltip;
 import '../app_shell/providers/remote_push_coordinator_provider.dart';
 import 'dart:io';
@@ -3799,6 +3800,31 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (groupId == null || epoch == null || _groupSecurityBusy) return;
     setState(() => _groupSecurityBusy = true);
     try {
+      final knownGroup = ref
+          .read(groupProvider)
+          .groups
+          .where((group) => group.groupId == groupId)
+          .firstOrNull;
+      if (!repair && knownGroup?.encrypted == true) {
+        final status = await ref
+            .read(groupEncryptionCorePortProvider)
+            .status(groupId);
+        if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
+        if (status.readiness == GroupEncryptionReadiness.ready ||
+            status.readiness == GroupEncryptionReadiness.preparing) {
+          final currentGroup = ref
+              .read(groupProvider)
+              .groups
+              .where((group) => group.groupId == groupId)
+              .firstOrNull;
+          if (currentGroup != null && currentGroup.encrypted == true) {
+            ref
+                .read(groupProvider.notifier)
+                .upsertGroup(applyGroupEncryptionStatus(currentGroup, status));
+          }
+          return;
+        }
+      }
       if (repair) {
         final previous = ref
             .read(groupProvider)
@@ -3819,6 +3845,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 .refreshGroup(groupId, refreshMembers: false);
           }
         }
+        return;
       }
       if (!mounted || !epoch.matches(ref.read(sessionProvider))) return;
       final group = await ref
