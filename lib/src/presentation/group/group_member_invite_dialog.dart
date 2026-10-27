@@ -272,7 +272,9 @@ class _GroupMemberInviteDialogState
     if (!mounted) {
       return;
     }
-    if (failed.isEmpty && !outcomes.any((value) => value.contains('正在完成'))) {
+    // Membership success closes this dialog. The chat's Core-backed status
+    // continues to show encryption preparation and keeps sending disabled.
+    if (failed.isEmpty) {
       Navigator.of(context).pop();
       return;
     }
