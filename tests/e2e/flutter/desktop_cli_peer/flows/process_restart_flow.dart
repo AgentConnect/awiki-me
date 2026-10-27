@@ -1,5 +1,9 @@
 part of '../desktop_cli_peer_e2e.dart';
 
+// Optional encrypted lane reuses the real three-process restart owner.
+bool get _encryptedProcessRestart =>
+    Platform.environment['AWIKI_E2E_ENCRYPTED_RESTART'] == '1';
+
 const String _processRestartCaseId = 'PROCESS-RESTART-E2E-001';
 const String _patchRestartCaseId = 'MESSAGE-PATCH-RESTART-E2E-001';
 const String _credentialDeleteCaseId = 'IDENTITY-DELETE-E2E-001';
@@ -57,6 +61,14 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       canonicalCliDid: canonicalCliDid,
       observedPeerDid: direct.targetDid ?? '',
     );
+    if (_encryptedProcessRestart) {
+      final mode = find.byKey(const Key('chat-message-security'));
+      await robot.tapOne(mode, description: 'select encrypted restart message');
+      await robot.pumpUntilFinder(
+        find.descendant(of: mode, matching: find.byIcon(CupertinoIcons.lock)),
+        description: 'encrypted restart mode',
+      );
+    }
     await robot.sendText(directAppText);
     final directAppMessage = await _waitForUiMessage(
       robot: robot,
@@ -66,8 +78,13 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       sendState: MessageSendState.sent,
     );
 
+    if (_encryptedProcessRestart) expect(directAppMessage.isEncrypted, isTrue);
+
     final groupName = 'AWiki restart ${config.runId} $nonce';
-    final group = await robot.createGroup(groupName);
+    final group = await robot.createGroup(
+      groupName,
+      encrypted: _encryptedProcessRestart,
+    );
     final groupDid = group.groupId!.trim();
     final cliHandle = config.cliHandle.trim().toLowerCase();
     final cliFullHandle = cliHandle.contains('.')
@@ -108,6 +125,19 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       sendState: MessageSendState.sent,
     );
 
+    if (_encryptedProcessRestart) {
+      expect(groupAppMessage.isEncrypted, isTrue);
+      // The one-off CLI must apply its Welcome before its first group send.
+      // Reuse the encrypted group lane's receiving oracle during bootstrap.
+      await _waitForCliGroupMessages(
+        config: config,
+        groupDid: groupDid,
+        expectedText: groupAppText,
+        expectedMessageId: groupAppMessage.remoteId,
+        expectedSenderDid: session.did,
+      );
+    }
+
     await robot.navigateToContacts();
     final totalUnreadBaseline = robot.container.read(
       conversationListProvider.select((state) => state.unreadCount),
@@ -115,6 +145,7 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     final directCliMessageId = await _cliSendDirectText(
       config: config,
       text: directCliText,
+      secure: _encryptedProcessRestart,
     );
     await _waitForUiUnreadClosedLoop(
       robot: robot,
@@ -195,6 +226,7 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     final restartGapMessageId = await _cliSendDirectText(
       config: config,
       text: restartGapText,
+      secure: _encryptedProcessRestart,
     );
     final handoff = _ProcessRestartHandoff(
       runId: config.runId,
@@ -444,6 +476,90 @@ void runDesktopCliPeerProcessRestartPhaseB() {
       expectedTotalUnread: handoff.totalUnreadBaseline,
       expectedLastMessage: handoff.groupCliText,
     );
+    if (_encryptedProcessRestart) {
+      // Assert ciphertext-backed projections after a distinct native process
+      // opens the same vault, including the message sent while it was offline.
+      for (final expected in <(String, String, String)>[
+        (
+          handoff.directConversationId,
+          handoff.directAppMessageId,
+          handoff.directAppText,
+        ),
+        (
+          handoff.directConversationId,
+          handoff.directCliMessageId,
+          handoff.directCliText,
+        ),
+        (
+          handoff.directConversationId,
+          handoff.restartGapMessageId,
+          handoff.restartGapText,
+        ),
+        (
+          handoff.groupConversationId,
+          handoff.groupAppMessageId,
+          handoff.groupAppText,
+        ),
+        (
+          handoff.groupConversationId,
+          handoff.groupCliMessageId,
+          handoff.groupCliText,
+        ),
+      ]) {
+        await robot.openConversationRowWithFirstVisibleTitle(
+          conversationId: expected.$1,
+          expectedTitle: expected.$1 == handoff.directConversationId
+              ? handoff.directDisplayName
+              : handoff.groupName,
+        );
+        final message = await _waitForUiMessage(
+          robot: robot,
+          conversationId: expected.$1,
+          messageId: expected.$2,
+          content: expected.$3,
+        );
+        expect(message.isEncrypted, isTrue);
+      }
+      for (final target in <(String, String)>[
+        (handoff.groupConversationId, handoff.groupName),
+        (handoff.directConversationId, handoff.directDisplayName),
+      ]) {
+        await robot.openConversationRowWithFirstVisibleTitle(
+          conversationId: target.$1,
+          expectedTitle: target.$2,
+        );
+        final text =
+            'encrypted after cold restart ${config.runId} ${target.$1}';
+        await robot.sendText(text);
+        final message = await _waitForUiMessage(
+          robot: robot,
+          conversationId: target.$1,
+          content: text,
+          senderDid: handoff.ownerDid,
+          sendState: MessageSendState.sent,
+        );
+        expect(message.isEncrypted, isTrue);
+        if (target.$1 == handoff.groupConversationId) {
+          await _waitForCliGroupMessages(
+            config: config,
+            groupDid: handoff.groupDid,
+            expectedText: text,
+            expectedMessageId: message.remoteId,
+            expectedSenderDid: handoff.ownerDid,
+          );
+        } else {
+          await _waitForCliInbox(
+            config: config,
+            expectedText: text,
+            expectedMessageId: message.remoteId,
+            expectedSenderDid: handoff.ownerDid,
+          );
+        }
+      }
+      await E2eScenarioProgressWriter.record(
+        'encrypted_cold_restart_restored_and_sent_both_modes',
+      );
+    }
     await E2eCaseAttestationWriter.markPassed(
       _processRestartCaseId,
       startedAt: startedAt,

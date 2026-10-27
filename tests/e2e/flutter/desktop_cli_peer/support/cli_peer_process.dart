@@ -55,7 +55,8 @@ Future<void> _waitForCliGroupMessages({
   String? expectedContentType,
 }) async {
   Future<E2eObservation> observe() async {
-    if (Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1') {
+    if (Platform.environment['AWIKI_E2E_ENCRYPTED_GROUP'] == '1' ||
+        _encryptedProcessRestart) {
       // This peer is a command process, not a continuously running client.
       // Receive its device-targeted Welcome before reading encrypted history.
       final receive = await _runCli(config, const <String>[

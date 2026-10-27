@@ -439,3 +439,9 @@ System Test 现有 exact ID、唯一字段、严格数字递增和 stability-win
 验收包装脚本不得固定添加该选项，也不得在超时后自动开启；仅在操作者明确要求本轮前台调试时使用。窗口失焦但仍可见时，`inactive` 继续产帧，WidgetTester 的应用内输入不依赖系统当前焦点；完全隐藏或遮挡进入 `hidden` 是另一种状态。共享 Mac 验收保留默认不持续激活，停帧时报告真实生命周期与帧状态，不自动夺回焦点。
 
 此调试模式适用于窗口遮挡导致 Flutter `hidden`、帧停止的桌面环境，会占用前台。日常通用 UI 测试使用 Linux＋Xvfb；macOS 专属验证使用独立测试会话或 CI。默认关闭持续激活不等于 macOS App 不会首次显示窗口，也不保证被遮挡时仍能正常产帧。UI 帧等待有独立时限，不能用伪造 resumed 生命周期或放宽业务断言掩盖停帧。后台/重启专门用例继续使用各自明确的生命周期操作。
+
+### 加密进程重启定向验收（2026-10-28）
+
+既有 `restart` suite 可通过任务进程环境 `AWIKI_E2E_ENCRYPTED_RESTART=1` 选择加密场景，仍由原 runner 启动不同原生进程并共享隔离状态目录。Phase A 经可见按钮选择私聊加密、建立加密群并接收双向消息；停止实时连接并销毁原 Core 后发送加密离线消息。Phase B 验证新进程恢复原身份、启动同步前缺少离线消息、同步后精确一次解密及五条历史消息的加密标记，再分别发送加密私聊/群消息并由 CLI 解密观察。原未读、canonical ID、凭据删除及第三进程断言保留。该变体不是 Widget rebuild，也不更改生产 App 或加密协议。未设置变量时保留原明文用例。
+
+命令：`AWIKI_E2E_ENCRYPTED_RESTART=1 dart run tests/e2e/runner.dart --case restart --config <本机Linux配置> --run-id <独立run-id>`。使用已有受保护OTP任务注入和来源核验；不在文档记录密钥。实际运行结果见本轮E2EE实施记录。
