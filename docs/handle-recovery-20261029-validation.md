@@ -64,13 +64,30 @@ catalog/attestation 同步更新，沿用现有隔离配置与测试专用 user 
 产品专项随后完成目标隔离及重开续办两段，连续恢复段遇到共享测试手机号的验证窗口限制；现场记录
 确认 factor exchange 的 HTTP 429。服务按手机号/purpose 与客户端 IP 限制 5 次/300 秒，正常测试须
 串行排程、等待原窗口，不能改限额或把错误当成准备成功。失败证据保留在本机
-`.e2e/handle-recovery-state-machine/`；完整专项复验另记。
+`.e2e/handle-recovery-state-machine/`。错开共享窗口后，最终产品 run
+`20261029072339-hnnnmxb4d2` 完整通过 TARGET / RESUME / REPEAT 三项、18 条业务断言，
+失败 0、跳过 0，耗时 2 分 28 秒。包括真实提交切点、迟到回调隔离、同 Scope 重开续办、凭证
+删除后独立设备先恢复、原设备再建立 fresh owner、显式进入消息及独立账号保留。
+制品来源为干净的 `bed46eec4b9b1d6c55e4f2ec0c47296d5fa562f0`，`evidenceEligible=true`；
+不存在以未提交修改或测试替身冒充服务结果的情况。输出中的 integration_test 插件提示来自
+直接执行 prepared executable，runner 已按 attestation 校验全部业务断言；不是忽略失败结果。
 
 `remote-handle-recovery-state-machine` 是支持 Mac 的独立公开 Core/真实服务专项，已经按 owning
 入口启动；0600 临时 target manifest 只把新加坡目标的 operator 换为既有 reviewed SSH profile，
 URL/domain/capabilities 保持不变，关闭自动远端删除并保留 `remote_residual_ledger`。
 此前把此专项误写成必须 Linux cleanup 的表述在此纠正。Linux 本机审计要求适用于另一组
 `remote-handle-recovery-v1` 完整门禁；本轮未执行该完整门禁，不用产品 E2E 替代它。
+
+System 首轮为 2 通过、2 失败、2 未完成，已中断并按失败点收敛。新增旧代次 fresh Recovery
+与响应丢失/延迟链已通过；另一设备恢复后的旧操作关闭定向复验为 1 passed、失败 0、跳过 0。
+初次 RPC 拒绝只记录为 `other`，未保存正文，不能据此推定具体服务拒绝原因；现已补齐受限的
+V4 `awiki_code` 诊断及 14 项 owning 单元验证，后续未知值仍归 other，不输出正文。
+
+还修正了状态机专项漏用已有持久文件隔离的问题。首轮 pytest 默认临时目录已被后续 pytest
+轮换清理，远端残留账本仍在；这是隔离测试材料保留缺口，不涉及正式 App/真实用户数据。
+专项现经 owning runner 创建独立 0700 artifact/basetemp，失败或中断保留整个恢复根和包装
+密钥，成功才删除本地 basetemp；15 项隔离检查通过。此修复不放宽 canonical Linux cleanup
+或远端删除权限。余下 System 定向复验另记，不能把上述通过项表述为整个专项通过。
 
 本地正常 main.dart 的 Mac Debug 双 App 构建已通过，使用既有
 `scripts/build_manual_dual_macos_apps.sh`、独立 bundle ID 与数据目录。主调试 App 已复制到桌面
