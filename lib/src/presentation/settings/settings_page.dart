@@ -561,6 +561,16 @@ class SettingsPage extends ConsumerWidget {
             height: sectionTitleHeight,
           ),
           children: <Widget>[
+            _QuietSettingsRow(
+              key: const Key('settings-server-features-row'),
+              icon: CupertinoIcons.square_grid_2x2,
+              title: l10n.serverFeaturesTitle,
+              height: 44,
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const ServerFeaturesPage(),
+              ),
+            ),
             if (isDesktopPlatform && !kIsWeb)
               _QuietSettingsRow(
                 key: const Key('settings-network-row'),

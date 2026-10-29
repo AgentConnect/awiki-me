@@ -5,6 +5,7 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/handle_recovery.dart';
@@ -20,6 +21,7 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/widgets/awiki_glass_controls.dart';
 import '../shared/widgets/awiki_glass.dart';
 import 'handle_recovery_provider.dart';
+import 'handle_recovery_presentation.dart';
 import 'handle_recovery_session.dart';
 
 class HandleRecoveryPage extends StatelessWidget {
@@ -151,6 +153,7 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(handleRecoveryProvider);
+    final view = HandleRecoveryPresentation(state);
     final otpCooldown = ref.watch(handleRecoverySmsOtpCooldownProvider);
     final progress = state.progress;
     final phone = context.awikiResponsive.isPhone;
@@ -171,29 +174,10 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
               titleFontSize: phone ? 16 : null,
               leading: AwikiBackButton(
                 key: const Key('handle-recovery-back-button'),
-                onTap: () => Navigator.of(context).maybePop(),
+                onTap: _leaveRecovery,
                 semanticsLabel: context.l10n.commonBack,
               ),
             ),
-            if (state.isBusy || _isActivatingRecoveredIdentity) ...<Widget>[
-              Row(
-                children: <Widget>[
-                  const CupertinoActivityIndicator(),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _isActivatingRecoveredIdentity
-                          ? context.l10n.handleRecoveryEntering
-                          : state.authoritative
-                          ? context.l10n.handleRecoveryRunning
-                          : context.l10n.handleRecoveryChecking,
-                      key: const Key('handle-recovery-busy'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-            ],
             _RecoveryCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -208,8 +192,81 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                     label: context.l10n.handleRecoveryHandle,
                     value: widget.initialHandle,
                   ),
-                  if (state.canRequestOtp ||
-                      state.allows(HandleRecoveryAction.prepare)) ...<Widget>[
+                  const SizedBox(height: 16),
+                  Text(
+                    _recoveryStageLabel(context, view),
+                    key: const Key('handle-recovery-progress'),
+                    style: TextStyle(color: context.awikiTheme.title),
+                  ),
+                  if (state.isBusy || _isActivatingRecoveredIdentity) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const CupertinoActivityIndicator(),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _isActivatingRecoveredIdentity
+                                ? context.l10n.handleRecoveryEntering
+                                : state.authoritative
+                                ? context.l10n.handleRecoveryRunning
+                                : context.l10n.handleRecoveryChecking,
+                            key: const Key('handle-recovery-busy'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (view.error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _errorLabel(context, view.error!, otpCooldown),
+                      key: const Key('handle-recovery-error'),
+                      style: TextStyle(color: context.awikiTheme.danger),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AppPressableText(
+                        key: const Key('handle-recovery-copy-diagnostic'),
+                        semanticLabel:
+                            context.l10n.handleRecoveryCopyDiagnostic,
+                        onTap: () => Clipboard.setData(
+                          ClipboardData(
+                            text:
+                                'handle_recovery: ${view.error!.safeCode}; '
+                                'stage=${view.stage.name}; '
+                                'time=${DateTime.now().toUtc().toIso8601String()}',
+                          ),
+                        ),
+                        child: Text(context.l10n.handleRecoveryCopyDiagnostic),
+                      ),
+                    ),
+                  ] else if (view.stage == HandleRecoveryViewStage.blocked) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      context.l10n.handleRecoveryBlockedHelp,
+                      style: TextStyle(color: context.awikiTheme.secondaryText),
+                    ),
+                  ],
+                  if (progress?.isStillConfirming == true &&
+                      view.error == null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      context.l10n.handleRecoveryStillConfirming,
+                      key: const Key('handle-recovery-still-confirming'),
+                    ),
+                  ],
+                  if (_sessionActivationFailed) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      context.l10n.handleRecoverySessionActivationFailed,
+                      key: const Key(
+                        'handle-recovery-session-activation-failed',
+                      ),
+                      style: TextStyle(color: context.awikiTheme.danger),
+                    ),
+                  ],
+                  if (view.showFactorInput) ...<Widget>[
                     const SizedBox(height: 12),
                     if (widget.allowPhoneInput)
                       AppTextField(
@@ -278,165 +335,112 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
                       ],
                     ),
                   ],
-                  if (state.allows(
-                    HandleRecoveryAction.discardPreAttempt,
-                  )) ...<Widget>[
+                  if (state.allows(HandleRecoveryAction.discardPreAttempt) &&
+                      !view.canRestartPreparation) ...[
                     const SizedBox(height: 10),
-                    AppSecondaryButton(
+                    AppPressableText(
                       key: const Key('handle-recovery-cancel-otp'),
-                      label: context.l10n.commonCancel,
-                      onPressed: state.isBusy
-                          ? null
-                          : () => ref
-                                .read(handleRecoveryProvider.notifier)
-                                .discardPreAttempt(),
+                      semanticLabel: context.l10n.handleRecoveryEndPreparation,
+                      onTap: state.isBusy ? null : _restartPreparation,
+                      child: Text(context.l10n.handleRecoveryEndPreparation),
                     ),
                   ],
                 ],
               ),
             ),
-            if (progress != null &&
-                progress.phase !=
-                    HandleRecoveryProgressPhase.otpRequested) ...<Widget>[
-              const SizedBox(height: 14),
-              if (state.allows(HandleRecoveryAction.activate) && !state.isBusy)
-                _RecoveryRiskCard(
-                  state: state,
-                  progress: progress,
-                  onChanged: (value) => ref
-                      .read(handleRecoveryProvider.notifier)
-                      .setRiskConfirmed(value),
-                ),
-              const SizedBox(height: 14),
-              _RecoveryCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    Text(
-                      state.error == null
-                          ? _phaseLabel(context, progress.phase)
-                          : _errorLabel(context, state.error!, otpCooldown),
-                      key: const Key('handle-recovery-progress'),
-                    ),
-                    if (progress.isStillConfirming &&
-                        state.error == null) ...<Widget>[
-                      const SizedBox(height: 10),
-                      Text(
-                        context.l10n.handleRecoveryStillConfirming,
-                        key: const Key('handle-recovery-still-confirming'),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
-                    if (state.allows(HandleRecoveryAction.activateIdentity))
-                      AppPrimaryButton(
-                        key: const Key('handle-recovery-enter-messages'),
-                        label: context.l10n.handleRecoveryEnterMessages,
-                        semanticsIdentifier: 'handle-recovery-enter-messages',
-                        onPressed:
-                            state.isBusy || _isActivatingRecoveredIdentity
-                            ? null
-                            : _activateRecoveredIdentityIfCompleted,
-                      )
-                    else if (state.allows(HandleRecoveryAction.activate))
-                      AppPrimaryButton(
-                        key: const Key('handle-recovery-activate'),
-                        label: context.l10n.handleRecoveryActivate,
-                        semanticsIdentifier: 'handle-recovery-activate',
-                        onPressed:
-                            state.isBusy ||
-                                !state.riskConfirmed ||
-                                !state.allows(HandleRecoveryAction.activate)
-                            ? null
-                            : _activate,
-                      ),
-                    if (_sessionActivationFailed) ...<Widget>[
-                      const SizedBox(height: 10),
-                      Text(
-                        context.l10n.handleRecoverySessionActivationFailed,
-                        key: const Key(
-                          'handle-recovery-session-activation-failed',
-                        ),
-                        style: TextStyle(color: context.awikiTheme.danger),
-                      ),
-                    ],
-                    if (state.allows(HandleRecoveryAction.resume)) ...<Widget>[
-                      const SizedBox(height: 10),
-                      AppSecondaryButton(
-                        key: const Key('handle-recovery-resume'),
-                        label: context.l10n.handleRecoveryResume,
-                        semanticsIdentifier: 'handle-recovery-resume',
-                        onPressed: state.isBusy ? null : _resume,
-                      ),
-                    ],
-                    if (state.allows(
-                      HandleRecoveryAction.quarantineKeyUnavailable,
-                    )) ...<Widget>[
-                      const SizedBox(height: 10),
-                      Text(context.l10n.handleRecoveryKeyUnavailable),
-                      const SizedBox(height: 10),
-                      AppSecondaryButton(
-                        key: const Key(
-                          'handle-recovery-quarantine-key-unavailable',
-                        ),
-                        label: context.l10n.handleRecoveryQuarantine,
-                        onPressed: state.isBusy
-                            ? null
-                            : () => ref
-                                  .read(handleRecoveryProvider.notifier)
-                                  .quarantineKeyUnavailable(
-                                    presenceReason: context
-                                        .l10n
-                                        .handleRecoveryQuarantineReason,
-                                  ),
-                      ),
-                    ],
-                    if (state.allows(HandleRecoveryAction.startNew) &&
-                        !state.allows(
-                          HandleRecoveryAction.activateIdentity,
-                        )) ...<Widget>[
-                      const SizedBox(height: 10),
-                      if (progress.lifecycleClass ==
-                          HandleRecoveryLifecycleClass
-                              .quarantinedKeyUnavailable)
-                        Text(context.l10n.handleRecoveryQuarantined),
-                      const SizedBox(height: 10),
-                      AppSecondaryButton(
-                        key: const Key(
-                          'handle-recovery-start-after-quarantine',
-                        ),
-                        label: context.l10n.handleRecoveryStartNew,
-                        onPressed: state.isBusy ? null : _confirmStartNew,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-            if (!state.authoritative && !state.isBusy)
-              AppSecondaryButton(
-                key: const Key('handle-recovery-retry-lookup'),
-                label: context.l10n.commonRetry,
-                onPressed: () => ref
+            const SizedBox(height: 14),
+            if (view.stage == HandleRecoveryViewStage.confirmation &&
+                progress != null) ...[
+              _RecoveryRiskCard(
+                state: state,
+                progress: progress,
+                onChanged: (value) => ref
                     .read(handleRecoveryProvider.notifier)
-                    .initialize(
-                      handle: widget.initialHandle,
-                      localIdentityId: widget.localIdentityId,
-                    ),
+                    .setRiskConfirmed(value),
               ),
-            if (state.error != null && progress == null) ...<Widget>[
-              const SizedBox(height: 12),
-              Text(
-                _errorLabel(context, state.error!, otpCooldown),
-                style: TextStyle(color: context.awikiTheme.danger),
+              const SizedBox(height: 14),
+              AppPrimaryButton(
+                key: const Key('handle-recovery-activate'),
+                label: context.l10n.handleRecoveryActivate,
+                semanticsIdentifier: 'handle-recovery-activate',
+                onPressed: state.isBusy || !state.riskConfirmed
+                    ? null
+                    : _activate,
+              ),
+            ] else if (view.stage == HandleRecoveryViewStage.completed)
+              AppPrimaryButton(
+                key: const Key('handle-recovery-enter-messages'),
+                label: context.l10n.handleRecoveryEnterMessages,
+                semanticsIdentifier: 'handle-recovery-enter-messages',
+                onPressed: state.isBusy || _isActivatingRecoveredIdentity
+                    ? null
+                    : _activateRecoveredIdentityIfCompleted,
+              )
+            else if (view.stage == HandleRecoveryViewStage.continuation)
+              AppPrimaryButton(
+                key: const Key('handle-recovery-resume'),
+                label: context.l10n.handleRecoveryResume,
+                semanticsIdentifier: 'handle-recovery-resume',
+                onPressed: state.isBusy ? null : _resume,
+              )
+            else if (view.canRestartPreparation)
+              AppPrimaryButton(
+                key: const Key('handle-recovery-restart-preparation'),
+                label: context.l10n.handleRecoveryRestartPreparation,
+                semanticsIdentifier: 'handle-recovery-restart-preparation',
+                onPressed: state.isBusy ? null : _restartPreparation,
+              )
+            else if (!state.authoritative)
+              AppPrimaryButton(
+                key: const Key('handle-recovery-retry-lookup'),
+                label: context.l10n.handleRecoveryCheckRecords,
+                onPressed: state.isBusy
+                    ? null
+                    : () => ref
+                          .read(handleRecoveryProvider.notifier)
+                          .initialize(
+                            handle: widget.initialHandle,
+                            localIdentityId: widget.localIdentityId,
+                          ),
+              )
+            else if (state.allows(HandleRecoveryAction.startNew) &&
+                progress != null)
+              AppPrimaryButton(
+                key: const Key('handle-recovery-start-after-quarantine'),
+                label: context.l10n.handleRecoveryStartNew,
+                onPressed: state.isBusy ? null : _confirmStartNew,
+              ),
+            if (state.allows(
+              HandleRecoveryAction.quarantineKeyUnavailable,
+            )) ...[
+              const SizedBox(height: 10),
+              Text(context.l10n.handleRecoveryKeyUnavailable),
+              const SizedBox(height: 10),
+              AppSecondaryButton(
+                key: const Key('handle-recovery-quarantine-key-unavailable'),
+                label: context.l10n.handleRecoveryQuarantine,
+                onPressed: state.isBusy
+                    ? null
+                    : () => ref
+                          .read(handleRecoveryProvider.notifier)
+                          .quarantineKeyUnavailable(
+                            presenceReason:
+                                context.l10n.handleRecoveryQuarantineReason,
+                          ),
               ),
             ],
-            if (Navigator.of(context).canPop()) ...<Widget>[
+            if (progress?.lifecycleClass ==
+                HandleRecoveryLifecycleClass.quarantinedKeyUnavailable) ...[
+              const SizedBox(height: 10),
+              Text(context.l10n.handleRecoveryQuarantined),
+            ],
+            if (Navigator.of(context).canPop()) ...[
               const SizedBox(height: 12),
               AppPressableText(
                 key: const Key('handle-recovery-use-other-account'),
-                semanticLabel: context.l10n.handleRecoveryUseOtherAccount,
-                onTap: state.isBusy ? null : () => Navigator.of(context).pop(),
-                child: Text(context.l10n.handleRecoveryUseOtherAccount),
+                semanticLabel: context.l10n.handleRecoveryContinueLater,
+                onTap: _leaveRecovery,
+                child: Text(context.l10n.handleRecoveryContinueLater),
               ),
             ],
           ],
@@ -449,6 +453,19 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
           ? AwikiGlassBackdrop(color: canvas, child: content)
           : content,
     );
+  }
+
+  void _leaveRecovery() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      ref.read(handleRecoveryProvider.notifier).invalidate();
+      navigator.pop();
+    }
+  }
+
+  Future<void> _restartPreparation() async {
+    _otpController.clear();
+    await ref.read(handleRecoveryProvider.notifier).discardPreAttempt();
   }
 
   void _handlePhoneInputChanged() {
@@ -478,7 +495,6 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     );
     if (mounted && confirmed == true) {
       _otpController.clear();
-      _phoneController.clear();
       ref.read(handleRecoveryProvider.notifier).startAfterQuarantine();
     }
   }
@@ -617,7 +633,7 @@ class _RecoveryVerifiedValue extends StatelessWidget {
   }
 }
 
-class _RecoveryRiskCard extends StatelessWidget {
+class _RecoveryRiskCard extends StatefulWidget {
   const _RecoveryRiskCard({
     required this.state,
     required this.progress,
@@ -629,7 +645,16 @@ class _RecoveryRiskCard extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   @override
+  State<_RecoveryRiskCard> createState() => _RecoveryRiskCardState();
+}
+
+class _RecoveryRiskCardState extends State<_RecoveryRiskCard> {
+  bool _showDetails = false;
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
+    final progress = widget.progress;
     return _RecoveryCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -640,14 +665,16 @@ class _RecoveryRiskCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           for (final (index, line) in <String>[
-            context.l10n.handleRecoveryHandlePreserved,
             context.l10n.handleRecoveryOtherDevicesRejoin,
             progress.impact.localOrdinaryDataWillMigrate
                 ? context.l10n.handleRecoveryLocalOrdinaryMigration
                 : context.l10n.handleRecoveryFreshDataNotice,
             context.l10n.handleRecoveryOldE2eeUnavailable,
-            context.l10n.handleRecoverySingletonRisk,
-            context.l10n.handleRecoveryDidOnlyUnsupported,
+            if (_showDetails) ...[
+              context.l10n.handleRecoveryHandlePreserved,
+              context.l10n.handleRecoverySingletonRisk,
+              context.l10n.handleRecoveryDidOnlyUnsupported,
+            ],
           ].indexed) ...<Widget>[
             if (index > 0)
               Container(height: 0.5, color: context.awikiTheme.glassEdgeActive),
@@ -663,6 +690,21 @@ class _RecoveryRiskCard extends StatelessWidget {
               ),
             ),
           ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: AppPressableText(
+              key: const Key('handle-recovery-impact-details'),
+              semanticLabel: _showDetails
+                  ? context.l10n.handleRecoveryHideDetails
+                  : context.l10n.handleRecoveryDetails,
+              onTap: () => setState(() => _showDetails = !_showDetails),
+              child: Text(
+                _showDetails
+                    ? context.l10n.handleRecoveryHideDetails
+                    : context.l10n.handleRecoveryDetails,
+              ),
+            ),
+          ),
           const SizedBox(height: 6),
           AwikiCheckRow(
             key: const Key('handle-recovery-risk-confirmation'),
@@ -671,13 +713,27 @@ class _RecoveryRiskCard extends StatelessWidget {
             onChanged:
                 state.isBusy || !state.allows(HandleRecoveryAction.activate)
                 ? null
-                : onChanged,
+                : widget.onChanged,
           ),
         ],
       ),
     );
   }
 }
+
+String _recoveryStageLabel(
+  BuildContext context,
+  HandleRecoveryPresentation view,
+) => switch (view.stage) {
+  HandleRecoveryViewStage.checking => context.l10n.handleRecoveryChecking,
+  HandleRecoveryViewStage.verification =>
+    context.l10n.handleRecoveryVerifyTitle,
+  HandleRecoveryViewStage.blocked => context.l10n.handleRecoveryBlockedTitle,
+  _ =>
+    view.state.progress == null
+        ? context.l10n.handleRecoveryChecking
+        : _phaseLabel(context, view.state.progress!.phase),
+};
 
 String _errorLabel(
   BuildContext context,

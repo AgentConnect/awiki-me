@@ -42,6 +42,7 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/backend_capabilities_port.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';

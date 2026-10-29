@@ -8,6 +8,7 @@ macOS/Windows 的“设置 → 应用 → 网络”只有“使用系统代理�
 和租户同步。启动与 native Core 打开前恢复选项，保存失败回滚当前传输策略。
 关闭时禁止应用层环境变量代理；VPN/TUN 仍由操作系统路由。
 页面状态只显示最近路径：系统代理、直接连接、代理不可用已回退。
+分组布局、加载与失败反馈及定向验证见 [设置页合同](settings-pages.md)。
 
 Rust `NetworkRuntime` 统一处理 Core HTTP/WS、附件、Dart 服务适配和头像下载。
 Dart 继续拥有 User Service 协议及逐请求认证；Core 继续拥有 WBA、可靠接收、密码状态与 outbox。

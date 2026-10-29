@@ -35,7 +35,13 @@ class DesktopNetworkPreference extends ChangeNotifier {
   bool enabled = true;
   bool saving = false;
   core.AwikiNetworkStatus status = core.AwikiNetworkStatus.direct;
-  Future<void> initialize() => _initializing ??= _initialize();
+  Future<void> initialize() => _initializing ??= _initialize().catchError((
+    Object error,
+    StackTrace stack,
+  ) {
+    _initializing = null;
+    Error.throwWithStackTrace(error, stack);
+  });
   Future<void> _initialize() async {
     final preferences = await _preferences();
     enabled = (await preferences.read(key: key)) != 'false';

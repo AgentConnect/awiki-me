@@ -68,6 +68,28 @@ Recovery 的完整断言。
 
 ## 当前协议边界
 
+### 恢复页的状态与操作（2026-10-29）
+
+页面沿用 620 宽度上限、现有卡片与字体。Handle 始终可见，状态及错误分别展示；不能因
+`otp_requested` 等粗粒度 phase 隐藏失败原因。视图由 Core 的 `allowedActions` 决定，
+不从错误文案推导提交权限，也不在 Dart 复制恢复授权状态机。
+
+- 需要 factor 时才显示验证码表单；准备完成后显示三条主要影响与一次风险确认，补充限制可展开。
+- 已提交或结果未知时只续办原 operation；不会退回新建恢复或重新发送短信。
+- 未提交且 Core 只允许 discard 的旧失败任务显示“重新准备”。点击后仅明确丢弃该未提交任务、
+  清除瞬时验证码并返回验证表单；不自动发短信或提交，旧历史不删除。
+- 完成后显示“进入消息”；只有用户选择且新会话确实激活后才退出恢复页。进入失败可重复此本地操作。
+- 返回/稍后继续保留 Core 持久化任务，并使旧页面回调失效；再次进入先读取精确任务。
+- 诊断复制仅含闭合错误码、视图阶段和 UTC 时间，不含 Handle、手机号、OTP、operation、密钥或响应正文。
+
+本机只有已完成退役的旧 binding，且另一台设备已推进远端代次时，Core 可以在同一验证流程
+选择 fresh owner。所有相关历史都须有匹配的删除证明且不存在活跃凭证或竞争事务；不满足则
+继续拒绝。旧本地历史保留在原 owner 下，新身份不自动继承。首次 Commit 前 Core 会重新检查，
+不改写已冻结的恢复材料。普通 Join 与旧密钥读取不使用这一例外。
+
+跨仓候选来源由根目录 `dependencies.source.json` 和 Core 的配套源码锁固定；仅供显式源码
+联调。正式 App 发布须先发布包含修复的新 Core SDK，更新 registry pin/lock 后撤销临时清单。
+
 - 当前 OTP purpose 固定为 `awiki.identity.handle-recovery.v1`。
 - Core 在请求 Recovery OTP 前创建 opaque operation ID；OTP、Handle 和 operation ID 必须
   在 prepare 阶段保持同一绑定。统一 onboarding Recovery 不提供 selector；Core 按 Handle

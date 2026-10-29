@@ -3615,7 +3615,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryMigrationUnsupported =>
-      '本机已有身份无法安全接续；尚未发起远端提交。请保留本机数据并处理身份状态，不要改用新的本机身份覆盖旧数据。';
+      '本机保留的旧身份暂时无法安全接续。本次恢复尚未提交，旧数据仍会保留。可以重新准备；若仍然失败，请返回使用现有设备加入或联系支持。';
 
   @override
   String get handleRecoveryErrorNotPrepared => '恢复尚未准备完成；本次流程已终止，请重新开始。';
@@ -4104,7 +4104,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get serverFeaturesUpdates => '客户端更新';
 
   @override
-  String get serverFeaturesPages => '内容与站点';
+  String get serverFeaturesPages => '内容页面';
 
   @override
   String get onboardingHandleOnlyHint =>
@@ -4150,4 +4150,95 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsNetworkSaveFailed => '网络设置保存失败，请重试。';
+
+  @override
+  String get handleRecoveryVerifyTitle => '验证手机号';
+
+  @override
+  String get handleRecoveryBlockedTitle => '暂时无法继续恢复';
+
+  @override
+  String get handleRecoveryBlockedHelp =>
+      '当前状态暂不支持继续操作。恢复记录已保留，你可以返回使用其他账号，稍后重新检查。';
+
+  @override
+  String get handleRecoveryRestartPreparation => '重新准备';
+
+  @override
+  String get handleRecoveryEndPreparation => '结束本次准备';
+
+  @override
+  String get handleRecoveryCopyDiagnostic => '复制诊断信息';
+
+  @override
+  String get handleRecoveryDetails => '查看全部影响';
+
+  @override
+  String get handleRecoveryHideDetails => '收起详细说明';
+
+  @override
+  String get handleRecoveryContinueLater => '稍后继续';
+
+  @override
+  String get serverFeaturesIntro => '查看当前服务器支持的功能。';
+
+  @override
+  String get serverFeaturesAvailabilityNote => '支持情况不代表已在当前聊天中开启加密。';
+
+  @override
+  String get serverFeaturesConfirming => '正在确认功能…';
+
+  @override
+  String get serverFeaturesRefreshFailed => '暂时无法更新，请重试。';
+
+  @override
+  String get serverFeaturesStatusSupported => '支持';
+
+  @override
+  String get serverFeaturesStatusUnsupported => '暂不支持';
+
+  @override
+  String get serverFeaturesStatusUnknown => '待确认';
+
+  @override
+  String get serverFeaturesMessagingDescription => '与联系人收发普通私聊消息。';
+
+  @override
+  String get serverFeaturesGroupsDescription => '创建或加入群组，与成员交流。';
+
+  @override
+  String get serverFeaturesAttachmentsDescription => '在聊天中发送和接收图片、文件。';
+
+  @override
+  String get serverFeaturesEncryptionDescription => '为私聊消息提供端到端加密。';
+
+  @override
+  String get serverFeaturesGroupEncryptionDescription => '使用端到端加密保护群内消息。';
+
+  @override
+  String get serverFeaturesDevicesDescription => '在多台设备上使用同一账号。';
+
+  @override
+  String get serverFeaturesAgentsDescription => '创建和管理与你协作的 Agent。';
+
+  @override
+  String get serverFeaturesMailDescription => '使用服务器提供的邮箱收发邮件。';
+
+  @override
+  String get serverFeaturesPagesDescription => '发布和管理用户名下的内容页面。';
+
+  @override
+  String get serverFeaturesUpdatesDescription => '获取客户端的更新建议和版本要求。';
+
+  @override
+  String get settingsNetworkRecentPath => '最近连接方式';
+
+  @override
+  String get settingsNetworkReading => '正在读取…';
+
+  @override
+  String get settingsNetworkInitializeFailed => '无法读取网络设置，请重试。';
+
+  @override
+  String get settingsNetworkStatusFailed => '暂时无法读取连接状态。';
 }

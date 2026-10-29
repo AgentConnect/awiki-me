@@ -388,6 +388,7 @@ void _registerStateMachineRecoveryE2e() {
       await _smWaitMessages(tester, appContainer, identityA.handle!);
       final recoveredA = appContainer.read(sessionProvider).session!;
       if (recoveredA.did == identityA.did ||
+          recoveredA.ownerIdentityId == null ||
           presence.calls != 1 ||
           recording.requestOtpCalls != 0) {
         fail('Resume performed another first Commit or reused the old DID.');
@@ -422,6 +423,14 @@ void _registerStateMachineRecoveryE2e() {
           !historical.allowedActions.contains(HandleRecoveryAction.startNew)) {
         fail('Deleted history was offered as an active credential.');
       }
+      final successor = await _smRecoverOnAnotherDevice(
+        config,
+        account,
+        handleA,
+      );
+      if (successor.currentDid == recoveredA.did) {
+        fail('The independent device did not advance the remote identity.');
+      }
       await _smSubmitHandle(
         tester,
         appContainer,
@@ -455,7 +464,12 @@ void _registerStateMachineRecoveryE2e() {
         config.didDomain,
       );
       await _smWaitPrepared(tester);
+      final secondPrepared = _recoveryUiContainer(
+        tester,
+      ).read(handleRecoveryProvider).progress!;
       if (secondOperation == operationA ||
+          secondPrepared.ownerIdentityId == recoveredA.ownerIdentityId ||
+          secondPrepared.impact.localOrdinaryDataWillMigrate ||
           _recoveryUiContainer(
             tester,
           ).read(handleRecoveryProvider).riskConfirmed) {
@@ -473,6 +487,9 @@ void _registerStateMachineRecoveryE2e() {
           .listLocalIdentities();
       if (secondSession.did == recoveredA.did ||
           secondSession.did == identityA.did ||
+          secondSession.did == successor.currentDid ||
+          recording.lastProgress?.registryEpochReset?.previousDid !=
+              successor.currentDid ||
           presence.calls != 2 ||
           !finalIdentities.any((item) => item.did == identityB.did) ||
           finalIdentities
@@ -490,6 +507,8 @@ void _registerStateMachineRecoveryE2e() {
           'visible_current_data_deletion',
           'same_process_provider_tree_reentered',
           'historical_applied_not_login',
+          'independent_device_advanced_remote_epoch_after_local_deletion',
+          'older_retired_binding_selected_fresh_owner_without_history_adoption',
           'second_operation_and_confirmation_distinct',
           'second_recovery_entered_messages',
           'independent_handle_preserved',
@@ -498,6 +517,66 @@ void _registerStateMachineRecoveryE2e() {
       completedAll = true;
     },
   );
+}
+
+Future<HandleRecoveryRegistryEpochReset> _smRecoverOnAnotherDevice(
+  _RemoteRecoveryRunConfig config,
+  _DedicatedAccount account,
+  String bareHandle,
+) async {
+  _requireFreshRoot(config.peerAppStateRoot);
+  final peer = await AppBootstrap.create(
+    environment: _environment(
+      config,
+      directE2eeEnabled: false,
+      groupE2eeEnabled: false,
+      agentImEnabled: false,
+    ),
+    appStateRoot: config.peerAppStateRoot,
+  );
+  try {
+    final capabilities = peer.identityCorePort;
+    if (capabilities is! BackendCapabilitiesPort) {
+      fail('The independent device has no real backend capability adapter.');
+    }
+    await (capabilities as BackendCapabilitiesPort).backendCapabilities();
+    final recovery = peer.handleRecoveryCorePort!;
+    final receipt = await recovery.requestOtp(
+      handle: '$bareHandle.${config.didDomain}',
+      phone: account.phone,
+    );
+    final otp = await _resolveOtp(
+      account: account,
+      purpose: _recoveryPurpose,
+      handle: bareHandle,
+      didDomain: config.didDomain,
+      operationId: receipt.operationId,
+    );
+    final prepared = await recovery.prepare(
+      operationId: receipt.operationId,
+      phone: account.phone,
+      otp: otp,
+    );
+    if (!prepared.allowedActions.contains(HandleRecoveryAction.activate)) {
+      fail('The independent-device Recovery was not ready for confirmation.');
+    }
+    var completed = await recovery.activate(
+      operationId: receipt.operationId,
+      userPresenceConfirmed: true,
+    );
+    for (var attempt = 0; !completed.isCompleted && attempt < 8; attempt += 1) {
+      if (!completed.allowedActions.contains(HandleRecoveryAction.resume)) {
+        fail('The independent-device Recovery could not resume exactly.');
+      }
+      completed = await recovery.reconcile(receipt.operationId);
+    }
+    if (!completed.isCompleted || completed.registryEpochReset == null) {
+      fail('The independent-device Recovery did not complete.');
+    }
+    return completed.registryEpochReset!;
+  } finally {
+    await peer.dispose();
+  }
 }
 
 class _HeldRecoveryPort extends _RecordingHandleRecoveryCorePort {
