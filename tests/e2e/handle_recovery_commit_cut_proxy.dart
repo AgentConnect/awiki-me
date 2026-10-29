@@ -66,6 +66,42 @@ class HandleRecoveryCommitCutProxy {
 
   Future<void> _handleRequest(HttpRequest request) async {
     try {
+      final query = request.uri.queryParametersAll;
+      if (request.method == 'GET' &&
+          request.uri.path == '/user-service/v1/server-info' &&
+          query.length == 2 &&
+          query['capabilities_version']?.length == 1 &&
+          query['capabilities_version']!.single == '1' &&
+          query['registration_domain']?.length == 1 &&
+          query['registration_domain']!.single == _upstream.host) {
+        // Reopening Core on this loopback endpoint creates a separate capability
+        // scope. Read the real declaration; never seed or emulate its authority.
+        final outgoing = http.Request(
+          'GET',
+          _upstream.replace(path: request.uri.path, query: request.uri.query),
+        )..followRedirects = false;
+        outgoing.headers['Accept'] = 'application/json';
+        if (request.headers.value('x-awiki-client-version')
+            case final version?) {
+          outgoing.headers['X-AWiki-Client-Version'] = version;
+        }
+        final response = await _client
+            .send(outgoing)
+            .timeout(const Duration(seconds: 10));
+        final bytes = <int>[];
+        await for (final chunk in response.stream.timeout(
+          const Duration(seconds: 10),
+        )) {
+          if (bytes.length + chunk.length > 262144) {
+            throw StateError('discovery_too_large');
+          }
+          bytes.addAll(chunk);
+        }
+        request.response.statusCode = response.statusCode;
+        request.response.headers.contentType = ContentType.json;
+        request.response.add(bytes);
+        return;
+      }
       if (committed &&
           request.method == 'GET' &&
           request.uri.path == '/.well-known/handle/$_handle') {

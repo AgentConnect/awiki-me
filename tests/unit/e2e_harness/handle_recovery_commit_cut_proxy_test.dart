@@ -18,6 +18,16 @@ void main() {
           handle: 'test-handle',
           client: MockClient((request) async {
             calls++;
+            if (request.method == 'GET') {
+              expect(
+                request.url.toString(),
+                'https://$domain/user-service/v1/server-info?capabilities_version=1&registration_domain=$domain',
+              );
+              expect(request.headers.containsKey('authorization'), isFalse);
+              expect(request.headers.containsKey('cookie'), isFalse);
+              expect(request.followRedirects, isFalse);
+              return http.Response('{"schema_version":1}', 200);
+            }
             expect(
               request.url.toString(),
               'https://$domain/user-service/v1/did-auth/rpc',
@@ -51,6 +61,26 @@ void main() {
         );
         expect(wrongOperation.statusCode, 502);
         expect(calls, 0);
+        for (final query in [
+          'capabilities_version=1&registration_domain=other.invalid',
+          'capabilities_version=1&registration_domain=$domain&extra=1',
+          'capabilities_version=1&registration_domain=$domain&registration_domain=$domain',
+        ]) {
+          final rejected = await http.get(
+            Uri.parse('${proxy.endpoint}/user-service/v1/server-info?$query'),
+          );
+          expect(rejected.statusCode, 502);
+        }
+        expect(calls, 0);
+        final declaration = await http.get(
+          Uri.parse(
+            '${proxy.endpoint}/user-service/v1/server-info?capabilities_version=1&registration_domain=$domain',
+          ),
+          headers: {'Authorization': 'must-not-forward', 'Cookie': 'private'},
+        );
+        expect(declaration.statusCode, 200);
+        expect(declaration.body, '{"schema_version":1}');
+        expect(calls, 1);
         final response = await http.post(
           Uri.parse('${proxy.endpoint}/user-service/v1/did-auth/rpc'),
           body: jsonEncode({
@@ -67,12 +97,12 @@ void main() {
         );
         expect(cut.statusCode, 502);
         expect(proxy.localCutObserved, isTrue);
-        expect(calls, 1);
+        expect(calls, 2);
         await http.post(
           Uri.parse('${proxy.endpoint}/user-service/v1/did-auth/rpc'),
           body: '{}',
         );
-        expect(calls, 1);
+        expect(calls, 2);
       },
     );
   }
