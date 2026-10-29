@@ -128,3 +128,13 @@ Core 当前制品逐字节匹配，均为 host arm64。这个启动检查不代�
 - 当前已发布同名 Core 0.1.12 不包含本修复。本轮不覆盖同版本发布；正式 App 合并发布前，先发布包含
   修复的新 Core 版本，再更新正式 pin/lock、撤销临时源码清单并完成 registry/真实服务门禁。
 - Message #22、System #55 继续保留前一轮生产修复；这次仅把配套恢复回归并入 System #55。
+
+
+## 正式依赖切换（后续生产候选）
+
+同事已从 `04dd9991024ab77ce00f4460706d2536f6571e0a` 发布 `awiki-im-core 0.1.13`。
+官方归档 checksum 为 `0c39ab233dbe9ba2732461ea28a1184ab5d9c59ca7222394a992af6a91c9d9c6`；
+本次独立核对包内 vcs SHA 与六个恢复相关 Rust 文件，均与该提交一致，发布 workflow 成功。
+撤销 App/Core 临时源码清单，正式 Rust SDK policy/锁切换到 registry 0.1.13；ANP 1.0.7、
+Identity 0.2.6 保持。新 App 候选版本为 0.1.42+54。
+前文源码联调和失败记录保留为历史证据；正式制品来源及发布验收另行记录，不能由 Debug 代替。
