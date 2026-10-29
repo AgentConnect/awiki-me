@@ -16,9 +16,11 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_presentation.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_session.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,8 +28,10 @@ import 'test_support.dart';
 
 part 'handle_recovery_state_machine_test.part.dart';
 part 'handle_recovery_session_test.part.dart';
+part 'handle_recovery_presentation_test.part.dart';
 
 void main() {
+  _registerHandleRecoveryPresentationTests();
   testWidgets(
     'registry conflict preserves resume and lets users return to other recoveries',
     (tester) async {
@@ -632,8 +636,8 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('handle-recovery-handle')), findsOneWidget);
-      expect(find.byKey(const Key('handle-recovery-phone')), findsOneWidget);
-      expect(find.byKey(const Key('handle-recovery-otp')), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-phone')), findsNothing);
+      expect(find.byKey(const Key('handle-recovery-otp')), findsNothing);
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
       await tester.pumpAndSettle();
 
@@ -1018,7 +1022,9 @@ void main() {
         await tester.ensureVisible(
           find.byKey(const Key('handle-recovery-enter-messages')),
         );
-        await tester.tap(find.byKey(const Key('handle-recovery-enter-messages')));
+        await tester.tap(
+          find.byKey(const Key('handle-recovery-enter-messages')),
+        );
         await tester.pumpAndSettle();
 
         expect(find.byType(HandleRecoveryPage), findsNothing);
@@ -1634,45 +1640,51 @@ HandleRecoveryProgress _operation({
       'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   HandleRecoveryLocalMigration localMigration =
       HandleRecoveryLocalMigration.supported,
+  List<HandleRecoveryAction>? allowedActionsOverride,
+  HandleRecoveryFailureCode? failureCode,
+  bool localOrdinaryDataWillMigrate = true,
 }) => HandleRecoveryProgress(
-  allowedActions: [
-    if (lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
-        !commitAttempted) ...[
-      HandleRecoveryAction.discardPreAttempt,
-      if (readyToCommit &&
-          localMigration != HandleRecoveryLocalMigration.preCommitUnsupported &&
-          keyState == HandleRecoveryKeyState.available)
-        HandleRecoveryAction.activate,
-      if (!readyToCommit) ...[
-        HandleRecoveryAction.requestOtp,
-        HandleRecoveryAction.prepare,
+  allowedActions:
+      allowedActionsOverride ??
+      [
+        if (lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
+            !commitAttempted) ...[
+          HandleRecoveryAction.discardPreAttempt,
+          if (readyToCommit &&
+              localMigration !=
+                  HandleRecoveryLocalMigration.preCommitUnsupported &&
+              keyState == HandleRecoveryKeyState.available)
+            HandleRecoveryAction.activate,
+          if (!readyToCommit) ...[
+            HandleRecoveryAction.requestOtp,
+            HandleRecoveryAction.prepare,
+          ],
+        ],
+        if (commitAttempted &&
+            keyState == HandleRecoveryKeyState.available &&
+            [
+              HandleRecoveryLifecycleClass.remoteUnresolved,
+              HandleRecoveryLifecycleClass.remoteCommitted,
+              HandleRecoveryLifecycleClass.localTransitionPending,
+            ].contains(lifecycleClass))
+          HandleRecoveryAction.resume,
+        if (lifecycleClass == HandleRecoveryLifecycleClass.remoteUnresolved &&
+            keyState == HandleRecoveryKeyState.available) ...[
+          HandleRecoveryAction.requestOtp,
+          HandleRecoveryAction.prepare,
+        ],
+        if (lifecycleClass == HandleRecoveryLifecycleClass.applied)
+          HandleRecoveryAction.activateIdentity,
+        if (keyState == HandleRecoveryKeyState.permanentlyUnavailable)
+          HandleRecoveryAction.quarantineKeyUnavailable,
       ],
-    ],
-    if (commitAttempted &&
-        keyState == HandleRecoveryKeyState.available &&
-        [
-          HandleRecoveryLifecycleClass.remoteUnresolved,
-          HandleRecoveryLifecycleClass.remoteCommitted,
-          HandleRecoveryLifecycleClass.localTransitionPending,
-        ].contains(lifecycleClass))
-      HandleRecoveryAction.resume,
-    if (lifecycleClass == HandleRecoveryLifecycleClass.remoteUnresolved &&
-        keyState == HandleRecoveryKeyState.available) ...[
-      HandleRecoveryAction.requestOtp,
-      HandleRecoveryAction.prepare,
-    ],
-    if (lifecycleClass == HandleRecoveryLifecycleClass.applied)
-      HandleRecoveryAction.activateIdentity,
-    if (keyState == HandleRecoveryKeyState.permanentlyUnavailable)
-      HandleRecoveryAction.quarantineKeyUnavailable,
-  ],
   operationId: operationId,
   ownerIdentityId: 'identity-alice',
   accountUserId: accountUserId,
   handle: 'alice.awiki.info',
   lifecycleClass: lifecycleClass,
-  impact: const HandleRecoveryImpact(
-    localOrdinaryDataWillMigrate: true,
+  impact: HandleRecoveryImpact(
+    localOrdinaryDataWillMigrate: localOrdinaryDataWillMigrate,
     otherDevicesMustRejoin: true,
   ),
   commitAttempted: commitAttempted,
@@ -1680,6 +1692,7 @@ HandleRecoveryProgress _operation({
   resultAbsent: resultAbsent,
   readyToCommit: readyToCommit,
   localMigration: localMigration,
+  failureCode: failureCode,
   discardAllowed:
       lifecycleClass == HandleRecoveryLifecycleClass.preCommit &&
       !commitAttempted,
@@ -1707,9 +1720,11 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     this.statusError,
     this.reconcileError,
     this.beforeActivate,
+    this.discardCompletes = false,
   }) : operation = operation ?? _operation();
 
   HandleRecoveryProgress operation;
+  final bool discardCompletes;
   final HandleRecoveryProgress? otpResponseOperation;
   final Object? otpError;
   final HandleRecoveryProgress? activateResult;
@@ -1861,6 +1876,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   @override
   Future<void> discardPreAttempt(String operationId) async {
     discardCalls += 1;
+    if (discardCompletes) operationDeleted = true;
   }
 
   @override

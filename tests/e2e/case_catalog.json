@@ -104,12 +104,13 @@
     },
     {
       "caseId": "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001",
-      "feature": "Visible credential deletion followed by a second Recovery in the same App process",
+      "feature": "Visible credential deletion, remote epoch advance and fresh Recovery in the original App",
       "layer": "remote_product_ui_security",
       "preconditions": "Reviewed awiki.info, isolated production AppBootstrap/native Core roots and a protected dedicated fixed-OTP account; two fixture Handles and E2E-only user presence.",
-      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion.",
+      "action": "Drive Settings Recovery, deterministic native Commit/local-authority cut and delayed App port returns; switch to another visible Handle, reopen the same native scope, use unified onboarding and perform a second Recovery after visible data deletion. After local deletion, recover the same Handle on another isolated native runtime before returning to the original App.",
       "exactOracles": [
-        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority."
+        "The exact real Core and visible App lifecycle checkpoints all complete without transferring operation, risk confirmation, session or routing authority.",
+        "All retired older bindings remain historical; the original App prepares a distinct fresh owner and recovers from the new remote DID without local history adoption."
       ],
       "negativeChecks": [
         "Synthetic backend results, an unconfirmed first Commit, mixed Handle state, old callback feedback/navigation, login from deleted audit, a new factor for resume, or deletion of unresolved recovery material prevents pass attestation."
@@ -131,7 +132,9 @@
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
-          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_device_advanced_remote_epoch_after_local_deletion",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:older_retired_binding_selected_fresh_owner_without_history_adoption"
         ],
         "exactOracleAssertions": [
           [
@@ -141,6 +144,10 @@
             "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
             "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
             "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+          ],
+          [
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_device_advanced_remote_epoch_after_local_deletion",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:older_retired_binding_selected_fresh_owner_without_history_adoption"
           ]
         ],
         "negativeCheckAssertions": [
@@ -150,7 +157,9 @@
             "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
             "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
             "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
-            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_device_advanced_remote_epoch_after_local_deletion",
+            "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:older_retired_binding_selected_fresh_owner_without_history_adoption"
           ]
         ]
       }

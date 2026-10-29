@@ -6775,7 +6775,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryMigrationUnsupported.
   ///
   /// In zh, this message translates to:
-  /// **'本机已有身份无法安全接续；尚未发起远端提交。请保留本机数据并处理身份状态，不要改用新的本机身份覆盖旧数据。'**
+  /// **'本机保留的旧身份暂时无法安全接续。本次恢复尚未提交，旧数据仍会保留。可以重新准备；若仍然失败，请返回使用现有设备加入或联系支持。'**
   String get handleRecoveryMigrationUnsupported;
 
   /// No description provided for @handleRecoveryErrorNotPrepared.
@@ -7797,6 +7797,60 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'网络设置保存失败，请重试。'**
   String get settingsNetworkSaveFailed;
+
+  /// No description provided for @handleRecoveryVerifyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证手机号'**
+  String get handleRecoveryVerifyTitle;
+
+  /// No description provided for @handleRecoveryBlockedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法继续恢复'**
+  String get handleRecoveryBlockedTitle;
+
+  /// No description provided for @handleRecoveryBlockedHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前状态暂不支持继续操作。恢复记录已保留，你可以返回使用其他账号，稍后重新检查。'**
+  String get handleRecoveryBlockedHelp;
+
+  /// No description provided for @handleRecoveryRestartPreparation.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新准备'**
+  String get handleRecoveryRestartPreparation;
+
+  /// No description provided for @handleRecoveryEndPreparation.
+  ///
+  /// In zh, this message translates to:
+  /// **'结束本次准备'**
+  String get handleRecoveryEndPreparation;
+
+  /// No description provided for @handleRecoveryCopyDiagnostic.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制诊断信息'**
+  String get handleRecoveryCopyDiagnostic;
+
+  /// No description provided for @handleRecoveryDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看全部影响'**
+  String get handleRecoveryDetails;
+
+  /// No description provided for @handleRecoveryHideDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起详细说明'**
+  String get handleRecoveryHideDetails;
+
+  /// No description provided for @handleRecoveryContinueLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'稍后继续'**
+  String get handleRecoveryContinueLater;
 }
 
 class _AppLocalizationsDelegate

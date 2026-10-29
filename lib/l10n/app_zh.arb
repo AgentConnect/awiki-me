@@ -1615,7 +1615,7 @@
   "handleRecoveryQuarantined": "密钥不可用的操作已隔离，并由 Core 保留用于审计。现在可以开始新的恢复。",
   "handleRecoveryRestartWarning": "需要重新验证手机号。新的恢复会替换 DID，其他设备需重新加入；旧数据保留，但不保证自动迁移到新身份。确认开始新的恢复？",
   "handleRecoveryStartNew": "开始新的恢复",
-  "handleRecoveryMigrationUnsupported": "本机已有身份无法安全接续；尚未发起远端提交。请保留本机数据并处理身份状态，不要改用新的本机身份覆盖旧数据。",
+  "handleRecoveryMigrationUnsupported": "本机保留的旧身份暂时无法安全接续。本次恢复尚未提交，旧数据仍会保留。可以重新准备；若仍然失败，请返回使用现有设备加入或联系支持。",
   "handleRecoveryErrorNotPrepared": "恢复尚未准备完成；本次流程已终止，请重新开始。",
   "handleRecoveryErrorUserPresenceRequired": "需要你再次完成本机系统验证后才能继续。",
   "handleRecoveryErrorTransitionMismatch": "恢复上下文不匹配；为安全起见本次流程已终止。",
@@ -1832,5 +1832,14 @@
   "settingsNetworkSystemProxy": "系统代理",
   "settingsNetworkDirect": "直接连接",
   "settingsNetworkFallback": "代理不可用已回退",
-  "settingsNetworkSaveFailed": "网络设置保存失败，请重试。"
+  "settingsNetworkSaveFailed": "网络设置保存失败，请重试。",
+  "handleRecoveryVerifyTitle": "验证手机号",
+  "handleRecoveryBlockedTitle": "暂时无法继续恢复",
+  "handleRecoveryBlockedHelp": "当前状态暂不支持继续操作。恢复记录已保留，你可以返回使用其他账号，稍后重新检查。",
+  "handleRecoveryRestartPreparation": "重新准备",
+  "handleRecoveryEndPreparation": "结束本次准备",
+  "handleRecoveryCopyDiagnostic": "复制诊断信息",
+  "handleRecoveryDetails": "查看全部影响",
+  "handleRecoveryHideDetails": "收起详细说明",
+  "handleRecoveryContinueLater": "稍后继续"
 }

@@ -3615,7 +3615,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryMigrationUnsupported =>
-      '本机已有身份无法安全接续；尚未发起远端提交。请保留本机数据并处理身份状态，不要改用新的本机身份覆盖旧数据。';
+      '本机保留的旧身份暂时无法安全接续。本次恢复尚未提交，旧数据仍会保留。可以重新准备；若仍然失败，请返回使用现有设备加入或联系支持。';
 
   @override
   String get handleRecoveryErrorNotPrepared => '恢复尚未准备完成；本次流程已终止，请重新开始。';
@@ -4150,4 +4150,32 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsNetworkSaveFailed => '网络设置保存失败，请重试。';
+
+  @override
+  String get handleRecoveryVerifyTitle => '验证手机号';
+
+  @override
+  String get handleRecoveryBlockedTitle => '暂时无法继续恢复';
+
+  @override
+  String get handleRecoveryBlockedHelp =>
+      '当前状态暂不支持继续操作。恢复记录已保留，你可以返回使用其他账号，稍后重新检查。';
+
+  @override
+  String get handleRecoveryRestartPreparation => '重新准备';
+
+  @override
+  String get handleRecoveryEndPreparation => '结束本次准备';
+
+  @override
+  String get handleRecoveryCopyDiagnostic => '复制诊断信息';
+
+  @override
+  String get handleRecoveryDetails => '查看全部影响';
+
+  @override
+  String get handleRecoveryHideDetails => '收起详细说明';
+
+  @override
+  String get handleRecoveryContinueLater => '稍后继续';
 }

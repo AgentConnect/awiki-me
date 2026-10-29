@@ -4313,6 +4313,7 @@ class FakeIdentityCorePort
           'identity.device_revoke',
           'identity.capability_upgrade',
           'identity.root_transfer',
+          'identity.account_recovery',
           'agents.managed_agents',
           'agents.daemon',
           'account.state_sync',

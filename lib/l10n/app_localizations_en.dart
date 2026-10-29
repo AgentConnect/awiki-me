@@ -3852,7 +3852,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryMigrationUnsupported =>
-      'The existing local identity cannot be continued safely. No remote commit was attempted. Keep the local data and resolve the identity state; do not replace it with a new local identity.';
+      'The previous local identity cannot be continued safely. No recovery commit was attempted and existing data is retained. You can prepare again; if this persists, return to join using an existing device or contact support.';
 
   @override
   String get handleRecoveryErrorNotPrepared =>
@@ -4468,4 +4468,32 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsNetworkSaveFailed =>
       'Could not save network settings. Try again.';
+
+  @override
+  String get handleRecoveryVerifyTitle => 'Verify your phone';
+
+  @override
+  String get handleRecoveryBlockedTitle => 'Recovery cannot continue yet';
+
+  @override
+  String get handleRecoveryBlockedHelp =>
+      'The current state does not allow this action. Your recovery record is retained. You can use another account and check again later.';
+
+  @override
+  String get handleRecoveryRestartPreparation => 'Prepare again';
+
+  @override
+  String get handleRecoveryEndPreparation => 'End this preparation';
+
+  @override
+  String get handleRecoveryCopyDiagnostic => 'Copy diagnostic information';
+
+  @override
+  String get handleRecoveryDetails => 'View all effects';
+
+  @override
+  String get handleRecoveryHideDetails => 'Hide details';
+
+  @override
+  String get handleRecoveryContinueLater => 'Continue later';
 }
