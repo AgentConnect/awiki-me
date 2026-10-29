@@ -138,3 +138,17 @@ Core 当前制品逐字节匹配，均为 host arm64。这个启动检查不代�
 撤销 App/Core 临时源码清单，正式 Rust SDK policy/锁切换到 registry 0.1.13；ANP 1.0.7、
 Identity 0.2.6 保持。新 App 候选版本为 0.1.42+54。
 前文源码联调和失败记录保留为历史证据；正式制品来源及发布验收另行记录，不能由 Debug 代替。
+
+## 正式 App 发布验收
+
+四平台正式构建 run40867311127通过，版本0.1.42+54；Mac两架构/Windows实际安装启动
+smoke run40872551000通过，Android构建内启动检查通过。正式registry原生库下的恢复专项
+run20261029115333-hnnv2r79w2三项、18断言通过，失败/跳过0，evidenceEligible=true，2分35秒。
+用户已覆盖安装正式Android及Macarm64，确认旧身份历史、普通/加密私聊、小附件、设置和重启通过；
+人工包摘要与最终正式聚合完全一致。Mac实际包deep/strict签名、公证票据、Gatekeeper检查通过，
+Android签名与上版一致。
+
+awiki.me与awiki.ai已更新推荐版本为0.1.42+54，政策revision分别11与8；最低仍为0.1.38+49。
+两地四份公网文件完整下载摘要通过，User/Message健康，保留其他产品政策和旧安装包。
+服务端根入口修复此前已上线，本轮不重复部署。发布脚本预检/自动回退及修正记录由
+System仓 `ops/releases/20261029-legacy-federation-root.md` 拥有。新Core SDK正式依赖门禁已满足。
