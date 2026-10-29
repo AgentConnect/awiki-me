@@ -35,7 +35,7 @@ App 只消费公开动作，始终显示状态和错误，提供明确的验证�
 | Core `cargo test -p awiki-im-core --lib identity_handle_recovery_runtime --quiet` | 69 passed，失败 0；含真实 custody/Vault/SQLite 的旧代次准备、重开及首次 Commit 前竞争变化 |
 | App `flutter analyze --no-pub lib/src/presentation/recovery tests/e2e/flutter/app/handle_recovery_ui_test.dart tests/unit/handle_recovery_flow_test.dart` | 无问题 |
 | App Recovery flow、crash cut、Core adapter、onboarding lookup 四文件定向测试 | 109 passed，失败 0；新增诊断复制检查后重跑 flow 为 77 passed |
-| App `flutter test --no-pub tests/unit/e2e_harness/` | 436 passed，失败 0；复用 runner/catalog/attestation 的现有合同检查 |
+| App `flutter test --no-pub tests/unit/e2e_harness/` | 436 passed，失败 0；断点代理后续变更后，受影响的 4 项 owning 检查再次通过，其余未重复 |
 | 布局矩阵 | 390/1100 宽、中英文、深浅色、1/1.6 字号共 16 组合；无 overflow/异常，阻断原因与主要操作可达 |
 | System `uv run --no-sync pytest tests/non_did/test_handle_recovery_v1_contract.py -q -rs` | 41 passed，失败 0，跳过 1：受管 operator 检查仅支持 Linux；不是远端恢复通过 |
 | System `cargo check --manifest-path probes/handle-recovery-v1/Cargo.toml --locked` | 通过；probe 及锁同步当前 Core 0.1.12 源码依赖 |
@@ -87,7 +87,28 @@ V4 `awiki_code` 诊断及 14 项 owning 单元验证，后续未知值仍归 oth
 轮换清理，远端残留账本仍在；这是隔离测试材料保留缺口，不涉及正式 App/真实用户数据。
 专项现经 owning runner 创建独立 0700 artifact/basetemp，失败或中断保留整个恢复根和包装
 密钥，成功才删除本地 basetemp；15 项隔离检查通过。此修复不放宽 canonical Linux cleanup
-或远端删除权限。余下 System 定向复验另记，不能把上述通过项表述为整个专项通过。
+或远端删除权限。
+
+最终六个相关 System case 均有逐项通过证据，且核对各 test body 与当前提交一致、所有执行固定
+Core `943659489ec376c9802e2dc2db4f5683e7b9ddbe`。这是首轮与定向复验的合并证据，不是单轮六项
+全绿，也不代表全量 System。原始失败记录保留，机器摘要在 System 仓
+`ops/releases/20261029-handle-recovery-focused-evidence.json`。
+
+| System case | 最终证据 |
+| --- | --- |
+| 已提交重开、注册互斥、旧凭证删除、远端推进后 fresh 恢复 | 首轮 passed |
+| 响应丢失及延迟原始 Commit | 首轮 passed |
+| 另一设备恢复后关闭原已提交操作 | 定向 1 passed，0 failed，0 skipped；初次拒绝的具体原因不可还原，未推定为 SDK 缺陷 |
+| bootstrap 设备撤销后关闭原已提交操作 | 定向 1 passed，0 failed，0 skipped |
+| 自然过期、同 intent 续期、绑定改变及 activate/discard 竞态 | remaining-r2 的该项 passed |
+| 旧设备无历史／已有普通历史重新加入 | 最后定向 1 passed，0 failed，0 skipped，376.17 秒；旧 owner 和 exactly-one 普通历史均保留 |
+
+撤销场景补齐切点后新 admin 的真实 tail-only 接收初始化，并额外断言 Recovery 仍精确 pending、
+未新增普通消息，再产生 Join 请求；没有给被测 cold 旧设备增加 warmup。另一次夹具收取出现
+transport_unavailable，同一持久身份重读成功。共享读取 helper 现可显式选择一次传输错误重读，
+Join 通知轮询使用该选项；认证、业务拒绝、畸形投影与持续失败仍失败，普通收取默认不重试。
+该 helper 的 168 项 owning 检查、41 项 Recovery contract（另 1 项 Linux-only skip）、
+14 项代理检查、15 项隔离检查通过。没有改变业务发送或验证码的透明重试策略。
 
 本地正常 main.dart 的 Mac Debug 双 App 构建已通过，使用既有
 `scripts/build_manual_dual_macos_apps.sh`、独立 bundle ID 与数据目录。主调试 App 已复制到桌面
