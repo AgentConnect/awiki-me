@@ -4104,7 +4104,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get serverFeaturesUpdates => '客户端更新';
 
   @override
-  String get serverFeaturesPages => '内容与站点';
+  String get serverFeaturesPages => '内容页面';
 
   @override
   String get onboardingHandleOnlyHint =>
@@ -4178,4 +4178,67 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueLater => '稍后继续';
+
+  @override
+  String get serverFeaturesIntro => '查看当前服务器支持的功能。';
+
+  @override
+  String get serverFeaturesAvailabilityNote => '支持情况不代表已在当前聊天中开启加密。';
+
+  @override
+  String get serverFeaturesConfirming => '正在确认功能…';
+
+  @override
+  String get serverFeaturesRefreshFailed => '暂时无法更新，请重试。';
+
+  @override
+  String get serverFeaturesStatusSupported => '支持';
+
+  @override
+  String get serverFeaturesStatusUnsupported => '暂不支持';
+
+  @override
+  String get serverFeaturesStatusUnknown => '待确认';
+
+  @override
+  String get serverFeaturesMessagingDescription => '与联系人收发普通私聊消息。';
+
+  @override
+  String get serverFeaturesGroupsDescription => '创建或加入群组，与成员交流。';
+
+  @override
+  String get serverFeaturesAttachmentsDescription => '在聊天中发送和接收图片、文件。';
+
+  @override
+  String get serverFeaturesEncryptionDescription => '为私聊消息提供端到端加密。';
+
+  @override
+  String get serverFeaturesGroupEncryptionDescription => '使用端到端加密保护群内消息。';
+
+  @override
+  String get serverFeaturesDevicesDescription => '在多台设备上使用同一账号。';
+
+  @override
+  String get serverFeaturesAgentsDescription => '创建和管理与你协作的 Agent。';
+
+  @override
+  String get serverFeaturesMailDescription => '使用服务器提供的邮箱收发邮件。';
+
+  @override
+  String get serverFeaturesPagesDescription => '发布和管理用户名下的内容页面。';
+
+  @override
+  String get serverFeaturesUpdatesDescription => '获取客户端的更新建议和版本要求。';
+
+  @override
+  String get settingsNetworkRecentPath => '最近连接方式';
+
+  @override
+  String get settingsNetworkReading => '正在读取…';
+
+  @override
+  String get settingsNetworkInitializeFailed => '无法读取网络设置，请重试。';
+
+  @override
+  String get settingsNetworkStatusFailed => '暂时无法读取连接状态。';
 }

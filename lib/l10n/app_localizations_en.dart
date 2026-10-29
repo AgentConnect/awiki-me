@@ -4416,7 +4416,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverFeaturesUpdates => 'Client updates';
 
   @override
-  String get serverFeaturesPages => 'Pages and sites';
+  String get serverFeaturesPages => 'Content pages';
 
   @override
   String get onboardingHandleOnlyHint =>
@@ -4496,4 +4496,81 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryContinueLater => 'Continue later';
+
+  @override
+  String get serverFeaturesIntro =>
+      'See the features supported by this server.';
+
+  @override
+  String get serverFeaturesAvailabilityNote =>
+      'Support does not mean encryption is enabled in the current chat.';
+
+  @override
+  String get serverFeaturesConfirming => 'Checking features…';
+
+  @override
+  String get serverFeaturesRefreshFailed => 'Unable to refresh. Try again.';
+
+  @override
+  String get serverFeaturesStatusSupported => 'Supported';
+
+  @override
+  String get serverFeaturesStatusUnsupported => 'Not supported';
+
+  @override
+  String get serverFeaturesStatusUnknown => 'Unconfirmed';
+
+  @override
+  String get serverFeaturesMessagingDescription =>
+      'Exchange regular direct messages with contacts.';
+
+  @override
+  String get serverFeaturesGroupsDescription =>
+      'Create or join groups to talk with others.';
+
+  @override
+  String get serverFeaturesAttachmentsDescription =>
+      'Send and receive images and files in chats.';
+
+  @override
+  String get serverFeaturesEncryptionDescription =>
+      'Protect direct messages with end-to-end encryption.';
+
+  @override
+  String get serverFeaturesGroupEncryptionDescription =>
+      'Protect group messages with end-to-end encryption.';
+
+  @override
+  String get serverFeaturesDevicesDescription =>
+      'Use the same account on multiple devices.';
+
+  @override
+  String get serverFeaturesAgentsDescription =>
+      'Create and manage agents that work with you.';
+
+  @override
+  String get serverFeaturesMailDescription =>
+      'Send and receive mail with a server-provided mailbox.';
+
+  @override
+  String get serverFeaturesPagesDescription =>
+      'Publish and manage content pages under your handle.';
+
+  @override
+  String get serverFeaturesUpdatesDescription =>
+      'Get update recommendations and version requirements.';
+
+  @override
+  String get settingsNetworkRecentPath => 'Last connection route';
+
+  @override
+  String get settingsNetworkReading => 'Reading…';
+
+  @override
+  String get settingsNetworkInitializeFailed =>
+      'Could not load network settings. Try again.';
+
+  @override
+  String get settingsNetworkStatusFailed =>
+      'Connection status is currently unavailable.';
 }

@@ -7711,7 +7711,7 @@ abstract class AppLocalizations {
   /// No description provided for @serverFeaturesPages.
   ///
   /// In zh, this message translates to:
-  /// **'内容与站点'**
+  /// **'内容页面'**
   String get serverFeaturesPages;
 
   /// No description provided for @onboardingHandleOnlyHint.
@@ -7851,6 +7851,132 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'稍后继续'**
   String get handleRecoveryContinueLater;
+
+  /// No description provided for @serverFeaturesIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看当前服务器支持的功能。'**
+  String get serverFeaturesIntro;
+
+  /// No description provided for @serverFeaturesAvailabilityNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'支持情况不代表已在当前聊天中开启加密。'**
+  String get serverFeaturesAvailabilityNote;
+
+  /// No description provided for @serverFeaturesConfirming.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在确认功能…'**
+  String get serverFeaturesConfirming;
+
+  /// No description provided for @serverFeaturesRefreshFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法更新，请重试。'**
+  String get serverFeaturesRefreshFailed;
+
+  /// No description provided for @serverFeaturesStatusSupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'支持'**
+  String get serverFeaturesStatusSupported;
+
+  /// No description provided for @serverFeaturesStatusUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂不支持'**
+  String get serverFeaturesStatusUnsupported;
+
+  /// No description provided for @serverFeaturesStatusUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'待确认'**
+  String get serverFeaturesStatusUnknown;
+
+  /// No description provided for @serverFeaturesMessagingDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'与联系人收发普通私聊消息。'**
+  String get serverFeaturesMessagingDescription;
+
+  /// No description provided for @serverFeaturesGroupsDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建或加入群组，与成员交流。'**
+  String get serverFeaturesGroupsDescription;
+
+  /// No description provided for @serverFeaturesAttachmentsDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'在聊天中发送和接收图片、文件。'**
+  String get serverFeaturesAttachmentsDescription;
+
+  /// No description provided for @serverFeaturesEncryptionDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'为私聊消息提供端到端加密。'**
+  String get serverFeaturesEncryptionDescription;
+
+  /// No description provided for @serverFeaturesGroupEncryptionDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用端到端加密保护群内消息。'**
+  String get serverFeaturesGroupEncryptionDescription;
+
+  /// No description provided for @serverFeaturesDevicesDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'在多台设备上使用同一账号。'**
+  String get serverFeaturesDevicesDescription;
+
+  /// No description provided for @serverFeaturesAgentsDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建和管理与你协作的 Agent。'**
+  String get serverFeaturesAgentsDescription;
+
+  /// No description provided for @serverFeaturesMailDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用服务器提供的邮箱收发邮件。'**
+  String get serverFeaturesMailDescription;
+
+  /// No description provided for @serverFeaturesPagesDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'发布和管理用户名下的内容页面。'**
+  String get serverFeaturesPagesDescription;
+
+  /// No description provided for @serverFeaturesUpdatesDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'获取客户端的更新建议和版本要求。'**
+  String get serverFeaturesUpdatesDescription;
+
+  /// No description provided for @settingsNetworkRecentPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近连接方式'**
+  String get settingsNetworkRecentPath;
+
+  /// No description provided for @settingsNetworkReading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读取…'**
+  String get settingsNetworkReading;
+
+  /// No description provided for @settingsNetworkInitializeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取网络设置，请重试。'**
+  String get settingsNetworkInitializeFailed;
+
+  /// No description provided for @settingsNetworkStatusFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法读取连接状态。'**
+  String get settingsNetworkStatusFailed;
 }
 
 class _AppLocalizationsDelegate

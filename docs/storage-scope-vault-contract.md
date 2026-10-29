@@ -597,7 +597,9 @@ backendFeaturesProvider 以当前 Core port 与 session generation 选择独立�
 切换后不沿用上一租户 AsyncValue 的 data。运行时再次核对客户端实例，迟到响应拒绝更新。
 同上下文刷新沿用 Core 的 confirmed/stale 状态；注册发现也只保留相同流程上下文的旧结果。
 
-服务器功能页面使用同一投影展示已确认、关闭和未确认状态；独立 Agent 入口、设备操作、
+服务器功能页面使用同一投影展示已确认、关闭和未确认状态；
+展示、独立来源提示与自适应卡片遵循 [设置页合同](settings-pages.md)。
+独立 Agent 入口、设备操作、
 加密选项与账户同步按声明判断。关闭账户同步时仍发布本地缓存，不伪造远端 reconcile 成功。
 明确没有更新政策是正常状态，已缓存最低版本仍有效。持久化的 `unavailable` 表示当前
 政策来源未提供政策，与是否持有已验证 manifest 相互独立；允许 unavailable 与旧 manifest

@@ -46,8 +46,9 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.textContaining('账户与服务功能'), findsOneWidget);
         expect(find.textContaining('聊天与加密功能'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('账户与服务功能'), 250);
+        expect(find.textContaining('账户与服务功能'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -293,7 +294,11 @@ void main() {
       expect(buttonRect.contains(iconRect.topLeft), isTrue);
       expect(buttonRect.contains(iconRect.bottomRight), isTrue);
       expect(buttonRect.right, lessThanOrEqualTo(width));
-      expect(find.text('此服务器暂不支持'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('server-feature-identity.multi_device')),
+        250,
+      );
+      expect(find.text('暂不支持'), findsOneWidget);
       expect(find.textContaining('最近确认'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
