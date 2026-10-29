@@ -52,11 +52,25 @@ Flutter 使用原 pubspec.lock，未升级依赖；构建工具产生的 CocoaPo
 catalog/attestation 同步更新，沿用现有隔离配置与测试专用 user presence，不证明系统生物认证通过。
 
 首次新用例构建发现 SessionIdentity 字段名错误，已修正并通过 analyze。后续真实执行在首次测试账号
-注册 OTP 请求处收到新加坡 HTTP 502，未进入恢复提交。现场只读检查确认两个受管服务在 10 月 27 日
-正常停止；等待环境恢复后复验。失败证据保留在本机 `.e2e/handle-recovery-state-machine/`。
+注册 OTP 请求处收到新加坡 HTTP 502，未进入恢复提交。两个受管服务此前在 10 月 27 日正常停止；
+用户明确授权后，通过受管 `awiki-user-service start` / `awiki-message-service start` 启动，双 readiness
+通过且 `trafficGated=false`。仍使用 User `20261026T120940Z-f3a43cfd4152`、Message
+`20261026T135122Z-2381a8d8b750`，未构建或部署新服务版本。
 
-System 的真实 Recovery 门禁要求受管 Linux 本机 cleanup preflight，本轮 Mac 未执行；已更新 owning
-case 与公开 driver 编译，不把契约测试或产品 E2E 当作该门禁的替代。
+恢复断点测试的 loopback proxy 起初未转发新版 Core 的公共能力查询，导致首次 Commit 前正确拒绝。
+测试代理现仅额外透传精确域名、固定版本参数的真实 server-info；去掉认证/Cookie、禁用跳转并限长，
+不合成能力声明，原 exact-operation Commit 与提交后 WNS 切点保持。对应 4 项单元检查与 analyze 通过。
+
+产品专项随后完成目标隔离及重开续办两段，连续恢复段遇到共享测试手机号的验证窗口限制；现场记录
+确认 factor exchange 的 HTTP 429。服务按手机号/purpose 与客户端 IP 限制 5 次/300 秒，正常测试须
+串行排程、等待原窗口，不能改限额或把错误当成准备成功。失败证据保留在本机
+`.e2e/handle-recovery-state-machine/`；完整专项复验另记。
+
+`remote-handle-recovery-state-machine` 是支持 Mac 的独立公开 Core/真实服务专项，已经按 owning
+入口启动；0600 临时 target manifest 只把新加坡目标的 operator 换为既有 reviewed SSH profile，
+URL/domain/capabilities 保持不变，关闭自动远端删除并保留 `remote_residual_ledger`。
+此前把此专项误写成必须 Linux cleanup 的表述在此纠正。Linux 本机审计要求适用于另一组
+`remote-handle-recovery-v1` 完整门禁；本轮未执行该完整门禁，不用产品 E2E 替代它。
 
 本地正常 main.dart 的 Mac Debug 双 App 构建已通过，使用既有
 `scripts/build_manual_dual_macos_apps.sh`、独立 bundle ID 与数据目录。主调试 App 已复制到桌面
