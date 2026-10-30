@@ -3324,12 +3324,13 @@ Future<ProviderContainer> _waitForAuthenticatedApp(
   required String expectedDid,
 }) async {
   await tester.pump();
-  final container = ProviderScope.containerOf(
-    tester.element(find.byType(AppShell)),
-  );
+  late ProviderContainer container;
   await _pumpUntil(
     tester,
     () {
+      final shell = find.byType(AppShell);
+      if (shell.evaluate().length != 1) return false;
+      container = ProviderScope.containerOf(tester.element(shell));
       final runtime = container.read(appRuntimeProvider);
       if (!runtime.isInitialized || runtime.isBusy) return false;
       if (runtime.activatedDid != expectedDid ||
