@@ -10,6 +10,7 @@ const String _appPairGenerationFenceCaseId =
     'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001';
 
 void appPairAdminMain() {
+  if (_invocationExplicitlyExpects(_pinAppCaseId)) return _pinAppAdminMain();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
@@ -520,6 +521,7 @@ void appPairAdminMain() {
 }
 
 void appPairJoinerMain() {
+  if (_invocationExplicitlyExpects(_pinAppCaseId)) return _pinAppJoinerMain();
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(

@@ -10,6 +10,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/ports/im_core_runtime_port.dart';
 import '../../application/tenant/app_tenant.dart';
 import 'awiki_im_core_config.dart';
+import 'awiki_im_core_pin_recovery_config.dart';
 import 'awiki_im_core_paths.dart';
 import 'awiki_im_core_secret_storage.dart';
 
@@ -41,6 +42,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     required AwikiImCorePathLayout paths,
     required StorageScopeId scopeId,
     required AwikiImCoreVaultSecretProvider vaultSecretProvider,
+    List<core.PinRecoveryTenantConfig>? pinRecoveryTenants,
     this.multiDeviceDeviceRevokeEnabled = true,
     this.multiDeviceDirectE2eeEnabled = true,
     this.multiDeviceGroupE2eeEnabled = true,
@@ -49,7 +51,8 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
     AwikiImCoreUpgradeLocalState? upgradeLocalState,
     void Function(AwikiImCoreRuntimeProgress progress)? onProgress,
-  }) : _config = config,
+  }) : pinRecoveryTenants = pinRecoveryTenants ?? installedPinRecoveryTenants(),
+       _config = config,
        _paths = paths,
        _scopeId = scopeId,
        _vaultSecretProvider = vaultSecretProvider,
@@ -65,6 +68,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCorePathLayout _paths;
   final StorageScopeId _scopeId;
   final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
+  final List<core.PinRecoveryTenantConfig> pinRecoveryTenants;
   final bool multiDeviceDeviceRevokeEnabled;
   final bool multiDeviceDirectE2eeEnabled;
   final bool multiDeviceGroupE2eeEnabled;
@@ -143,6 +147,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       config: _config.toCoreConfig(),
       paths: corePaths,
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
+        pinRecoveryTenants: pinRecoveryTenants,
         multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,

@@ -7,6 +7,7 @@ import '../data/services/appearance_preference_service.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../application/config/awiki_client_version.dart';
@@ -26,6 +27,8 @@ import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
 import '../application/models/product_local_models.dart';
 import '../application/onboarding_service.dart';
+import '../application/ports/pin_recovery_core_port.dart';
+import '../data/im_core/awiki_im_core_pin_recovery_adapter.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
@@ -126,6 +129,7 @@ class AppBootstrap {
     this.rootKeyTransferPort,
     this.groupEncryptionCorePort,
     this.handleRecoveryCorePort,
+    this.pinRecoveryCorePort,
     this.legacyRegistryEpochAdoptionPort,
     this.onboardingService,
     this.onboardingSupportService,
@@ -170,6 +174,7 @@ class AppBootstrap {
   final RootKeyTransferPort? rootKeyTransferPort;
   final GroupEncryptionCorePort? groupEncryptionCorePort;
   final HandleRecoveryCorePort? handleRecoveryCorePort;
+  final PinRecoveryCorePort? pinRecoveryCorePort;
   final LegacyRegistryEpochAdoptionPort? legacyRegistryEpochAdoptionPort;
   final OnboardingService? onboardingService;
   final OnboardingSupportService? onboardingSupportService;
@@ -201,6 +206,7 @@ class AppBootstrap {
     AwikiEnvironmentConfig? environment,
     String? appStateRoot,
     AppTenantProfile? tenant,
+    List<core.PinRecoveryTenantConfig>? pinRecoveryTenants,
     DesktopShellService? desktopShellService,
     NotificationFacade? notificationFacade,
     RemotePushClient? remotePushClient,
@@ -278,6 +284,7 @@ class AppBootstrap {
       ),
       paths: pathLayout,
       scopeId: registeredTenant.storageScopeId,
+      pinRecoveryTenants: pinRecoveryTenants,
       vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
         repository: scopeSecretRepository,
       ),
@@ -333,6 +340,17 @@ class AppBootstrap {
       );
       final handleRecoveryAdapter = AwikiImCoreHandleRecoveryAdapter(
         runtime: runtime,
+      );
+      final trustedPinTenants = runtime.pinRecoveryTenants.where(
+        (config) =>
+            Uri.parse(config.controlBaseUrl).origin ==
+            Uri.parse(effectiveEnvironment.userServiceUrl).origin,
+      );
+      final pinRecoveryAdapter = AwikiImCorePinRecoveryAdapter(
+        runtime: runtime,
+        tenantId: trustedPinTenants.length == 1
+            ? trustedPinTenants.single.tenantId
+            : null,
       );
       final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
@@ -489,6 +507,7 @@ class AppBootstrap {
         rootKeyTransferPort: rootKeyTransferAdapter,
         groupEncryptionCorePort: groupEncryptionAdapter,
         handleRecoveryCorePort: handleRecoveryAdapter,
+        pinRecoveryCorePort: pinRecoveryAdapter,
         legacyRegistryEpochAdoptionPort: handleRecoveryAdapter,
         onboardingService: onboardingService,
         onboardingSupportService: onboardingSupportService,
@@ -594,6 +613,7 @@ class AppBootstrap {
       rootKeyTransferPort: rootKeyTransferPort,
       groupEncryptionCorePort: groupEncryptionCorePort,
       handleRecoveryCorePort: handleRecoveryCorePort,
+      pinRecoveryCorePort: pinRecoveryCorePort,
       legacyRegistryEpochAdoptionPort: legacyRegistryEpochAdoptionPort,
       onboardingService: onboardingService,
       onboardingSupportService: onboardingSupportService,

@@ -1,3 +1,4 @@
+import '../../domain/entities/pin_recovery.dart';
 import 'network_settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,8 @@ import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../devices/devices_page.dart';
 import '../recovery/handle_recovery_page.dart';
+import '../pin_recovery/pin_recovery_page.dart';
+import '../pin_recovery/pin_recovery_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_semantic_icon.dart';
@@ -69,6 +72,15 @@ class SettingsPage extends ConsumerWidget {
                 .valueOrNull
                 ?.handleRecovery ==
             true;
+    final pinStatus = session?.localIdentityId == null
+        ? null
+        : ref.watch(
+            pinBackupStatusProvider((session!.localIdentityId!, session.did)),
+          );
+    final pinState = pinStatus?.valueOrNull?.state ?? PinBackupState.unknown;
+    final pinStatusLabel = pinState == PinBackupState.unknown
+        ? l10n.pinBackupUnknownShort
+        : pinBackupStateLabel(context, pinState);
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final activeTenant = ref.watch(activeAppTenantProvider);
@@ -113,6 +125,21 @@ class SettingsPage extends ConsumerWidget {
         _SettingsSection(
           key: const Key('settings-devices-section'),
           children: <Widget>[
+            if (ref.watch(pinRecoveryAvailableProvider) &&
+                session.localIdentityId != null)
+              AppListTile(
+                key: const Key('settings-pin-backup-row'),
+                title: l10n.pinRecoveryTitle,
+                subtitle: pinStatusLabel,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => PinRecoveryPage(
+                    localIdentityId: session.localIdentityId,
+                    expectedDid: session.did,
+                    expectedHandle: session.handle,
+                  ),
+                ),
+              ),
             AppListTile(
               title: l10n.settingsDevices,
               leading: leading(
@@ -451,6 +478,21 @@ class SettingsPage extends ConsumerWidget {
           key: const Key('settings-session-section'),
           title: l10n.settingsSecuritySection,
           children: <Widget>[
+            if (session?.localIdentityId != null &&
+                ref.watch(pinRecoveryAvailableProvider))
+              _DesktopSettingsRow(
+                key: const Key('settings-pin-backup-row'),
+                title: l10n.pinRecoveryTitle,
+                trailingText: pinStatusLabel,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => PinRecoveryPage(
+                    localIdentityId: session!.localIdentityId,
+                    expectedDid: session.did,
+                    expectedHandle: session.handle,
+                  ),
+                ),
+              ),
             if (supportsHandleRecovery)
               _DesktopSettingsRow(
                 key: const Key('settings-recover-handle-did-row'),
@@ -668,6 +710,23 @@ class SettingsPage extends ConsumerWidget {
             height: sectionTitleHeight,
           ),
           children: <Widget>[
+            if (session?.localIdentityId != null &&
+                ref.watch(pinRecoveryAvailableProvider))
+              _QuietSettingsRow(
+                key: const Key('settings-pin-backup-row'),
+                trailingText: pinStatusLabel,
+                icon: CupertinoIcons.lock_shield,
+                title: l10n.pinRecoveryTitle,
+                height: optionRowHeight,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => PinRecoveryPage(
+                    localIdentityId: session!.localIdentityId,
+                    expectedDid: session.did,
+                    expectedHandle: session.handle,
+                  ),
+                ),
+              ),
             if (supportsHandleRecovery)
               _QuietSettingsRow(
                 key: const Key('settings-recover-handle-did-row'),

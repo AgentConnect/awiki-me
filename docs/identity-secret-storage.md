@@ -146,6 +146,29 @@ Core，校验 arm64/x86_64，刷新 CocoaPods 并清理旧 Release XCFramework �
 - `tests/e2e/flutter/native/secure_storage_smoke_test.dart`
 - `tests/e2e/flutter/native/production_scope_restart_probe.dart`
 
+## PIN 根备份与原身份恢复
+
+`PinRecoveryCorePort` / `PinRecoveryService` / `AwikiImCorePinRecoveryAdapter` 只传递
+瞬时短信/PIN 输入和 Core 的公开状态；DPoP、PST/RAT、Juicebox、加解密、受限根
+custody、device commit 和秘密 pending 全部由 Rust Core/Vault 持有。App 不读写
+另一份 operation journal，不从没有本地记录推断服务端未开启备份。RootControl
+可用性由 `identityCustodyStatus` 确认。
+
+新建身份和既有 V4 的新身份本地激活后提供一次可跳过的备份引导。跳过只消费当前
+UI offer，不创建备份、不记 pending，也不建立强制提醒。设置页提供手动首次开启和
+Core pending 的继续/取消。PIN 恢复加入保持原 DID/根；V4 仍是显式的新 DID/根恢复，
+首版不提供 change_pin。消息历史、Ratchet、MLS 状态和本地数据库不在备份范围。
+
+受信 tenant/deployment/control origin 与配置验签公钥由 Host 安装，构建注入键为
+`AWIKI_PIN_RECOVERY_TENANTS_BASE64`（编码 snake_case 配置数组）。默认空数组不安装
+任何信任；网络配置不能自带公钥来建立信任。集成测试可在独立 AppBootstrap 中显式
+安装同一组公开 trust anchors，不能复制另一个 App 的 Vault 或平台 secret。
+
+PIN/OTP 使用安全输入并提交后清空；异常只把 Core 稳定 `serviceCode` 投影到 UI，
+不展示原异常正文。普通错误 PIN 不自动重试，也不触发 V4；重验证与 resume 始终
+携带同一个 Core operation。`commitUnknown`、`localActivationPending` 和
+`activeSecurePending` 分别显示远端待对账、本地待激活和通信待就绪。
+
 ## 7. 安全红线
 
 AWiki Me 不得：

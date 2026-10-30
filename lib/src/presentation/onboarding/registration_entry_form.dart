@@ -7,6 +7,7 @@ import '../shared/awiki_me_feedback.dart';
 import '../../l10n/l10n.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../recovery/pending_handle_recovery_entry.dart';
+import '../pin_recovery/pin_recovery_entry.dart';
 import 'onboarding_provider.dart';
 import 'onboarding_outlined_field.dart';
 import 'registration_entry_provider.dart';
@@ -103,6 +104,7 @@ class RegistrationEntryForm extends ConsumerWidget {
           ),
         if (state.check?.decision == 'unavailable')
           Text(l10n.onboardingAccountUnavailable),
+        const PinRecoveryEntry(),
         PendingHandleRecoveryEntry(
           handleController: handleController,
           phoneController: phoneController,

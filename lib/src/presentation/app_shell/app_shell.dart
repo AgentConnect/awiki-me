@@ -25,6 +25,8 @@ import '../agents/personal_agent_feature_visibility.dart';
 import '../friends/friends_navigation_provider.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
+import '../pin_recovery/pin_recovery_page.dart';
+import '../pin_recovery/pin_recovery_provider.dart';
 import '../profile/profile_workspace_page.dart';
 import '../profile/profile_provider.dart';
 import '../settings/settings_page.dart';
@@ -76,12 +78,71 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _authRevokedDialogOpen = false;
   bool _authRevokedDialogAcknowledged = false;
   bool _runtimeInitializationRequested = false;
+  bool _pinBackupOfferOpening = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(appUpdateProvider.notifier).initialize());
+    });
+  }
+
+  void _schedulePinBackupOffer() {
+    final offer = ref.watch(pinBackupOfferProvider);
+    final session = ref.read(sessionProvider).session;
+    if (_pinBackupOfferOpening ||
+        offer == null ||
+        offer.localIdentityId == null ||
+        session?.localIdentityId != offer.localIdentityId ||
+        session?.did != offer.did) {
+      return;
+    }
+    final scopeId = ref.read(activeAppTenantProvider).storageScopeId;
+    _pinBackupOfferOpening = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (!mounted ||
+            ref.read(activeAppTenantProvider).storageScopeId != scopeId ||
+            !identical(ref.read(pinBackupOfferProvider), offer) ||
+            ref.read(sessionProvider).session?.localIdentityId !=
+                offer.localIdentityId ||
+            ref.read(sessionProvider).session?.did != offer.did) {
+          return;
+        }
+        ref.read(pinBackupOfferProvider.notifier).state = null;
+        final service = ref.read(pinRecoveryServiceProvider);
+        if (service == null ||
+            !service.isAvailable ||
+            !await service.canBackup(offer.localIdentityId!)) {
+          return;
+        }
+        if (!mounted ||
+            ref.read(activeAppTenantProvider).storageScopeId != scopeId ||
+            ref.read(sessionProvider).session?.localIdentityId !=
+                offer.localIdentityId ||
+            ref.read(sessionProvider).session?.did != offer.did) {
+          return;
+        }
+        await Navigator.of(context).push(
+          CupertinoPageRoute<void>(
+            builder: (_) => PinRecoveryPage(
+              localIdentityId: offer.localIdentityId,
+              expectedDid: offer.did,
+              expectedHandle: offer.handle,
+              offerBackup: true,
+            ),
+          ),
+        );
+      } catch (_) {
+        // An optional offer never blocks an already activated identity. Settings
+        // provides an explicit retry without manufacturing a backup operation.
+      } finally {
+        _pinBackupOfferOpening = false;
+        if (mounted && ref.read(pinBackupOfferProvider) != null) {
+          setState(() {});
+        }
+      }
     });
   }
 
@@ -185,6 +246,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     }
 
+    _schedulePinBackupOffer();
     final expanded = responsive.usesDesktopLayout;
     final enteredDesktopFromCompactProfile =
         _previousExpandedLayout == false &&

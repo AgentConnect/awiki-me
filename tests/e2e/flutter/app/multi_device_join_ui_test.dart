@@ -101,6 +101,13 @@ import '../../sync_recovery_operator_contract.dart';
 import '../support/protected_otp_config.dart';
 import '../support/join_admin_response_gate.dart';
 
+import 'package:awiki_me/src/data/im_core/awiki_im_core_pin_recovery_config.dart';
+import 'package:awiki_me/src/domain/entities/pin_recovery.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/pin_recovery/pin_recovery_provider.dart';
+
+part 'pin_recovery_app_pair_test.part.dart';
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
 part 'multi_device_app_pair_paging_recovery_test.part.dart';

@@ -743,6 +743,8 @@ class DesktopE2eRunner {
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.identityDeletionRecoveryGuard:
           await _runRemoteHandleRecovery();
+        case DesktopE2eCase.pinRecovery:
+          await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPair:
         case DesktopE2eCase.didMethodWeb:
           await _runRemoteMultiDeviceAppPair();

@@ -3,9 +3,24 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_catalog.dart';
+import 'runner.dart' as runner;
 import 'runner/manifest.dart';
 
 void main() {
+  test('PIN recovery uses isolated App-pair metadata and no CLI peer', () {
+    const suite = runner.DesktopE2eCase.pinRecovery;
+    expect(suite.caseName, 'pin-recovery');
+    expect(suite.scenario, 'pin-recovery-original-root-v1');
+    expect(
+      suite.runConfigPath,
+      '.e2e/multi-device-app-pair/current/run_config.json',
+    );
+    expect(suite.testFile, 'integration_test/multi_device_app_pair_test.dart');
+    expect(suite.usesRemoteAppPairScenario, true);
+    expect(suite.requiresCliPeer, false);
+    expect(suite.caseIds, ['PIN-RECOVERY-APP-E2E-001']);
+  });
+
   test('capability candidate is an explicit direct target only', () {
     final suites = DesktopE2eSuiteManifest.load(Directory.current).definitions;
     const domain = 'backend-adapt.anpclaw.com';

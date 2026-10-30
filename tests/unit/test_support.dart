@@ -4310,6 +4310,7 @@ class FakeIdentityCorePort
       'capabilities': {
         for (final key in [
           'identity.multi_device',
+          'identity.account_recovery',
           'identity.device_revoke',
           'identity.capability_upgrade',
           'identity.root_transfer',
