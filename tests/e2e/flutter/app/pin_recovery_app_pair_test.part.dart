@@ -50,7 +50,7 @@ Future<void> _pinFill(WidgetTester tester, String key, String value) async {
   await _pumpUntil(
     tester,
     () => finder.evaluate().length == 1,
-    failure: 'PIN secure input is unavailable.',
+    failure: 'PIN product input is unavailable: $key',
   );
   await tester.ensureVisible(finder);
   await tester.enterText(finder, value);
@@ -308,12 +308,7 @@ void _pinAppAdminMain() {
       );
       await tester.pump();
       await _pinTap(tester, 'settings-pin-backup-row');
-      await _pinVerifySelect(
-        tester,
-        account,
-        '$handle.${config.didDomain}',
-        deviceLabel: 'PIN Joiner A',
-      );
+      await _pinVerifySelect(tester, account, '$handle.${config.didDomain}');
       await _pinFill(tester, 'pin-recovery-pin', fixture.pin);
       await _pinFill(tester, 'pin-recovery-pin-confirm', fixture.pin);
       await _pinTap(tester, 'pin-recovery-submit-pin');
@@ -631,6 +626,10 @@ void _pinAppJoinerMain() {
       await config.coordinator.publish(
         'joiner',
         'pin_new_device_authenticated',
+        data: {
+          'operationId': pending.single.operationId,
+          'deviceId': current.protocolDeviceId,
+        },
       );
       await _pinOpenSettings(tester);
       await _pinTap(tester, 'settings-pin-backup-row');

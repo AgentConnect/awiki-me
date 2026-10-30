@@ -40,6 +40,11 @@ void main() {
       );
       await client.publish(
         'joiner',
+        'pin_new_device_authenticated',
+        data: {'operationId': 'pin-operation', 'deviceId': 'joined-device'},
+      );
+      await client.publish(
+        'joiner',
         'pin_v4_new_backup_ready',
         data: {
           'did': 'did:wba:awiki.info:user:new',
@@ -58,6 +63,14 @@ void main() {
       expect(server.pinCleanupLedger['v4'], {
         'did': 'did:wba:awiki.info:user:new',
       });
+      expect(server.pinCleanupLedger['recoveredDevice'], {
+        'operationId': 'pin-operation',
+        'deviceId': 'joined-device',
+      });
+      await expectLater(
+        client.publish('joiner', 'pin_new_device_authenticated'),
+        throwsA(isA<AppPairProtocolException>()),
+      );
       expect(
         (server.pinCleanupLedger['backup'] as Map).containsKey('publicMethods'),
         false,
