@@ -202,12 +202,6 @@ void _pinAppAdminMain() {
         'pin_registration_intent',
         data: {'handle': handle},
       );
-      final otp = await _requestAppRegistrationOtp(
-        bootstrap: bootstrap,
-        config: config,
-        account: account,
-        handle: handle,
-      );
       await tester.pumpWidget(
         AwikiMeApp(
           bootstrap: bootstrap,
@@ -224,27 +218,62 @@ void _pinAppAdminMain() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(OnboardingPage)),
       );
+      await _pumpUntil(
+        tester,
+        () =>
+            container.read(onboardingProvider).supportsPhoneOtpRegistration &&
+            container.read(onboardingProvider).canRegisterSelectedDidMethod,
+        failure: 'App A phone registration did not become available.',
+      );
+      final onboarding = container.read(onboardingProvider.notifier);
+      await onboarding.requestOtp(
+        phone: account.phone,
+        handle: handle,
+        handleDomain: config.didDomain,
+      );
+      final verification = container.read(onboardingProvider);
+      if (verification.otpTargetFullHandle != '$handle.${config.didDomain}' ||
+          verification.otpTargetPhone == null ||
+          verification.isPhoneOtpConsumed) {
+        fail('App A registration OTP did not bind the requested Handle.');
+      }
       // Exercise the owning production registration orchestration; all new PIN
       // steps below use the visible production surfaces and native adapter.
-      final registration = container
-          .read(onboardingProvider.notifier)
+      var registrationDone = false;
+      IdentityRegistrationStatus? registrationStatus;
+      final registration = onboarding
           .registerWithPhone(
             phone: account.phone,
-            otp: otp,
+            otp: account.fixedOtp,
             handle: handle,
             handleDomain: config.didDomain,
             nickName: 'PIN App A',
             profileMarkdown: '# PIN App A\n',
-          );
+          )
+          .then((status) {
+            registrationStatus = status;
+            registrationDone = true;
+          });
+      await _pumpUntil(
+        tester,
+        () => registrationDone,
+        timeout: const Duration(seconds: 90),
+        failure: 'App A registration did not return within its deadline.',
+      );
+      await registration;
+      if (registrationStatus != IdentityRegistrationStatus.registered) {
+        final outcome = container
+            .read(onboardingProvider)
+            .phoneRegistrationOutcome
+            .name;
+        fail('App A registration did not complete ($outcome).');
+      }
       await _pumpUntil(
         tester,
         () => find.byKey(const Key('pin-backup-skip')).evaluate().length == 1,
         timeout: const Duration(seconds: 90),
         failure: 'New identity did not offer optional PIN backup.',
       );
-      if (await registration != IdentityRegistrationStatus.registered) {
-        fail('App A registration did not complete.');
-      }
       final identity = container.read(sessionProvider).session!;
       final did = identity.did;
       await config.coordinator.publish(
