@@ -661,6 +661,22 @@ void _pinAppJoinerMain() {
       await _pinTap(tester, 'pin-recovery-done');
       Navigator.of(tester.element(find.byType(SettingsPage))).pop();
       await tester.pump();
+      await _pumpUntil(
+        tester,
+        () {
+          final shell = find.byType(AppShell);
+          return shell.evaluate().length == 1 &&
+              (ModalRoute.of(tester.element(shell))?.isCurrent ?? false) &&
+              find
+                      .bySemanticsIdentifier('e2e-messages-tab')
+                      .hitTestable()
+                      .evaluate()
+                      .length ==
+                  1;
+        },
+        failure:
+            'New-root backup did not return to the visible Messages shell.',
+      );
       await config.coordinator.publish(
         'joiner',
         'pin_v4_new_backup_ready',
