@@ -26,24 +26,8 @@ const String _pinAppCaseId = 'PIN-RECOVERY-APP-E2E-001';
   );
 }
 
-Future<void> _pinTap(WidgetTester tester, String key) async {
-  final finder = find.byKey(Key(key));
-  await _pumpUntil(
-    tester,
-    () =>
-        finder.evaluate().length == 1 &&
-        (tester.widget(finder) is! AppSecondaryButton ||
-            tester.widget<AppSecondaryButton>(finder).onPressed != null) &&
-        (tester.widget(finder) is! AppPrimaryButton ||
-            tester.widget<AppPrimaryButton>(finder).onPressed != null),
-    timeout: const Duration(seconds: 60),
-    failure: 'PIN product control unavailable: $key',
-  );
-  await tester.ensureVisible(finder);
-  await tester.pump();
-  await tester.tap(finder);
-  await tester.pump();
-}
+Future<void> _pinTap(WidgetTester tester, String key) =>
+    tapAppPairProductControl(tester, key);
 
 Future<void> _pinFill(WidgetTester tester, String key, String value) async {
   final finder = find.byKey(Key(key));
