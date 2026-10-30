@@ -547,6 +547,28 @@ void main() {
     }
   });
 
+  test('App failure diagnostics admit only bounded lowercase codes', () {
+    expect(safeAppPairFailureCode(null), 'none');
+    expect(safeAppPairFailureCode('invalid_argument'), 'invalid_argument');
+    expect(
+      safeAppPairFailureCode('identity.registration_failed'),
+      'identity.registration_failed',
+    );
+    for (final unsafe in [
+      '',
+      '123456',
+      '+86123456789',
+      'Bearer secret-input',
+      'service error with input',
+      'UPPERCASE_CODE',
+      'https://private.example/error',
+      '{"phone":"private-input"}',
+      'x' * 97,
+    ]) {
+      expect(safeAppPairFailureCode(unsafe), 'redacted');
+    }
+  });
+
   test('CLI failure diagnostics expose only allowlisted stable codes', () {
     const secret = 'secret-bearing-service-message';
     final diagnostic = safeCliFailureDiagnostic(

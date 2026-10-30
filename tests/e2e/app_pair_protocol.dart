@@ -192,6 +192,14 @@ String safeMessageSyncFailureDiagnostic(String code) {
   return 'MessageSyncCoordinatorFailure:$safe';
 }
 
+String safeAppPairFailureCode(String? code) {
+  if (code == null) return 'none';
+  return _isSafeDiagnosticCode(code, requireNamespace: false) &&
+          RegExp(r'^[a-z]').hasMatch(code)
+      ? code
+      : 'redacted';
+}
+
 String safeCliFailureDiagnostic({
   required int exitCode,
   required Object? stdout,

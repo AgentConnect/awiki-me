@@ -262,11 +262,16 @@ void _pinAppAdminMain() {
       );
       await registration;
       if (registrationStatus != IdentityRegistrationStatus.registered) {
-        final outcome = container
-            .read(onboardingProvider)
-            .phoneRegistrationOutcome
-            .name;
-        fail('App A registration did not complete ($outcome).');
+        final state = container.read(onboardingProvider);
+        final code = safeAppPairFailureCode(state.phoneRegistrationFailureCode);
+        final category = safeAppPairFailureCode(
+          container.read(uiFeedbackProvider)?.message.id.toLowerCase(),
+        );
+        fail(
+          'App A registration did not complete '
+          '(outcome=${state.phoneRegistrationOutcome.name},'
+          'code=$code,category=$category).',
+        );
       }
       await _pumpUntil(
         tester,
