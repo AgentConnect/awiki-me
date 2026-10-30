@@ -351,6 +351,7 @@ void _pinAppAdminMain() {
       final currentDid = _required(v4, 'did');
       if (currentDid == did) fail('V4 did not replace the original DID.');
       final newRoot = '${config.adminStateRoot}-v4';
+      await Directory(newRoot).create(recursive: true);
       _requireIndependentEmptyPaths([newRoot]);
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
