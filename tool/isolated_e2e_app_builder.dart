@@ -105,6 +105,7 @@ class IsolatedE2eAppBuildRequest {
         'platform',
         'flutter-bin',
         'dart-define',
+        'consumer-suite',
       }.contains(key)) {
         throw IsolatedE2eAppBuildException('Unknown argument: --$key');
       }
@@ -170,6 +171,15 @@ class IsolatedE2eAppBuildRequest {
     final dartDefines = canonicalDartDefines(
       values['dart-define'] ?? const <String>[],
     );
+    final consumerSuites =
+        (values['consumer-suite'] ?? const <String>[]).toSet().toList()..sort();
+    if (consumerSuites.any(
+      (value) => !RegExp(r'^[a-z][a-z0-9-]{0,79}$').hasMatch(value),
+    )) {
+      throw const IsolatedE2eAppBuildException(
+        'Consumer suite names are invalid.',
+      );
+    }
     final stateRoot = _validatedRoot(
       requiredValue('state-root'),
       projectRoot: projectRoot,
@@ -203,6 +213,7 @@ class IsolatedE2eAppBuildRequest {
       platform: platform,
       flutterBin: flutterBin,
       dartDefines: dartDefines,
+      consumerSuites: List<String>.unmodifiable(consumerSuites),
       dryRun: dryRun,
     );
   }

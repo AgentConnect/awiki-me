@@ -91,8 +91,9 @@ points to a separate ignored JSON file (0600) containing `pin` and `tenants`;
 `tenants` is the Host-installed public trust configuration array, with
 `tenant_id`, `deployment_id`, `control_base_url`, and `config_signing_keys`.
 Never put PIN, phone, or OTP values in command arguments or tracked files.
-The dedicated phone must not match multiple active account owners. Coordinate
-shared test-OTP changes and exact fixture cleanup with the environment owner.
+The verified phone may discover multiple independently validated Handles,
+including Handles with different owners. Select the exact run-owned full Handle;
+coordinate shared test-OTP windows and exact cleanup with the environment owner.
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
@@ -106,7 +107,9 @@ The runner retains a private exact-resource ledger and failed App roots for
 result inspection; successful roots are removed. Remote account/backup rows
 remain subject to precise owner cleanup, with the ledger recording that state.
 `--prepare-only` compiles both Apps without registering an account or creating a
-backup. Focused unit/widget and adapter coverage is in
+backup. Its export includes the artifact spec's consumer suites, so required
+execution can verify and reuse both manifests without rebuilding. Focused
+unit/widget and adapter coverage is in
 `tests/unit/pin_recovery_test.dart` and
 `tests/unit/data/im_core/awiki_im_core_pin_recovery_adapter_test.dart`; the V4
 regression also checks its new root's optional backup offer and skip.

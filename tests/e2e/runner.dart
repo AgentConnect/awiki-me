@@ -1005,6 +1005,7 @@ class DesktopE2eRunner {
       '--platform=${platform.name}',
       '--flutter-bin=flutter',
       for (final define in spec.dartDefines) '--dart-define=$define',
+      for (final suite in spec.consumerSuites) '--consumer-suite=$suite',
     ], timeout: const Duration(minutes: 12));
     return _IsolatedAppArtifact.fromBuilderOutput(
       result.output,
