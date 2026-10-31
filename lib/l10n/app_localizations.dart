@@ -7977,6 +7977,324 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'暂时无法读取连接状态。'**
   String get settingsNetworkStatusFailed;
+
+  /// No description provided for @pinRecoveryFailure.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作未完成，请检查网络或稍后继续同一操作。'**
+  String get pinRecoveryFailure;
+
+  /// No description provided for @pinRecoveryCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消此操作'**
+  String get pinRecoveryCancel;
+
+  /// No description provided for @pinRecoveryPinMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'两次输入的 PIN 不一致。'**
+  String get pinRecoveryPinMismatch;
+
+  /// No description provided for @pinRecoveryCommitting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在提交新设备'**
+  String get pinRecoveryCommitting;
+
+  /// No description provided for @pinRecoveryContinueExisting.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回并继续使用现有设备'**
+  String get pinRecoveryContinueExisting;
+
+  /// No description provided for @pinRecoveryTargets.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择已授权的 Handle'**
+  String get pinRecoveryTargets;
+
+  /// No description provided for @pinRecoveryRegistering.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在注册三节点备份'**
+  String get pinRecoveryRegistering;
+
+  /// No description provided for @pinRecoveryJoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机号 + PIN 加入'**
+  String get pinRecoveryJoin;
+
+  /// No description provided for @pinRecoveryCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'6 位短信验证码'**
+  String get pinRecoveryCode;
+
+  /// No description provided for @pinRecoveryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'PIN 保护与恢复'**
+  String get pinRecoveryTitle;
+
+  /// No description provided for @pinRecoveryNoTargets.
+  ///
+  /// In zh, this message translates to:
+  /// **'该手机号没有可用的 Handle。'**
+  String get pinRecoveryNoTargets;
+
+  /// No description provided for @pinBackupUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'备份状态暂无法核验，请联网后重试。'**
+  String get pinBackupUnknown;
+
+  /// No description provided for @pinBackupUnknownShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'待核验'**
+  String get pinBackupUnknownShort;
+
+  /// No description provided for @pinRecoveryStatusCheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'请验证手机号，查看当前备份状态。'**
+  String get pinRecoveryStatusCheck;
+
+  /// No description provided for @pinRecoveryUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'该 Handle 未开启 PIN 备份或当前不可恢复。'**
+  String get pinRecoveryUnavailable;
+
+  /// No description provided for @pinRecoveryVerify.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证并查看 Handle'**
+  String get pinRecoveryVerify;
+
+  /// No description provided for @pinRecoveryAttemptBudget.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线尝试次数'**
+  String get pinRecoveryAttemptBudget;
+
+  /// No description provided for @pinRecoveryRealmUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复服务暂不可用。这不是 PIN 错误，请稍后继续同一操作。'**
+  String get pinRecoveryRealmUnavailable;
+
+  /// No description provided for @pinRecoverySecurePending.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份已激活，加密通信仍在准备'**
+  String get pinRecoverySecurePending;
+
+  /// No description provided for @pinRecoveryPinFormat.
+  ///
+  /// In zh, this message translates to:
+  /// **'PIN 必须是 4 位 ASCII 数字。'**
+  String get pinRecoveryPinFormat;
+
+  /// No description provided for @pinBackupOffer.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置 4 位恢复 PIN 后，可在旧设备离线时恢复原身份并加入新设备。仅备份根私钥，不包含消息历史。'**
+  String get pinBackupOffer;
+
+  /// No description provided for @pinRecoveryEnter.
+  ///
+  /// In zh, this message translates to:
+  /// **'进入消息'**
+  String get pinRecoveryEnter;
+
+  /// No description provided for @pinRecoveryForgotInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'首版暂不支持修改或重设备份 PIN。现有设备可继续使用，也可由在线设备批准新设备加入。若明确需要恢复为新身份，可主动选择既有身份恢复；该流程会更换 DID 和根私钥，旧设备需重新加入。'**
+  String get pinRecoveryForgotInfo;
+
+  /// No description provided for @pinRecoveryDeviceLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'新设备名称'**
+  String get pinRecoveryDeviceLabel;
+
+  /// No description provided for @pinRecoveryConfirmDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认加入此设备'**
+  String get pinRecoveryConfirmDevice;
+
+  /// No description provided for @pinRecoveryConfirmDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'已恢复原根能力。确认后将添加新设备，保留现有设备和原 DID。不会恢复历史消息。'**
+  String get pinRecoveryConfirmDescription;
+
+  /// No description provided for @pinBackupPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'根备份待完成'**
+  String get pinBackupPending;
+
+  /// No description provided for @pinRecoveryWrongPin.
+  ///
+  /// In zh, this message translates to:
+  /// **'PIN 不正确。本次已计入在线尝试次数，请谨慎重试。'**
+  String get pinRecoveryWrongPin;
+
+  /// No description provided for @pinRecoveryReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份已激活，加密通信已就绪'**
+  String get pinRecoveryReady;
+
+  /// No description provided for @pinRecoverySendCode.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送恢复专用验证码'**
+  String get pinRecoverySendCode;
+
+  /// No description provided for @pinRecoveryVerifying.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在回读校验备份'**
+  String get pinRecoveryVerifying;
+
+  /// No description provided for @pinRecoveryBudgetExhausted.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线 PIN 尝试次数已耗尽，短信验证或重新登录不会重置次数。'**
+  String get pinRecoveryBudgetExhausted;
+
+  /// No description provided for @pinRecoveryConfirmPin.
+  ///
+  /// In zh, this message translates to:
+  /// **'再次输入 PIN'**
+  String get pinRecoveryConfirmPin;
+
+  /// No description provided for @pinBackupUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前设备没有可备份的根控制权限。请使用持根设备开启。'**
+  String get pinBackupUnsupported;
+
+  /// No description provided for @pinRecoveryCancelledOperation.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作已取消。'**
+  String get pinRecoveryCancelledOperation;
+
+  /// No description provided for @pinRecoveryAwaitingPin.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待输入 PIN'**
+  String get pinRecoveryAwaitingPin;
+
+  /// No description provided for @pinRecoveryResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续同一操作'**
+  String get pinRecoveryResume;
+
+  /// No description provided for @pinBackupTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'保护根私钥'**
+  String get pinBackupTitle;
+
+  /// No description provided for @pinRecoveryV4.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择恢复为新身份'**
+  String get pinRecoveryV4;
+
+  /// No description provided for @pinRecoverySubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交 PIN'**
+  String get pinRecoverySubmit;
+
+  /// No description provided for @pinRecoveryPhoneAgain.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话已过期，请验证同一手机号并选择同一 Handle 继续。'**
+  String get pinRecoveryPhoneAgain;
+
+  /// No description provided for @pinBackupProtected.
+  ///
+  /// In zh, this message translates to:
+  /// **'根私钥已保护'**
+  String get pinBackupProtected;
+
+  /// No description provided for @pinRecoveryLocalPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端已加入，本地激活待完成'**
+  String get pinRecoveryLocalPending;
+
+  /// No description provided for @pinRecoveryPresence.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认使用已恢复的根私钥授权此新设备'**
+  String get pinRecoveryPresence;
+
+  /// No description provided for @pinRecoveryForgot.
+  ///
+  /// In zh, this message translates to:
+  /// **'忘记 PIN？'**
+  String get pinRecoveryForgot;
+
+  /// No description provided for @pinRecoveryRecovering.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在恢复原根能力'**
+  String get pinRecoveryRecovering;
+
+  /// No description provided for @pinBackupSet.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置恢复 PIN'**
+  String get pinBackupSet;
+
+  /// No description provided for @pinRecoveryPin.
+  ///
+  /// In zh, this message translates to:
+  /// **'4 位恢复 PIN'**
+  String get pinRecoveryPin;
+
+  /// No description provided for @pinBackupPresence.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认备份当前身份的根私钥'**
+  String get pinBackupPresence;
+
+  /// No description provided for @pinBackupSkip.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂不设置'**
+  String get pinBackupSkip;
+
+  /// No description provided for @pinRecoveryPhone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已绑定的手机号'**
+  String get pinRecoveryPhone;
+
+  /// No description provided for @pinRecoveryCommitUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端提交结果待确认，请继续同一操作'**
+  String get pinRecoveryCommitUnknown;
+
+  /// No description provided for @pinBackupNotEnabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'PIN 备份未开启'**
+  String get pinBackupNotEnabled;
 }
 
 class _AppLocalizationsDelegate

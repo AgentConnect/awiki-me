@@ -12,6 +12,7 @@ import 'dart:async';
 import '../support/enter_existing_account.dart';
 import '../support/read_rendered_sas.dart';
 import '../support/wait_for_app_pair_message.dart';
+import '../support/tap_app_pair_control.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -101,6 +102,10 @@ import '../../sync_recovery_operator_contract.dart';
 import '../support/protected_otp_config.dart';
 import '../support/join_admin_response_gate.dart';
 
+import 'package:awiki_me/src/data/im_core/awiki_im_core_pin_recovery_config.dart';
+import 'package:awiki_me/src/domain/entities/pin_recovery.dart';
+
+part 'pin_recovery_app_pair_test.part.dart';
 part 'multi_device_app_pair_ui_test.part.dart';
 part 'multi_device_app_pair_content_sync_test.part.dart';
 part 'multi_device_app_pair_paging_recovery_test.part.dart';
@@ -3320,12 +3325,13 @@ Future<ProviderContainer> _waitForAuthenticatedApp(
   required String expectedDid,
 }) async {
   await tester.pump();
-  final container = ProviderScope.containerOf(
-    tester.element(find.byType(AppShell)),
-  );
+  late ProviderContainer container;
   await _pumpUntil(
     tester,
     () {
+      final shell = find.byType(AppShell);
+      if (shell.evaluate().length != 1) return false;
+      container = ProviderScope.containerOf(tester.element(shell));
       final runtime = container.read(appRuntimeProvider);
       if (!runtime.isInitialized || runtime.isBusy) return false;
       if (runtime.activatedDid != expectedDid ||

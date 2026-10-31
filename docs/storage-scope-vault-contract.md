@@ -74,6 +74,19 @@ Tenant Profile（App 业务连接配置）
   账号或设备做产品灰度；raw cursor、recovery 和 mutation outbox 仍只属于该 scope 的 Core
   SQLite。测试 operator allowlist 不得写入 scope registry 或业务 cache。
 
+### PIN 根备份与独立设备加入
+
+PIN 恢复沿用同一 Storage Scope/Vault lifecycle。Core 拥有 phone/discovery/单目标
+session、DPoP、PIN attempt、加密包、根 pending 和新设备密钥；App 仅保存当前页面的
+非持久化交互状态，不写另一份 operation locator 或备份真相。重开页面和网络失败后
+从 Core typed pending 重新发现原操作。恢复根后仍需显式确认设备加入，远端提交未知
+和本地激活待完成只能续跑同一 operation；完成后复用既有精确 identity ID 登录。
+
+创建身份或 V4 新根激活后的一次性备份 offer 可以明确跳过。跳过不调用 begin_enable，
+不建立无 PIN 备份或 pending，不在后续启动强制提醒。手动入口在身份设置中。忘记 PIN
+允许返回现有设备，V4 是明确选择的新 DID/根恢复；不把普通 PIN 错误改为 V4。
+原在线设备批准 Join 与普通邮箱登录保持既有入口；本次 PIN 流程只用短信。
+
 ### DID 方法与产品入口
 
 App 消费 Core 的 `identityCreationMethods`、`identityMethodCapabilities` 和当前

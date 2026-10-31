@@ -4573,4 +4573,182 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsNetworkStatusFailed =>
       'Connection status is currently unavailable.';
+
+  @override
+  String get pinRecoveryFailure =>
+      'Operation incomplete. Check the connection or resume this operation later.';
+
+  @override
+  String get pinRecoveryCancel => 'Cancel this operation';
+
+  @override
+  String get pinRecoveryPinMismatch => 'The PIN entries do not match.';
+
+  @override
+  String get pinRecoveryCommitting => 'Committing the new device';
+
+  @override
+  String get pinRecoveryContinueExisting =>
+      'Return and keep using existing devices';
+
+  @override
+  String get pinRecoveryTargets => 'Select an authorized Handle';
+
+  @override
+  String get pinRecoveryRegistering => 'Registering backup with three Realms';
+
+  @override
+  String get pinRecoveryJoin => 'Join with phone + PIN';
+
+  @override
+  String get pinRecoveryCode => '6-digit SMS code';
+
+  @override
+  String get pinRecoveryTitle => 'PIN protection and recovery';
+
+  @override
+  String get pinRecoveryNoTargets =>
+      'No eligible Handles for this phone number.';
+
+  @override
+  String get pinBackupUnknown =>
+      'Backup status unavailable; verify again when connected.';
+
+  @override
+  String get pinBackupUnknownShort => 'Unverified';
+
+  @override
+  String get pinRecoveryStatusCheck =>
+      'Verify your phone to check the current backup status.';
+
+  @override
+  String get pinRecoveryUnavailable =>
+      'PIN backup is off or recovery is unavailable for this Handle.';
+
+  @override
+  String get pinRecoveryVerify => 'Verify and view Handles';
+
+  @override
+  String get pinRecoveryAttemptBudget => 'Online attempts';
+
+  @override
+  String get pinRecoveryRealmUnavailable =>
+      'Recovery service is unavailable. This is not a PIN mismatch; resume the same operation later.';
+
+  @override
+  String get pinRecoverySecurePending =>
+      'Identity activated; secure messaging is preparing';
+
+  @override
+  String get pinRecoveryPinFormat => 'PIN must contain exactly 4 ASCII digits.';
+
+  @override
+  String get pinBackupOffer =>
+      'Set a 4-digit recovery PIN to recover your original identity and add a device when your previous devices are offline. Only the root key is backed up; message history is excluded.';
+
+  @override
+  String get pinRecoveryEnter => 'Enter Messages';
+
+  @override
+  String get pinRecoveryForgotInfo =>
+      'Changing or resetting the backup PIN is not supported in this version. Keep using existing devices, or ask an online device to approve enrollment. You may explicitly choose identity recovery to create a new DID and root key; old devices will need to rejoin.';
+
+  @override
+  String get pinRecoveryDeviceLabel => 'New device name';
+
+  @override
+  String get pinRecoveryConfirmDevice => 'Confirm this device';
+
+  @override
+  String get pinRecoveryConfirmDescription =>
+      'The original root has been recovered. Confirm to add this device while keeping the original DID and existing devices. Historical messages are not restored.';
+
+  @override
+  String get pinBackupPending => 'Root backup pending';
+
+  @override
+  String get pinRecoveryWrongPin =>
+      'Incorrect PIN. This submission used an online attempt. Retry carefully.';
+
+  @override
+  String get pinRecoveryReady => 'Identity activated; secure messaging ready';
+
+  @override
+  String get pinRecoverySendCode => 'Send recovery code';
+
+  @override
+  String get pinRecoveryVerifying => 'Verifying backup by recovery';
+
+  @override
+  String get pinRecoveryBudgetExhausted =>
+      'Online PIN attempt budget exhausted. SMS or signing in again cannot reset it.';
+
+  @override
+  String get pinRecoveryConfirmPin => 'Confirm PIN';
+
+  @override
+  String get pinBackupUnsupported =>
+      'This device has no exportable root control. Enable backup on a device that holds the root key.';
+
+  @override
+  String get pinRecoveryCancelledOperation => 'Operation cancelled.';
+
+  @override
+  String get pinRecoveryAwaitingPin => 'Awaiting PIN';
+
+  @override
+  String get pinRecoveryResume => 'Resume this operation';
+
+  @override
+  String get pinBackupTitle => 'Protect your root key';
+
+  @override
+  String get pinRecoveryV4 => 'Choose recovery to a new identity';
+
+  @override
+  String get pinRecoverySubmit => 'Submit PIN';
+
+  @override
+  String get pinRecoveryPhoneAgain =>
+      'Session expired. Verify the same phone number and select the same Handle to resume.';
+
+  @override
+  String get pinBackupProtected => 'Root key protected';
+
+  @override
+  String get pinRecoveryLocalPending =>
+      'Device enrolled remotely; local activation pending';
+
+  @override
+  String get pinRecoveryPresence =>
+      'Confirm authorizing this new device with the recovered root key';
+
+  @override
+  String get pinRecoveryForgot => 'Forgot PIN?';
+
+  @override
+  String get pinRecoveryRecovering => 'Recovering original root control';
+
+  @override
+  String get pinBackupSet => 'Set recovery PIN';
+
+  @override
+  String get pinRecoveryPin => '4-digit recovery PIN';
+
+  @override
+  String get pinBackupPresence =>
+      'Confirm backing up the current identity root key';
+
+  @override
+  String get pinBackupSkip => 'Skip for now';
+
+  @override
+  String get pinRecoveryPhone => 'Bound phone number';
+
+  @override
+  String get pinRecoveryCommitUnknown =>
+      'Remote result is unknown; resume this operation';
+
+  @override
+  String get pinBackupNotEnabled => 'PIN backup is off';
 }

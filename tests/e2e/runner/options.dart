@@ -97,6 +97,7 @@ Usage:
   dart run tests/e2e/runner.dart --case step4-revoke-mls
   dart run tests/e2e/runner.dart --case multi-device-app-pair-later-admin-grant
   dart run tests/e2e/runner.dart --case root-transfer
+  dart run tests/e2e/runner.dart --case pin-recovery --config tests/e2e/configs/pin-recovery.local.yaml
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
   dart run tests/e2e/runner.dart --case restart
@@ -108,7 +109,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|avatars|agent-avatars|personal-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-remote-recovery-fresh|handle-recovery-local-data|handle-recovery-state-machine|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair-recovery-registration-resume|multi-device-app-pair-recovery-retirement-ordinary-rejoin|identity-deletion-recovery-guard|multi-device-app-pair|multi-device-app-pair-functional|multi-device-app-pair-content-sync|multi-device-app-pair-paging-recovery|step4-revoke-mls|multi-device-app-pair-later-admin-grant|root-transfer|pin-recovery|full|messaging|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|avatars|agent-avatars|personal-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -136,6 +137,10 @@ Options:
                                macOS; it currently runs only the remote member Join
                                flow with an E2E-only unattended user-presence
                                decision.
+                               pin-recovery uses dedicated protected PIN/trust
+                               fixtures for root backup, original-DID Join,
+                               explicit V4/new-root rebackup, and a new-message
+                               round trip between two isolated Apps.
                                multi-device-app-pair-functional reuses the two
                                isolated Apps with an E2E-only user-presence
                                port to run unattended Agent-inventory and
@@ -197,6 +202,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
     _multiDeviceAppPairRecoveryRetirementCaseIds,
   ),
   identityDeletionRecoveryGuard(_identityDeletionRecoveryGuardCaseIds),
+  pinRecovery(<String>['PIN-RECOVERY-APP-E2E-001']),
   multiDeviceAppPair(_multiDeviceAppPairCaseIds),
   multiDeviceAppPairFunctional(_multiDeviceAppPairFunctionalCaseIds),
   multiDeviceAppPairContentSync(_multiDeviceAppPairContentSyncCaseIds),
@@ -271,6 +277,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'integration_test/handle_recovery_ui_test.dart',
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         'integration_test/handle_recovery_ui_test.dart',
+      DesktopE2eCase.pinRecovery => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairTarget,
       DesktopE2eCase.didMethodWeb => _multiDeviceAppPairTarget,
       DesktopE2eCase.multiDeviceAppPairFunctional => _multiDeviceAppPairTarget,
@@ -343,6 +350,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         'identity-deletion-recovery-guard',
+      DesktopE2eCase.pinRecovery => 'pin-recovery',
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.didMethodWeb => 'did-method-web',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
@@ -358,6 +366,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
   }
 
   bool get usesRemoteAppPairScenario =>
+      this == DesktopE2eCase.pinRecovery ||
       this == DesktopE2eCase.didMethodWeb ||
       this == DesktopE2eCase.multiDeviceAppPair ||
       this == DesktopE2eCase.multiDeviceAppPairFunctional ||
@@ -365,6 +374,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       this == DesktopE2eCase.multiDeviceAppPairPagingRecovery;
 
   bool get requiresCliPeer =>
+      this != DesktopE2eCase.pinRecovery &&
       this != DesktopE2eCase.full &&
       this != DesktopE2eCase.hostedGatewayJoin &&
       this != DesktopE2eCase.hostedGatewayEmailJoin &&
@@ -415,6 +425,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair-recovery-retirement-ordinary-rejoin',
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         'identity-deletion-recovery-guard',
+      DesktopE2eCase.pinRecovery => 'pin-recovery',
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         'multi-device-app-pair-functional',
@@ -460,6 +471,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       DesktopE2eCase.identityDeletionRecoveryGuard => const Duration(
         minutes: 25,
       ),
+      DesktopE2eCase.pinRecovery => const Duration(minutes: 25),
       DesktopE2eCase.multiDeviceAppPair => const Duration(minutes: 25),
       DesktopE2eCase.multiDeviceAppPairFunctional => const Duration(
         minutes: 30,
@@ -507,6 +519,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         _multiDeviceAppPairRecoveryRetirementScenario,
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         _identityDeletionRecoveryGuardScenario,
+      DesktopE2eCase.pinRecovery => 'pin-recovery-original-root-v1',
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairScenario,
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         _multiDeviceAppPairFunctionalScenario,
@@ -543,6 +556,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         _multiDeviceRemoteRecoveryRunConfigPath,
       DesktopE2eCase.identityDeletionRecoveryGuard =>
         _multiDeviceRemoteRecoveryRunConfigPath,
+      DesktopE2eCase.pinRecovery => _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         _multiDeviceAppPairRunConfigPath,
@@ -604,6 +618,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         DesktopE2eCase.identityDeletionRecoveryGuard,
       'multi-device-app-pair-later-admin-grant' ||
       'multi_device_app_pair_later_admin_grant' ||
+      'pin-recovery' => DesktopE2eCase.pinRecovery,
       'multi-device-app-pair' ||
       'multi_device_app_pair' => DesktopE2eCase.multiDeviceAppPair,
       'multi-device-app-pair-functional' ||
@@ -682,7 +697,7 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
         'multi-device-app-pair, multi-device-app-pair-functional, '
         'multi-device-app-pair-content-sync, '
         'multi-device-app-pair-paging-recovery, '
-        'step4-revoke-mls, root-transfer, full, messaging, performance, direct, '
+        'step4-revoke-mls, root-transfer, pin-recovery, full, messaging, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '
         'personal-agent.',

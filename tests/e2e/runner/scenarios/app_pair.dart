@@ -25,6 +25,26 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
     if (pairConfig.functional || pagingRecovery) {
       validateAppPairCleanupHandlePrefix(pairConfig.handlePrefix);
     }
+    if (options.e2eCase == DesktopE2eCase.pinRecovery) {
+      final fixturePath =
+          Platform.environment['AWIKI_PIN_RECOVERY_E2E_FIXTURE'];
+      if (fixturePath == null ||
+          !File(fixturePath).existsSync() ||
+          (File(fixturePath).statSync().mode & 0x3f) != 0) {
+        throw E2eFailure(
+          'PIN recovery requires its dedicated permission-restricted fixture.',
+        );
+      }
+      final fixture = jsonDecode(File(fixturePath).readAsStringSync());
+      if (fixture is! Map ||
+          fixture['pin'] is! String ||
+          !RegExp(r'^[0-9]{4}$').hasMatch(fixture['pin'] as String)) {
+        throw E2eFailure('PIN recovery fixture is invalid.');
+      }
+      _addRuntimeSecret(fixturePath);
+      _addRuntimeSecret(fixture['pin'] as String);
+      _addRuntimeSecret(fixture['pin'] == '0000' ? '0001' : '0000');
+    }
     remoteMultiDeviceAppPairConfig = pairConfig;
     _addRuntimeSecret(pairConfig.phone);
     _addRuntimeSecret(pairConfig.fixedOtp);
@@ -255,6 +275,30 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             await _cleanupAppPairMessages(coordinator.cleanupAccountIds);
           }
           try {
+            if (options.e2eCase == DesktopE2eCase.pinRecovery) {
+              final ledger = File(
+                '${reportDir.parent.path}/pin_resources.private.json',
+              );
+              await ledger.create();
+              final permission = await Process.run('chmod', [
+                '600',
+                ledger.path,
+              ]);
+              if (permission.exitCode != 0)
+                throw E2eFailure('PIN cleanup ledger permissions failed.');
+              await ledger.writeAsString(
+                jsonEncode({
+                  'schemaVersion': 1,
+                  'runId': runId,
+                  'didDomain': pairConfig.didDomain,
+                  'status': 'remote_resources_pending_exact_cleanup',
+                  'localRootsRetained': !appPairCompleted,
+                  'v4StateRoot': '${appPairAdminStateRootDir.path}-v4',
+                  ...coordinator.pinCleanupLedger,
+                }),
+                flush: true,
+              );
+            }
             if (options.e2eCase == DesktopE2eCase.didMethodWeb) {
               final ledger = File(
                 '${reportDir.parent.path}/web_resources.private.json',
@@ -287,10 +331,15 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           }
           // A failed Web publication may still own a pending candidate key.
           // Preserve both roots for explicit result inspection and cleanup.
-          if (options.e2eCase != DesktopE2eCase.didMethodWeb ||
+          if ((options.e2eCase != DesktopE2eCase.didMethodWeb &&
+                  options.e2eCase != DesktopE2eCase.pinRecovery) ||
               appPairCompleted) {
             await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
             await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
+            if (options.e2eCase == DesktopE2eCase.pinRecovery)
+              await _deleteDirectoryBestEffort(
+                Directory('${appPairAdminStateRootDir.path}-v4'),
+              );
           }
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
           if ((pairConfig.functional || pairConfig.contentSync) &&

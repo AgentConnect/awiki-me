@@ -4241,4 +4241,166 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsNetworkStatusFailed => '暂时无法读取连接状态。';
+
+  @override
+  String get pinRecoveryFailure => '操作未完成，请检查网络或稍后继续同一操作。';
+
+  @override
+  String get pinRecoveryCancel => '取消此操作';
+
+  @override
+  String get pinRecoveryPinMismatch => '两次输入的 PIN 不一致。';
+
+  @override
+  String get pinRecoveryCommitting => '正在提交新设备';
+
+  @override
+  String get pinRecoveryContinueExisting => '返回并继续使用现有设备';
+
+  @override
+  String get pinRecoveryTargets => '选择已授权的 Handle';
+
+  @override
+  String get pinRecoveryRegistering => '正在注册三节点备份';
+
+  @override
+  String get pinRecoveryJoin => '手机号 + PIN 加入';
+
+  @override
+  String get pinRecoveryCode => '6 位短信验证码';
+
+  @override
+  String get pinRecoveryTitle => 'PIN 保护与恢复';
+
+  @override
+  String get pinRecoveryNoTargets => '该手机号没有可用的 Handle。';
+
+  @override
+  String get pinBackupUnknown => '备份状态暂无法核验，请联网后重试。';
+
+  @override
+  String get pinBackupUnknownShort => '待核验';
+
+  @override
+  String get pinRecoveryStatusCheck => '请验证手机号，查看当前备份状态。';
+
+  @override
+  String get pinRecoveryUnavailable => '该 Handle 未开启 PIN 备份或当前不可恢复。';
+
+  @override
+  String get pinRecoveryVerify => '验证并查看 Handle';
+
+  @override
+  String get pinRecoveryAttemptBudget => '在线尝试次数';
+
+  @override
+  String get pinRecoveryRealmUnavailable => '恢复服务暂不可用。这不是 PIN 错误，请稍后继续同一操作。';
+
+  @override
+  String get pinRecoverySecurePending => '身份已激活，加密通信仍在准备';
+
+  @override
+  String get pinRecoveryPinFormat => 'PIN 必须是 4 位 ASCII 数字。';
+
+  @override
+  String get pinBackupOffer =>
+      '设置 4 位恢复 PIN 后，可在旧设备离线时恢复原身份并加入新设备。仅备份根私钥，不包含消息历史。';
+
+  @override
+  String get pinRecoveryEnter => '进入消息';
+
+  @override
+  String get pinRecoveryForgotInfo =>
+      '首版暂不支持修改或重设备份 PIN。现有设备可继续使用，也可由在线设备批准新设备加入。若明确需要恢复为新身份，可主动选择既有身份恢复；该流程会更换 DID 和根私钥，旧设备需重新加入。';
+
+  @override
+  String get pinRecoveryDeviceLabel => '新设备名称';
+
+  @override
+  String get pinRecoveryConfirmDevice => '确认加入此设备';
+
+  @override
+  String get pinRecoveryConfirmDescription =>
+      '已恢复原根能力。确认后将添加新设备，保留现有设备和原 DID。不会恢复历史消息。';
+
+  @override
+  String get pinBackupPending => '根备份待完成';
+
+  @override
+  String get pinRecoveryWrongPin => 'PIN 不正确。本次已计入在线尝试次数，请谨慎重试。';
+
+  @override
+  String get pinRecoveryReady => '身份已激活，加密通信已就绪';
+
+  @override
+  String get pinRecoverySendCode => '发送恢复专用验证码';
+
+  @override
+  String get pinRecoveryVerifying => '正在回读校验备份';
+
+  @override
+  String get pinRecoveryBudgetExhausted => '在线 PIN 尝试次数已耗尽，短信验证或重新登录不会重置次数。';
+
+  @override
+  String get pinRecoveryConfirmPin => '再次输入 PIN';
+
+  @override
+  String get pinBackupUnsupported => '当前设备没有可备份的根控制权限。请使用持根设备开启。';
+
+  @override
+  String get pinRecoveryCancelledOperation => '操作已取消。';
+
+  @override
+  String get pinRecoveryAwaitingPin => '等待输入 PIN';
+
+  @override
+  String get pinRecoveryResume => '继续同一操作';
+
+  @override
+  String get pinBackupTitle => '保护根私钥';
+
+  @override
+  String get pinRecoveryV4 => '选择恢复为新身份';
+
+  @override
+  String get pinRecoverySubmit => '提交 PIN';
+
+  @override
+  String get pinRecoveryPhoneAgain => '会话已过期，请验证同一手机号并选择同一 Handle 继续。';
+
+  @override
+  String get pinBackupProtected => '根私钥已保护';
+
+  @override
+  String get pinRecoveryLocalPending => '远端已加入，本地激活待完成';
+
+  @override
+  String get pinRecoveryPresence => '确认使用已恢复的根私钥授权此新设备';
+
+  @override
+  String get pinRecoveryForgot => '忘记 PIN？';
+
+  @override
+  String get pinRecoveryRecovering => '正在恢复原根能力';
+
+  @override
+  String get pinBackupSet => '设置恢复 PIN';
+
+  @override
+  String get pinRecoveryPin => '4 位恢复 PIN';
+
+  @override
+  String get pinBackupPresence => '确认备份当前身份的根私钥';
+
+  @override
+  String get pinBackupSkip => '暂不设置';
+
+  @override
+  String get pinRecoveryPhone => '已绑定的手机号';
+
+  @override
+  String get pinRecoveryCommitUnknown => '远端提交结果待确认，请继续同一操作';
+
+  @override
+  String get pinBackupNotEnabled => 'PIN 备份未开启';
 }

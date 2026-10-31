@@ -71,6 +71,49 @@ the same change:
 Code-only feature changes without corresponding tests are not acceptable unless
 the exception and follow-up are explicitly documented.
 
+## PIN root recovery (focused Linux App pair)
+
+`pin-recovery` / `PIN-RECOVERY-APP-E2E-001` uses the existing isolated two-App
+runner under Xvfb and real production AppBootstrap/native Core. It exercises an
+optional backup offer and explicit skip, enablement from Settings, dedicated SMS
+and authorized Handle selection, one wrong PIN, the correct PIN, explicit device
+confirmation and authenticated activation with the original DID/root and both
+devices preserved. App A disposes its runtime before App B recovers. After all PIN
+and explicit V4/new-root skip, rebackup and fresh-scope recovery steps finish,
+App A registers a separate disposable Direct peer and both Apps
+verify a new message and visible reply. That second owner is recorded in the
+exact cleanup ledger; it is never present during phone/PIN discovery. It does not
+claim message history recovery, real-phone coverage, or macOS OS behavior.
+
+Use an ignored `tests/e2e/configs/pin-recovery.local.yaml` with `platform: linux`
+and a dedicated permission-restricted OTP fixture. `AWIKI_PIN_RECOVERY_E2E_FIXTURE`
+points to a separate ignored JSON file (0600) containing `pin` and `tenants`;
+`tenants` is the Host-installed public trust configuration array, with
+`tenant_id`, `deployment_id`, `control_base_url`, and `config_signing_keys`.
+Never put PIN, phone, or OTP values in command arguments or tracked files.
+The verified phone may discover multiple independently validated Handles,
+including Handles with different owners. Select the exact run-owned full Handle;
+coordinate shared test-OTP windows and exact cleanup with the environment owner.
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
+AWIKI_PIN_RECOVERY_E2E_FIXTURE=<ignored-fixture-path> \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=e2epin20261030 \
+dart run tests/e2e/runner.dart --case pin-recovery \
+  --config tests/e2e/configs/pin-recovery.local.yaml
+```
+
+The runner retains a private exact-resource ledger and failed App roots for
+result inspection; successful roots are removed. Remote account/backup rows
+remain subject to precise owner cleanup, with the ledger recording that state.
+`--prepare-only` compiles both Apps without registering an account or creating a
+backup. Its export includes the artifact spec's consumer suites, so required
+execution can verify and reuse both manifests without rebuilding. Focused
+unit/widget and adapter coverage is in
+`tests/unit/pin_recovery_test.dart` and
+`tests/unit/data/im_core/awiki_im_core_pin_recovery_adapter_test.dart`; the V4
+regression also checks its new root's optional backup offer and skip.
+
 ## Account-first registration
 
 The mobile and desktop onboarding entry first asks for a Handle in the selected

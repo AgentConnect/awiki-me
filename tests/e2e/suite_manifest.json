@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-10-16.hosted-gateway-join",
+  "sourceRevision": "2026-10-31.pin-root-recovery",
   "suites": {
     "smoke": {
       "tier": "portable_product_ui",
@@ -1409,6 +1409,7 @@
         "PERF-E2E-010",
         "PERF-E2E-011",
         "PERF-E2E-012",
+        "PIN-RECOVERY-APP-E2E-001",
         "PROCESS-RESTART-E2E-001",
         "REGISTRATION-ACCOUNT-FIRST-E2E-001",
         "REGISTRATION-DOMAIN-DISCOVERY-E2E-001",
@@ -1450,7 +1451,8 @@
         "avatars",
         "agent-avatars",
         "registration-domain-discovery",
-        "hosted-gateway-join"
+        "hosted-gateway-join",
+        "pin-recovery"
       ]
     },
     "registration-account-first": {
@@ -1675,6 +1677,44 @@
       ],
       "caseIds": [
         "HOSTED-GATEWAY-JOIN-E2E-001"
+      ]
+    },
+    "pin-recovery": {
+      "tier": "remote_product_ui_security",
+      "supportedPlatforms": [
+        "macos",
+        "linux"
+      ],
+      "requiredTools": [
+        "flutter",
+        "dart"
+      ],
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 12,
+      "timeoutMinutes": 25,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info",
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
+      ],
+      "allowedDidDomains": [
+        "awiki.info",
+        "anpclaw.com",
+        "test-fix.anpclaw.com"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "root_transfer",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "PIN-RECOVERY-APP-E2E-001"
       ]
     }
   }

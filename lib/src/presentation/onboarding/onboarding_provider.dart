@@ -1,3 +1,4 @@
+import '../pin_recovery/pin_recovery_provider.dart';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -689,6 +690,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           reportFailure: false,
         );
     if (activated) {
+      if (mounted && ref.read(pinRecoveryAvailableProvider)) {
+        ref.read(pinBackupOfferProvider.notifier).state = identity
+            .toLegacySessionIdentity();
+      }
       return IdentityRegistrationStatus.registered;
     }
     state = state.copyWith(
@@ -822,6 +827,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     if (!_sessionService.isSessionTransitionCurrent(transition)) {
       throw const AppSessionTransitionSuperseded();
+    }
+    if (ref.read(pinRecoveryAvailableProvider)) {
+      ref.read(pinBackupOfferProvider.notifier).state = session
+          .toLegacySessionIdentity();
     }
     await ref
         .read(appRuntimeProvider.notifier)

@@ -1,3 +1,7 @@
+import 'package:awiki_me/src/domain/entities/pin_recovery.dart';
+import 'package:awiki_me/src/application/ports/pin_recovery_core_port.dart';
+import 'package:awiki_me/src/presentation/pin_recovery/pin_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/pin_recovery/pin_recovery_page.dart';
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
@@ -876,9 +880,13 @@ void main() {
     expect(core.lastPhone, isNull);
   });
 
-  for (final fromSettings in [false, true]) {
+  for (final (fromSettings, pinBackupEnabled) in [
+    (false, false),
+    (true, false),
+    (false, true),
+  ]) {
     testWidgets(
-      'completed Recovery opens the authenticated message workspace from ${fromSettings ? 'desktop settings' : 'root route'}',
+      'completed Recovery opens the authenticated message workspace from ${fromSettings ? 'desktop settings' : 'root route'} (PIN offer: $pinBackupEnabled)',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(1280, 900));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -923,6 +931,8 @@ void main() {
             gateway: gateway,
             session: previousSession,
             providerOverrides: <Override>[
+              if (pinBackupEnabled)
+                pinRecoveryCorePortProvider.overrideWithValue(_PinOfferCore()),
               handleRecoveryCorePortProvider.overrideWithValue(core),
               userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
             ],
@@ -1027,6 +1037,13 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        if (pinBackupEnabled) {
+          expect(find.byType(PinRecoveryPage), findsOneWidget);
+          expect(find.byKey(const Key('pin-backup-skip')), findsOneWidget);
+          await tester.tap(find.byKey(const Key('pin-backup-skip')));
+          await tester.pumpAndSettle();
+          expect(container.read(pinBackupOfferProvider), isNull);
+        }
         expect(find.byType(HandleRecoveryPage), findsNothing);
         expect(find.byType(ConversationWorkspacePage), findsOneWidget);
         expect(
@@ -1930,4 +1947,19 @@ class _FakeUserPresence implements UserPresencePort {
     calls += 1;
     return await (completer?.future ?? Future.value(true));
   }
+}
+
+class _PinOfferCore extends Fake implements PinRecoveryCorePort {
+  @override
+  String? get tenantId => 'test-tenant';
+  @override
+  Future<bool> canBackup(String localIdentityId) async => true;
+  @override
+  Future<PinBackupStatus> backupStatus(String localIdentityId) async =>
+      const PinBackupStatus(
+        did: 'did:wba:awiki.info:users:alice-new',
+        state: PinBackupState.notEnabled,
+      );
+  @override
+  Future<List<Never>> listPending() async => const [];
 }

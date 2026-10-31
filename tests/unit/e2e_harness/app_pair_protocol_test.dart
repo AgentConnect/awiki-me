@@ -8,6 +8,90 @@ import '../../e2e/app_pair_protocol.dart';
 
 void main() {
   test(
+    'PIN/V4 checkpoints coordinate only public scopes and retain exact cleanup actors',
+    () async {
+      final server = await AppPairCoordinatorServer.start(
+        token: List.filled(48, 't').join(),
+      );
+      addTearDown(server.close);
+      final client = AppPairCoordinatorClient(
+        endpoint: server.endpoint,
+        token: server.token,
+      );
+      await client.publish(
+        'admin',
+        'cleanup_scope',
+        data: {'accountId': 'original-owner'},
+      );
+      await client.publish(
+        'admin',
+        'cleanup_peer',
+        data: {'accountId': 'peer-owner'},
+      );
+      await client.publish(
+        'admin',
+        'pin_backup_ready',
+        data: {
+          'did': 'did:wba:awiki.info:user:original',
+          'fullHandle': 'original.awiki.info',
+          'oldDevice': 'old-device',
+          'publicMethods': {'#root': 'public-root-method'},
+        },
+      );
+      await client.publish(
+        'joiner',
+        'pin_new_device_authenticated',
+        data: {'operationId': 'pin-operation', 'deviceId': 'joined-device'},
+      );
+      await client.publish(
+        'joiner',
+        'pin_v4_new_backup_ready',
+        data: {
+          'did': 'did:wba:awiki.info:user:new',
+          'publicMethods': {'#root': 'new-public-root-method'},
+        },
+      );
+      await client.publish(
+        'admin',
+        'pin_v4_rejoined',
+        data: {'deviceId': 'new-device'},
+      );
+      expect(server.pinCleanupLedger['accountIds'], [
+        'original-owner',
+        'peer-owner',
+      ]);
+      expect(server.pinCleanupLedger['v4'], {
+        'did': 'did:wba:awiki.info:user:new',
+      });
+      expect(server.pinCleanupLedger['recoveredDevice'], {
+        'operationId': 'pin-operation',
+        'deviceId': 'joined-device',
+      });
+      await expectLater(
+        client.publish('joiner', 'pin_new_device_authenticated'),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+      expect(
+        (server.pinCleanupLedger['backup'] as Map).containsKey('publicMethods'),
+        false,
+      );
+      await expectLater(
+        client.publish(
+          'admin',
+          'pin_backup_ready',
+          data: {
+            'did': 'did:wba:awiki.info:user:original',
+            'fullHandle': 'original.awiki.info',
+            'oldDevice': 'old-device',
+            'publicMethods': {'pin': 'secret-input'},
+          },
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+    },
+  );
+
+  test(
     'two isolated roles exchange checkpoints and compare SAS in memory',
     () async {
       final server = await AppPairCoordinatorServer.start(
@@ -449,12 +533,39 @@ void main() {
       safeMessageSyncFailureDiagnostic('transport_unavailable'),
       'MessageSyncCoordinatorFailure:transport_unavailable',
     );
-    for (final unsafe in ['', 'Bearer private-token', 'did:wba:private:user',
-      'https://private.example/error', 'x' * 97]) {
+    for (final unsafe in [
+      '',
+      'Bearer private-token',
+      'did:wba:private:user',
+      'https://private.example/error',
+      'x' * 97,
+    ]) {
       expect(
         safeMessageSyncFailureDiagnostic(unsafe),
         'MessageSyncCoordinatorFailure:redacted',
       );
+    }
+  });
+
+  test('App failure diagnostics admit only bounded lowercase codes', () {
+    expect(safeAppPairFailureCode(null), 'none');
+    expect(safeAppPairFailureCode('invalid_argument'), 'invalid_argument');
+    expect(
+      safeAppPairFailureCode('identity.registration_failed'),
+      'identity.registration_failed',
+    );
+    for (final unsafe in [
+      '',
+      '123456',
+      '+86123456789',
+      'Bearer secret-input',
+      'service error with input',
+      'UPPERCASE_CODE',
+      'https://private.example/error',
+      '{"phone":"private-input"}',
+      'x' * 97,
+    ]) {
+      expect(safeAppPairFailureCode(unsafe), 'redacted');
     }
   });
 

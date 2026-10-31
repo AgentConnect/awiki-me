@@ -168,6 +168,33 @@ void main() {
     );
   });
 
+  test(
+    'builder CLI preserves consumer suites for required manifest reuse',
+    () async {
+      final project = Directory('/tmp/awiki-app-consumer-test/project');
+      final request = IsolatedE2eAppBuildRequest.parse(<String>[
+        '--name=admin',
+        '--target=integration_test/multi_device_app_pair_test.dart',
+        '--state-root=${project.path}/state',
+        '--work-root=${project.path}/work',
+        '--artifact-root=${project.path}/artifacts',
+        '--bundle-id=ai.awiki.awikime.dev.e2e.pair.admin',
+        '--platform=linux',
+        '--consumer-suite=pin-recovery',
+        '--consumer-suite=multi-device-app-pair',
+        '--consumer-suite=pin-recovery',
+        '--dry-run',
+      ], projectRoot: project);
+
+      final artifact = await IsolatedE2eAppBuilder().build(request);
+      expect(artifact.toJson()['consumerSuites'], const <String>[
+        'multi-device-app-pair',
+        'pin-recovery',
+      ]);
+      expect(project.existsSync(), isFalse);
+    },
+  );
+
   test('Linux build plan creates a relocatable isolated desktop bundle', () {
     final project = Directory('/tmp/awiki-app-pair-builder-test/project');
     final root = Directory('${project.path}/.e2e/pair');

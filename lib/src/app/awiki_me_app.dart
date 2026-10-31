@@ -32,6 +32,7 @@ import '../presentation/app_shell/providers/navigation_provider.dart';
 import '../presentation/agents/agents_provider.dart';
 import '../presentation/chat/chat_provider.dart';
 import '../presentation/recovery/handle_recovery_provider.dart';
+import '../presentation/pin_recovery/pin_recovery_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
 import '../presentation/shared/widgets/keyboard_dismiss_scope.dart';
@@ -124,6 +125,10 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.groupEncryptionCorePort != null)
           groupEncryptionCorePortProvider.overrideWithValue(
             bootstrap.groupEncryptionCorePort!,
+          ),
+        if (bootstrap.pinRecoveryCorePort != null)
+          pinRecoveryCorePortProvider.overrideWithValue(
+            bootstrap.pinRecoveryCorePort,
           ),
         if (bootstrap.handleRecoveryCorePort != null)
           handleRecoveryCorePortProvider.overrideWithValue(

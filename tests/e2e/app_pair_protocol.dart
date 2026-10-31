@@ -16,6 +16,25 @@ const Set<String> _forbiddenCheckpointKeys = <String>{
   'authorization',
 };
 const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
+  'joiner\u0000pin_v4_new_backup_ready': <String>{'did', 'publicMethods'},
+  'admin\u0000pin_v4_rejoined': <String>{'deviceId'},
+  'admin\u0000pin_peer_registration_intent': <String>{'handle'},
+  'admin\u0000pin_peer_ready': <String>{'peerDid'},
+  'joiner\u0000pin_outbound': <String>{'messageId'},
+  'admin\u0000pin_reply': <String>{'messageId'},
+  'joiner\u0000pin_roundtrip_visible': <String>{},
+  'admin\u0000pin_registration_intent': <String>{'handle'},
+  'admin\u0000pin_backup_ready': <String>{
+    'did',
+    'fullHandle',
+    'oldDevice',
+    'publicMethods',
+  },
+  'admin\u0000pin_old_runtime_offline': <String>{},
+  'joiner\u0000pin_new_device_authenticated': <String>{
+    'operationId',
+    'deviceId',
+  },
   'admin\u0000web_peer_ready': <String>{'peerDid', 'conversationId'},
   'joiner\u0000web_member_readonly': <String>{},
   'admin\u0000web_incoming': <String>{'messageId'},
@@ -173,6 +192,14 @@ String safeMessageSyncFailureDiagnostic(String code) {
   return 'MessageSyncCoordinatorFailure:$safe';
 }
 
+String safeAppPairFailureCode(String? code) {
+  if (code == null) return 'none';
+  return _isSafeDiagnosticCode(code, requireNamespace: false) &&
+          RegExp(r'^[a-z]').hasMatch(code)
+      ? code
+      : 'redacted';
+}
+
 String safeCliFailureDiagnostic({
   required int exitCode,
   required Object? stdout,
@@ -268,6 +295,32 @@ class AppPairCoordinatorServer {
     if (_checkpoints['joiner\u0000web_reply']
         case final Map<String, Object?> data)
       'web_reply': data,
+  };
+  Map<String, Object?> get pinCleanupLedger => {
+    'accountIds': cleanupAccountIds,
+    if (_checkpoints['joiner\u0000pin_v4_new_backup_ready']
+        case final Map<String, Object?> data)
+      'v4': {'did': data['did']},
+    if (_checkpoints['admin\u0000pin_v4_rejoined']
+        case final Map<String, Object?> data)
+      'v4Device': data,
+    if (_checkpoints['admin\u0000pin_peer_registration_intent']
+        case final Map<String, Object?> data)
+      'peerRegistration': data,
+    if (_checkpoints['admin\u0000pin_peer_ready']
+        case final Map<String, Object?> data)
+      'peer': data,
+    if (_checkpoints['admin\u0000pin_registration_intent']
+        case final Map<String, Object?> data)
+      'registration': data,
+    if (_checkpoints['admin\u0000pin_backup_ready']
+        case final Map<String, Object?> data)
+      'backup': {
+        for (final key in ['did', 'fullHandle', 'oldDevice']) key: data[key],
+      },
+    if (_checkpoints['joiner\u0000pin_new_device_authenticated']
+        case final Map<String, Object?> data)
+      'recoveredDevice': data,
   };
   StreamSubscription<HttpRequest>? _subscription;
 
@@ -629,7 +682,14 @@ bool _containsForbiddenCheckpointValue(Object? value) {
   if (value is Map) {
     for (final entry in value.entries) {
       final key = entry.key.toString().toLowerCase();
-      if (_forbiddenCheckpointKeys.any(key.contains) ||
+      if (const {
+            'pin',
+            'pin_code',
+            'pincode',
+            'recovery_pin',
+            'recoverypin',
+          }.contains(key) ||
+          _forbiddenCheckpointKeys.any(key.contains) ||
           _containsForbiddenCheckpointValue(entry.value)) {
         return true;
       }

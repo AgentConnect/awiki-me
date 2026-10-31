@@ -23,6 +23,8 @@ import '../shared/widgets/awiki_glass.dart';
 import 'handle_recovery_provider.dart';
 import 'handle_recovery_presentation.dart';
 import 'handle_recovery_session.dart';
+import '../pin_recovery/pin_recovery_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 
 class HandleRecoveryPage extends StatelessWidget {
   const HandleRecoveryPage({
@@ -580,6 +582,11 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
       if (!activated) {
         setState(() => _sessionActivationFailed = true);
         return;
+      }
+      if (ref.read(pinRecoveryAvailableProvider)) {
+        ref.read(pinBackupOfferProvider.notifier).state = ref
+            .read(sessionProvider)
+            .session;
       }
       ref
           .read(shellDestinationProvider.notifier)

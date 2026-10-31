@@ -743,6 +743,8 @@ class DesktopE2eRunner {
           await _runRemoteHandleRecovery();
         case DesktopE2eCase.identityDeletionRecoveryGuard:
           await _runRemoteHandleRecovery();
+        case DesktopE2eCase.pinRecovery:
+          await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.multiDeviceAppPair:
         case DesktopE2eCase.didMethodWeb:
           await _runRemoteMultiDeviceAppPair();
@@ -1003,6 +1005,7 @@ class DesktopE2eRunner {
       '--platform=${platform.name}',
       '--flutter-bin=flutter',
       for (final define in spec.dartDefines) '--dart-define=$define',
+      for (final suite in spec.consumerSuites) '--consumer-suite=$suite',
     ], timeout: const Duration(minutes: 12));
     return _IsolatedAppArtifact.fromBuilderOutput(
       result.output,
