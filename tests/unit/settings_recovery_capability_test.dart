@@ -43,6 +43,9 @@ void main() {
               ],
             ),
           );
+          // Resolve the backend feature stream before completing the method
+          // capability future that SettingsPage subscribes to conditionally.
+          await tester.pump();
           final recovery = find.byKey(
             const Key('settings-recover-handle-did-row'),
           );
