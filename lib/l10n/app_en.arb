@@ -1915,5 +1915,13 @@
   "pinBackupSkip": "Skip for now",
   "pinRecoveryPhone": "Bound phone number",
   "pinRecoveryCommitUnknown": "Remote result is unknown; resume this operation",
-  "pinBackupNotEnabled": "PIN backup is off"
+  "pinBackupNotEnabled": "PIN backup is off",
+  "chatMultiSelect": "Select messages",
+  "chatMessageMore": "More message actions",
+  "chatReply": "Quote",
+  "chatDeleteMessagesTitle": "Delete {count} messages?",
+  "chatDeleteMessagesLocalNotice": "Delete from chat history on this device only. Messages on the server and other devices are unaffected.",
+  "chatMessagesSelected": "{count} messages selected",
+  "@chatDeleteMessagesTitle": {"placeholders": {"count": {"type": "int"}}},
+  "@chatMessagesSelected": {"placeholders": {"count": {"type": "int"}}}
 }

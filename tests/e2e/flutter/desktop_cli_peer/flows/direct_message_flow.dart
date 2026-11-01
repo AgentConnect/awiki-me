@@ -700,11 +700,149 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   await E2eScenarioProgressWriter.record(
     'direct_mixed_encryption_and_restart_verified',
   );
+
+  await _runMessageManagementRegression(
+    robot: robot,
+    conversation: refreshedConversation,
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+    config: config,
+    nonce: nonce,
+    ownerDid: ownerDid,
+    cliDid: cliDid,
+    expectedPeerName: expectedPeerName,
+  );
   return _DirectRegressionResult(
     conversationId: conversationId,
     peerPersonaId: conversation.peerPersonaId!,
     peerDid: cliDid,
     displayName: expectedPeerName,
+  );
+}
+
+Future<void> _runMessageManagementRegression({
+  required _DesktopAppRobot robot,
+  required ConversationSummary conversation,
+  required AppBootstrap bootstrap,
+  required List<Override> providerOverrides,
+  required AppSession session,
+  required _DesktopCliPeerSmokeConfig config,
+  required String nonce,
+  required String ownerDid,
+  required String cliDid,
+  required String expectedPeerName,
+}) async {
+  final id = conversation.conversationId;
+  await robot.navigateToMessages();
+  await robot.openConversationRowWithFirstVisibleTitle(
+    conversationId: id,
+    expectedTitle: expectedPeerName,
+  );
+  final source = _uiMessages(robot, id).last;
+  await robot.expectMessageContentVisible(source);
+  final bubble = find.byKey(Key('chat-message-bubble:${source.localId}'));
+  await robot.tester.tapAt(
+    robot.tester.getTopLeft(bubble) + const Offset(2, 2),
+    buttons: kSecondaryMouseButton,
+  );
+  await robot.tapOne(
+    find.byKey(const Key('message-action:reply')),
+    description: 'quote message',
+  );
+  final text = 'e2e quoted reply ${config.runId} $nonce';
+  await robot.sendText(text);
+  final reply = await _waitForUiMessage(
+    robot: robot,
+    conversationId: id,
+    content: text,
+    senderDid: ownerDid,
+    sendState: MessageSendState.sent,
+  );
+  expect(reply.replyToMessageId, source.remoteId ?? source.localId);
+  await robot.pumpUntilFinder(
+    find.byKey(Key('chat-message-quote:${reply.localId}')),
+    description: 'quoted source rendered after send',
+  );
+  await _waitForCliHistory(
+    config: config,
+    peerHandle: config.appHandle,
+    expectedText: text,
+    expectedMessageId: reply.remoteId,
+    expectedSenderDid: ownerDid,
+    expectedReceiverDid: cliDid,
+    expectedContentType: 'application/json',
+  );
+  await robot.tester.tapAt(
+    robot.tester.getCenter(
+      find.byKey(Key('chat-message-bubble:${reply.localId}')),
+    ),
+    buttons: kSecondaryMouseButton,
+  );
+  await robot.tapOne(
+    find.byKey(const Key('message-action:multiSelect')),
+    description: 'select messages',
+  );
+  await robot.tapOne(
+    find.byKey(Key('chat-message-select:${source.localId}')),
+    description: 'select second message',
+  );
+  await robot.tapOne(
+    find.byKey(const Key('chat-delete-selected-messages')),
+    description: 'delete selected messages',
+  );
+  await robot.tapOne(
+    find.byKey(const Key('chat-confirm-delete-messages')),
+    description: 'confirm device-local deletion',
+  );
+  await robot.pumpUntil(
+    description: 'selected messages removed locally',
+    condition: () => robot.container
+        .read(visibleChatThreadProvider(id))
+        .messages
+        .every(
+          (m) => m.localId != source.localId && m.localId != reply.localId,
+        ),
+  );
+  await robot.restart(
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+  );
+  await robot.openConversationRowWithFirstVisibleTitle(
+    conversationId: id,
+    expectedTitle: expectedPeerName,
+  );
+  await robot.pumpUntil(
+    description: 'local deletion restored after restart',
+    condition: () =>
+        robot.container
+            .read(chatThreadProvider(id))
+            .messages
+            .any((m) => m.remoteId == reply.remoteId) &&
+        !robot.container
+            .read(visibleChatThreadProvider(id))
+            .isHydratingLocalHistory &&
+        robot.container
+            .read(visibleChatThreadProvider(id))
+            .messages
+            .every(
+              (m) =>
+                  m.remoteId != reply.remoteId && m.remoteId != source.remoteId,
+            ),
+  );
+  // Peer/backend history must still contain the exact sent message.
+  await _waitForCliHistory(
+    config: config,
+    peerHandle: config.appHandle,
+    expectedText: text,
+    expectedMessageId: reply.remoteId,
+    expectedSenderDid: ownerDid,
+    expectedReceiverDid: cliDid,
+    expectedContentType: 'application/json',
+  );
+  await E2eScenarioProgressWriter.record(
+    'direct_quote_and_local_batch_delete_verified',
   );
 }
 

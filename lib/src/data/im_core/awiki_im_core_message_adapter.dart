@@ -13,12 +13,14 @@ import '../../application/ports/message_core_port.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/message_reply_reference.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_runtime.dart';
 
 class AwikiImCoreMessageAdapter
     implements
         MessageCorePort,
+        QuotedAttachmentMessageCorePort,
         AttachmentDownloadCancellationCorePort,
         LocalHistoryMessageCorePort,
         ThreadPatchMessageCorePort,
@@ -185,20 +187,23 @@ class AwikiImCoreMessageAdapter
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
+    MessageReplyReference? reply,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? clientMessageId,
     String? idempotencyKey,
   }) async {
     return _runtime.withCurrentClient((client) async {
       final ownerDid = await _currentOwnerDid(client);
-      final mentionPayloadJson = mentions.isEmpty || caption == null
+      final mentionPayload = mentions.isEmpty && reply == null
           ? null
-          : jsonEncode(
-              ChatMentionPayload.toP9Json(
-                text: caption,
-                draftMentions: mentions,
-              ),
+          : ChatMentionPayload.toP9Json(
+              text: caption ?? '',
+              draftMentions: mentions,
             );
+      if (reply != null) mentionPayload!['annotations'] = reply.annotations;
+      final mentionPayloadJson = mentionPayload == null
+          ? null
+          : jsonEncode(mentionPayload);
       final result = await client.attachments.sendConversation(
         core.SendConversationAttachmentRequest(
           security: _securityMode(
@@ -698,6 +703,19 @@ class AwikiImCoreMessageAdapter
 
   @override
   Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) {
+    if (MessageReplyReference.tryParse(failed.payloadJson) != null &&
+        failed.conversationId?.isNotEmpty == true) {
+      return sendConversationPayload(
+        secure: failed.encryptionRequired || failed.isEncrypted,
+        conversation: AppConversationReadRef.fromConversationId(
+          failed.conversationId!,
+        ),
+        payload: (jsonDecode(failed.payloadJson!) as Map)
+            .cast<String, Object?>(),
+        clientMessageId: failed.localId,
+        idempotencyKey: 'op-${failed.localId}',
+      );
+    }
     final mentionPayload = ChatMentionPayload.tryParsePayloadJson(
       failed.payloadJson,
     );

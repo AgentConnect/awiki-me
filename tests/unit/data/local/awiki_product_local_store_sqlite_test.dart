@@ -1,4 +1,8 @@
+// ignore_for_file: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
 import 'dart:io';
+import 'package:awiki_me/src/presentation/chat/local_message_deletions.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:awiki_me/src/application/account_state_sync_service.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
@@ -87,6 +91,36 @@ void main() {
       );
     }
   });
+
+  test(
+    'message deletion survives closing and reopening the device SQLite store',
+    () async {
+      var store = _store(databaseDir);
+      final message = ChatMessage(
+        localId: 'local',
+        remoteId: 'remote',
+        threadId: 'dm:peer',
+        senderDid: 'did:peer',
+        content: 'private text',
+        createdAt: DateTime(2026),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      var deletions = LocalMessageDeletions(store, 'did:owner', 'dm:peer');
+      await deletions.delete([message]);
+      deletions.dispose();
+      await store.close();
+      store = _store(databaseDir);
+      deletions = LocalMessageDeletions(store, 'did:owner', 'dm:peer');
+      await deletions.ready;
+      expect(
+        isMessageLocallyDeleted(message, deletions.state.requireValue),
+        isTrue,
+      );
+      deletions.dispose();
+      await store.close();
+    },
+  );
 
   test('persists overlays drafts and preferences by owner', () async {
     final store = _store(databaseDir);
@@ -1448,6 +1482,7 @@ void main() {
     await legacyStore.close();
 
     final store = AwikiProductLocalStoreSqlite(databasePath: targetPath);
+    addTearDown(store.close);
     final states = await store.loadAgentStates(ownerDid: 'did:alice');
     await store.saveAgentState(
       LocalAgentState(
@@ -1459,9 +1494,13 @@ void main() {
     );
     expect(states, isEmpty);
     expect(await File(targetPath).exists(), isTrue);
-    final targetRows = await AwikiProductLocalStoreSqlite(
+    final reopenedStore = AwikiProductLocalStoreSqlite(
       databasePath: targetPath,
-    ).loadAgentStates(ownerDid: 'did:alice');
+    );
+    addTearDown(reopenedStore.close);
+    final targetRows = await reopenedStore.loadAgentStates(
+      ownerDid: 'did:alice',
+    );
     expect(targetRows.map((state) => state.agentDid), <String>['did:agent-2']);
   });
 
@@ -1911,7 +1950,11 @@ class _LegacyUpgradeRemote implements AccountStateSyncPort {
 }
 
 AwikiProductLocalStoreSqlite _store(Directory databaseDir) {
-  return AwikiProductLocalStoreSqlite(databasePath: _databasePath(databaseDir));
+  final store = AwikiProductLocalStoreSqlite(
+    databasePath: _databasePath(databaseDir),
+  );
+  addTearDown(store.close);
+  return store;
 }
 
 String _databasePath(Directory databaseDir) {

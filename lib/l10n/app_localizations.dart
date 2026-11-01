@@ -8295,6 +8295,42 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'PIN 备份未开启'**
   String get pinBackupNotEnabled;
+
+  /// No description provided for @chatMultiSelect.
+  ///
+  /// In zh, this message translates to:
+  /// **'多选'**
+  String get chatMultiSelect;
+
+  /// No description provided for @chatMessageMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'更多消息操作'**
+  String get chatMessageMore;
+
+  /// No description provided for @chatReply.
+  ///
+  /// In zh, this message translates to:
+  /// **'引用'**
+  String get chatReply;
+
+  /// No description provided for @chatDeleteMessagesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除 {count} 条消息？'**
+  String chatDeleteMessagesTitle(int count);
+
+  /// No description provided for @chatDeleteMessagesLocalNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅从本机聊天记录中删除，服务端和其他设备上的消息不受影响。'**
+  String get chatDeleteMessagesLocalNotice;
+
+  /// No description provided for @chatMessagesSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已选择 {count} 条消息'**
+  String chatMessagesSelected(int count);
 }
 
 class _AppLocalizationsDelegate

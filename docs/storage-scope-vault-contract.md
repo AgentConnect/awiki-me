@@ -487,6 +487,12 @@ Store。schema 1 到 26 的归档是明确的预发布兼容退场策略，不�
 | development/profile | 独立dev application identity和data root | 独立dev secure-store service |
 | E2E | `AWIKI_E2E_APP_STATE_ROOT` | private file provider，0600/strict read |
 
+Windows computer-use 使用 `scripts/build_manual_dual_windows_apps.ps1` 在忽略的构建副本内生成
+固定 Admin/Joiner Debug 应用身份：ProductName、native support/cache/temp、窗口位置及
+Credential Manager service 均按角色隔离（见 `tests/computer-use/windows.md`）。副本同步替换
+Dart service 与 native allowlist，仍使用真实 Credential Manager/DPAPI 和原 scope UUID 合同；
+不启用 E2E provider，不更改生产命名空间，不通过复制 vault 或本机凭证构造 Joiner。
+
 E2E和dev不得读写production item。macOS ACL必须最终由stable Team + bundle designated
 requirement验证；iOS使用device-only/non-sync accessibility；Android使用Keystore-backed
 provider。Web在安全backend获批前保持vault unavailable。

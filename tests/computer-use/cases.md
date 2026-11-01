@@ -17,6 +17,8 @@
 
 **必测重点：** CU-DISPLAY-001，以及多设备／恢复的 CU-JOIN-002、CU-JOIN-001、CU-MULTI-001、CU-RECOVERY-001、CU-RECOVERY-002、CU-RECOVERY-003。用例排列是查询顺序，执行顺序以 playbook 为准。
 
+Windows 执行前先读 [平台映射](windows.md#用例平台映射)：以下 macOS 窗口名、bundle、`.app` 重开和 Command-Q 按 Windows 的固定角色、原 EXE 路径和完全退出流程替换；Touch ID 对应实际 Windows 系统认证，必须真人完成。CU-DAEMON-001 在 Windows 当前记 `blocked`，其余用例不能因此从清单移除。
+
 所有用例执行 acceptance.md 的 App 稳定性检查；单聊、群聊、联系人进入会话、多设备及恢复用例还必须执行消息完整性、唯一性、顺序、气泡／列表稳定性、名称检查。各步等待期间持续观察，最终正常不能覆盖过程中的异常。回访外部账号的阶段及预期消息集合必须写进逐项记录。
 
 ---

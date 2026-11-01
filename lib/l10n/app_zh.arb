@@ -1915,5 +1915,13 @@
   "pinBackupSkip": "暂不设置",
   "pinRecoveryPhone": "已绑定的手机号",
   "pinRecoveryCommitUnknown": "远端提交结果待确认，请继续同一操作",
-  "pinBackupNotEnabled": "PIN 备份未开启"
+  "pinBackupNotEnabled": "PIN 备份未开启",
+  "chatMultiSelect": "多选",
+  "chatMessageMore": "更多消息操作",
+  "chatReply": "引用",
+  "chatDeleteMessagesTitle": "删除 {count} 条消息？",
+  "chatDeleteMessagesLocalNotice": "仅从本机聊天记录中删除，服务端和其他设备上的消息不受影响。",
+  "chatMessagesSelected": "已选择 {count} 条消息",
+  "@chatDeleteMessagesTitle": {"placeholders": {"count": {"type": "int"}}},
+  "@chatMessagesSelected": {"placeholders": {"count": {"type": "int"}}}
 }

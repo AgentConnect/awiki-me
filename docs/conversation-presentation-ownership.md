@@ -65,6 +65,15 @@ App list/detail/read/send/realtime 主链路必须通过 `ConversationIdentity.c
 
 ## 2. 分层总览
 
+### 消息操作与本机删除（2026-10-05）
+
+- 文本/Markdown/附件气泡（含内边距）共用消息菜单；桌面右键和悬停气泡旁的三个点共用复制、全选、引用、多选、删除。移动端保留原生文字选择菜单并提供相同消息操作。执行中的 ACP 预览不具有已提交消息身份，不提供引用或删除。
+- 引用草稿按会话保存在 `ChatComposerDraft`，可以取消；发送后的摘要在气泡内展示。文本和附件复用既有 Core conversation payload/attachment 接口，`annotations.awiki_reply_to_message_id` 关联原消息；`awiki_reply_sender_name`、`awiki_reply_excerpt` 是发送时的展示快照，摘要最多 500 个 Unicode code point。引用与 P9 mention 共存，发送及失败重试保留原引用、幂等 ID 和用户选择的消息加密模式。
+- 删除是本机聊天记录的持久隐藏，不是撤回，也不是 Core SQLite 或附件缓存的物理擦除。`ProductLocalStore` 的 `deleted-messages:v1:<canonical conversationId>` UI preference 仅保存消息 ID/别名集合；按当前 Storage Scope、owner DID、conversationId 隔离，不写服务端、不发同步事件、不影响对方或兄弟设备。批量写成功后才移除显示，失败保留选中项和消息以便重试。
+- `chatThreadProvider` 继续提供完整 Core UI window；`visibleChatThreadProvider` 在最后展示边界应用删除标记，聊天搜索也消费该可见投影。同步、分页、已读与 Agent 因果关联继续使用未过滤窗口。重开、重新拉历史、repair/reset 不会解除删除标记；overlay 加载完成前不闪现已删消息，失败时提供重试。最近会话预览和预览搜索不再展示已删的末条消息。
+- 多选模式逐条勾选、显示数量、确认后批量删除，可取消或按 Esc 退出；切换会话/账号清空选择。引用草稿跟随会话恢复，账号 generation 切换清除。删除确认和异步完成必须通过同一 session/conversation fence。
+- 回归入口：`chat_page_test.dart` 的 Windows 消息操作用例、`local_message_deletions_test.dart`、`chat_provider_open_test.dart` 的引用/删除投影用例、SQLite store 重开用例、message adapter 引用与附件用例。产品 `MSG-REG-001` 追加真实 UI 引用发送、CLI 收到、批量本机删除、App 重建后仍隐藏且 CLI history 保留的闭环；未执行该远端用例时不得声称已完成跨设备 E2E 验收。System Test 无新服务端行为，本机删除不扩展服务端 delete/tombstone 协议。
+
 当前消息展示链路如下：
 
 ```text
@@ -816,6 +825,10 @@ Codex / Claude Code 依赖宿主机 Node.js ≥22（推荐 24 LTS）。缺失或
 Android 收到复用现有弹窗的新 Intent 时，必须整体替换该弹窗的消息 payload、声振 token、倒计时和查看状态；关闭与查看只作用于当前消息。相同消息重复投递不能打断正在进行的解锁。解锁回调按弹窗消息代次隔离，旧消息的成功、取消或失败不得打开新消息或清除新请求状态。旋转及进程恢复保存最新消息，账号与消息有效性仍由既有打开入口校验。
 
 ## 用户与群头像（2026-09-28）
+
+智能体头像（2026-10-05）由既有 User Service Inventory 的不可变行 ID 管理，头像元数据保存在 `profile_summary.avatar`；App 通过可选 `AgentAvatarPort` 读取和修改，不改变 Core 身份架构。创建事务即绑定默认素材，改名、Handle 更改、列表刷新不会生成图片。保存先更新当前 Inventory 投影，再按提交版本请求既有账号状态同步；他人资料通过原公开 Profile facade 和缓存刷新收敛。详情见 [实施方案](agent-avatar-implementation-plan.md) 和 [服务端契约](../../user-service/docs/api/agent-avatars.md)。
+
+智能体在所有 `AvatarBadge` / `ProfileAvatar` 表面使用共用 `AgentAvatarImage` 圆角方形，真人保持圆形。单独头像播放 GIF，组合头像、生成中、减少动态和禁用 Ticker 使用 PNG 封面；动画失败先回退封面，再回退字符。32 款素材随包提供，其中四款保留原 GIF，其余为静态预置。GIF 上传只为预览提取封面，原动画送服务端；静态图使用原裁剪流程及方形预览。旧生成任务通过服务端 CAS 拒绝覆盖手动选择。
 
 头像引用、账号版本与群成员摘要由 Core 提供；App 只拥有选择、裁剪、编码和有界的公开图片缓存。用户编辑只作用于当前人类账号，使用 UUID 幂等请求和期望资料版本；未知结果保留同一请求，重新读权威资料后才继续。账号切换使待处理交互与旧结果失效。显式清空必须清空主图与缩略图，缺字段不能被当作清空。
 

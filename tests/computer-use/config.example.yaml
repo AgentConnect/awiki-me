@@ -4,6 +4,7 @@
 # 解析顺序见 playbook.md：提示词覆盖 > 本机 tests/e2e/configs/*.local.yaml > 本文件。
 # 占位符不是可登录账号。
 
+# macos 或 windows；Windows 同机双窗口配置见 windows.md。
 platform: macos
 tenant: awiki.info
 
@@ -30,6 +31,8 @@ accounts:
     handle: "<fresh-handle-b>"
 
 apps:
+  # 以下为 macOS。Windows 不使用 bundleId；从构建输出 build.json 的
+  # apps[role=admin/joiner].title / executable 读取两个实际窗口及路径。
   admin:
     displayName: "AWikiMe (Development)"
     bundleId: ai.awiki.awikime.dev

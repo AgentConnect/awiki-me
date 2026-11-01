@@ -647,7 +647,7 @@ class _ChatHistorySearchPageState
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final messages = ref.watch(
-      chatThreadProvider(
+      visibleChatThreadProvider(
         widget.displayThreadId,
       ).select((state) => state.messages),
     );

@@ -9,6 +9,7 @@
 ## Members
 
 - `build_manual_dual_macos_apps.sh`: Builds isolated standalone Admin and Joiner macOS Debug Apps from `lib/main.dart`.
+- `build_manual_dual_windows_apps.ps1`: 在构建副本中隔离 Windows Admin/Joiner 的进程、存储、凭证和通知标识，使用正常 `lib/main.dart` Debug 入口；操作边界见 `tests/computer-use/windows.md`。
 - `prepare_macos_build.sh`: Prepares Flutter and CocoaPods dependencies.
 - `run_macos_production_scope_restart_gate.sh`: Runs the signed production-scope restart gate.
 - `pre_release_storage_cleanup.dart`: Executes the reviewed pre-release storage cleanup workflow.

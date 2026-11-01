@@ -1,5 +1,6 @@
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/chat_mention.dart';
+import '../../domain/entities/message_reply_reference.dart';
 import '../models/attachment_models.dart';
 import '../models/app_conversation_read_ref.dart';
 import '../models/app_thread_ref.dart';
@@ -82,6 +83,19 @@ abstract interface class PlainDirectTextMessageCorePort {
   Future<ChatMessage> sendPlainConversationText({
     required AppConversationReadRef conversation,
     required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+}
+
+abstract interface class QuotedAttachmentMessageCorePort {
+  Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const [],
+    MessageReplyReference? reply,
     String? clientMessageId,
     String? idempotencyKey,
   });

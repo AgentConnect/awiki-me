@@ -4,13 +4,16 @@
 
 ## 1. 适用主机
 
-第一版只覆盖 **Intel macOS 桌面双窗口**。
+覆盖 **Intel macOS 或 Windows x64 同机双窗口**，按当前主机选择准备入口。
+
+- Windows：执行 [windows.md](windows.md)；使用 `scripts/build_manual_dual_windows_apps.ps1`，不运行 macOS 构建、`open`、`launchctl` 或 codesign 命令。
+- 下文第 3、4 节的 `.app` / bundle / LaunchAgent 命令属于 macOS 分支；Windows 的构建、启动、完全退出、存储、系统认证及 Daemon 限制由 windows.md 定义。公共用例、等待、消息验收与结果规则不变。
 
 - 双 App 脚本 `scripts/build_manual_dual_macos_apps.sh` 要求 `uname -s == Darwin` 且 `uname -m == x86_64`
 - 不要把 Linux/Xvfb 的 `dart run tests/e2e/runner.dart` 步骤写成 computer-use 动作
 - 不要打开 `.e2e/build-cache/` 里的隔离制品；那些给 E2E runner 用，手工打开会黑屏
 
-需要两台测试身份时，用 Admin / Joiner 两个不同 bundle 的 Debug App，而不是同一个 `.app` 开两次。
+需要两台测试身份时，用 Admin / Joiner 两个独立应用身份的 Debug App，而不是同一个程序开两次。macOS 通过不同 bundle，Windows 通过独立构建的进程标识、数据根及 Credential Manager service 隔离。
 
 ## 2. 配置
 
@@ -139,7 +142,7 @@ open -n 'build/manual-multi-device/AWikiMe-Joiner.app'
 - 已登录其他人的身份或无法确认归属：该窗口相关用例记 `blocked`，保留现场；不要为了得到登录页删除本机凭证。
 - CU-JOIN-001 使用同一 Joiner 时，先完成 App B 的消息用例并记录结果，再按上述退出路径回到登录页。这里的“干净 Joiner”指没有活动登录会话，并非擦除数据目录。
 
-缺少 Flutter、Intel macOS 或 `awiki-cli-rs2` native Core 时，按脚本报错停。不要改去跑 `tool/build_isolated_e2e_app.dart`。
+macOS 分支缺少 Flutter、Intel macOS 或 `awiki-cli-rs2` native Core 时，按脚本报错停；Windows 分支按 windows.md 检查 Windows x64、Flutter、MSVC/ATL 与原生 Core。不要改去跑 `tool/build_isolated_e2e_app.dart`。
 
 ## 4. macOS Daemon
 
@@ -223,11 +226,11 @@ App 两个 bundle 的隔离不延伸到 Daemon。安装默认使用 `~/.awiki-da
 - 界面语言跟系统走，中文系统默认简体。本手册按中文文案写；英文系统对照 [selectors.md](selectors.md)
 - 先点看得见的中文按钮。同时记下 `e2e-*` semantics，方便以后接 accessibility
 - 每个点击或输入后等界面稳定：本地切换 2–5 秒，网络动作默认最多 30 秒；用例明确给出的专属超时优先。Join 按阶段计时，需要切换窗口操作，不是在 Joiner 上被动等完整流程。真人系统认证期间记 `blocked`，不计入网络超时
-- 两个窗口始终看标题。Admin 是 `AWikiMe (Development)`，Joiner 是 `AWikiMe Joiner`
+- 两个窗口始终看标题。macOS：Admin 是 `AWikiMe (Development)`，Joiner 是 `AWikiMe Joiner`；Windows：分别是 `AWiki Me CU Admin` 和 `AWiki Me CU Joiner`。
 - 失败即停，留下最后一屏的窗口标题、可见文案、刚做的一步。不要为了绿而换账号、跳过 OTP、或点系统「以后」
 - 截图或短录像打码手机号、OTP、两端 SAS 六位码、token、完整 DID、安装命令里的 `--token`；只记录“两端一致 / 不一致”，不保存 SAS 数字
 - 系统「屏幕与系统音频录制」里授权的是 `AWikiMe (Development)` / `AWikiMe Joiner`，不是正式 Release `AWikiMe`
-- 本机用户在场（Touch ID / 登录密码）computer-use 过不了就记阻塞，不要把 E2E 的测试 UserPresencePort 当成产品能力
+- 本机用户在场（macOS Touch ID / 登录密码，Windows Hello / 系统提供的认证方式）由真人完成；computer-use 过不了就记阻塞，不要把 E2E 的测试 UserPresencePort 当成产品能力
 - 无论通过、失败还是阻塞，都按第 7 节记录结果并收尾；关闭窗口不会停止 Daemon
 - 每个消息检查点执行 [公共验收规则](acceptance.md)：逐条编号及顺序核对、到齐后至少 10 秒观察、返回列表重开，以及用例要求的重启后复查。昵称已知时不得把 Handle/DID 回退视为等价成功；任何可见闪退、气泡消失／重复／错序或名称串线，最终恢复正常也不能覆盖失败
 

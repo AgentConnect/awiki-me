@@ -89,7 +89,8 @@ correct active test domain:
   rules. Root `integration_test/*.dart` files must stay thin Flutter tooling
   shims that import implementations from `tests/e2e/flutter/`.
 - `tests/computer-use/`: operator/AI playbooks for visible App actions on two
-  real macOS Debug windows. Do not add a `--case` to `tests/e2e/runner.dart`
+  real macOS or Windows x64 Debug windows. Windows preparation and platform
+  limitations live in `tests/computer-use/windows.md`. Do not add a `--case` to `tests/e2e/runner.dart`
   for this domain, and do not treat a computer-use pass as Dart E2E
   attestation. Start at `tests/computer-use/README.md`.
 

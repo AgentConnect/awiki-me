@@ -4403,4 +4403,26 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pinBackupNotEnabled => 'PIN 备份未开启';
+
+  @override
+  String get chatMultiSelect => '多选';
+
+  @override
+  String get chatMessageMore => '更多消息操作';
+
+  @override
+  String get chatReply => '引用';
+
+  @override
+  String chatDeleteMessagesTitle(int count) {
+    return '删除 $count 条消息？';
+  }
+
+  @override
+  String get chatDeleteMessagesLocalNotice => '仅从本机聊天记录中删除，服务端和其他设备上的消息不受影响。';
+
+  @override
+  String chatMessagesSelected(int count) {
+    return '已选择 $count 条消息';
+  }
 }

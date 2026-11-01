@@ -760,6 +760,7 @@ class FakeAttachmentCacheService implements AttachmentCacheService {
 }
 
 class FakeAwikiGateway implements AwikiAccountGateway {
+  int _sentSequence = 0;
   List<SessionIdentity> localCredentials = const <SessionIdentity>[];
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   Map<String, List<ChatMessage>> dmHistoryByPeerDid =
@@ -1559,7 +1560,7 @@ class FakeAwikiGateway implements AwikiAccountGateway {
     final sentId = nextSentMessageIds.isNotEmpty
         ? nextSentMessageIds.removeAt(0)
         : (nextSentMessageId ??
-              'sent-${DateTime.now().microsecondsSinceEpoch}');
+              'sent-${DateTime.now().microsecondsSinceEpoch}-${_sentSequence++}');
     if (nextSentMessageIds.isEmpty) {
       nextSentMessageId = null;
     }
@@ -1605,7 +1606,8 @@ class FakeAwikiGateway implements AwikiAccountGateway {
       await Future<void>.delayed(sendDelay);
     }
     final sentId =
-        nextSentMessageId ?? 'sent-${DateTime.now().microsecondsSinceEpoch}';
+        nextSentMessageId ??
+        'sent-${DateTime.now().microsecondsSinceEpoch}-${_sentSequence++}';
     nextSentMessageId = null;
     final sentThreadId = nextSentThreadId ?? threadId;
     nextSentThreadId = null;
@@ -2198,6 +2200,7 @@ class FakeConversationService implements ConversationService {
 class FakeMessagingService
     implements
         MessagingService,
+        ConversationPayloadMessagingService,
         PlainDirectMessagingService,
         LocalHistoryMessagingService,
         ConversationTimelineMessagingService {
@@ -2621,6 +2624,7 @@ class FakeMessagingService
     );
   }
 
+  @override
   Future<ChatMessage> sendConversationPayload({
     bool secure = false,
     required AppConversationReadRef conversation,

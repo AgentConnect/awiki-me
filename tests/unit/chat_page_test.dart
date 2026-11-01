@@ -722,6 +722,164 @@ void main() {
     }
   }
 
+  testWidgets('Windows 单条本机删除支持取消、确认和菜单 Esc 关闭', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final conversation = _scrollConversation('dm:single-local-delete');
+    final store = FakeProductLocalStore();
+    final message = ChatMessage(
+      localId: 'single',
+      remoteId: 'remote-single',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:test:alice',
+      content: 'delete one',
+      createdAt: DateTime(2026),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: [message],
+      surfaceSize: const Size(960, 640),
+      additionalProviderOverrides: [
+        productLocalStoreProvider.overrideWithValue(store),
+      ],
+    );
+    final bubble = find.byKey(const Key('chat-message-bubble:single'));
+    Future<void> openMenu() async {
+      await tester.tapAt(
+        tester.getTopLeft(bubble) + const Offset(2, 2),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openMenu();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-menu')), findsNothing);
+    await openMenu();
+    await tester.tap(find.byKey(const Key('message-action:delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(bubble, findsOneWidget);
+    expect(
+      store.preferences.values.where(
+        (p) => p.key.startsWith('deleted-messages:'),
+      ),
+      isEmpty,
+    );
+    await openMenu();
+    await tester.tap(find.byKey(const Key('message-action:delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-confirm-delete-messages')));
+    await tester.pumpAndSettle();
+    expect(bubble, findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+  testWidgets('Windows 整块气泡右键、悬停菜单、引用与本机多选删除', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final conversation = _scrollConversation('dm:message-management');
+    final store = FakeProductLocalStore();
+    final messages = [
+      for (final id in ['first', 'second'])
+        ChatMessage(
+          localId: id,
+          remoteId: 'remote-$id',
+          conversationId: conversation.conversationId,
+          threadId: conversation.threadId,
+          senderDid: 'did:test:alice',
+          senderName: 'Alice',
+          content: 'message $id',
+          createdAt: DateTime(2026, 10, 5),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+    ];
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: messages,
+      surfaceSize: const Size(960, 640),
+      macStyle: true,
+      additionalProviderOverrides: [
+        productLocalStoreProvider.overrideWithValue(store),
+      ],
+    );
+    final first = find.byKey(const Key('chat-message-bubble:first'));
+    // Padding, outside every text glyph, must still open the message menu.
+    await tester.tapAt(
+      tester.getTopLeft(first) + const Offset(2, 2),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action:reply')), findsOneWidget);
+    await tester.tap(find.byType(CupertinoTextField).first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action-menu')), findsNothing);
+    await tester.tapAt(
+      tester.getTopLeft(first) + const Offset(2, 2),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('message-action:reply')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-composer-reply')), findsOneWidget);
+    expect(
+      container
+          .read(chatComposerDraftsProvider)
+          .values
+          .single
+          .reply
+          ?.sourceMessageId,
+      'remote-first',
+    );
+    await tester.tap(find.byKey(const Key('chat-cancel-reply')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('chat-composer-reply')), findsNothing);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(first));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-message-more:first')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('message-action:delete')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('message-action:multiSelect')));
+    await tester.pumpAndSettle();
+    expect(find.text('已选择 1 条消息'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-message-select:second')));
+    await tester.pumpAndSettle();
+    expect(find.text('已选择 2 条消息'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-delete-selected-messages')));
+    await tester.pumpAndSettle();
+    expect(find.text('仅从本机聊天记录中删除，服务端和其他设备上的消息不受影响。'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-confirm-delete-messages')));
+    await tester.pumpAndSettle();
+    expect(first, findsNothing);
+    expect(find.byKey(const Key('chat-message-bubble:second')), findsNothing);
+    // Core/UI source window remains intact; only the device projection is filtered.
+    expect(
+      container
+          .read(chatThreadsProvider)[conversation.conversationId]!
+          .messages,
+      hasLength(2),
+    );
+    expect(
+      store.preferences.values.any(
+        (p) => p.key.startsWith('deleted-messages:v1:'),
+      ),
+      isTrue,
+    );
+    await mouse.removePointer();
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
   for (final desktop in [false, true]) {
     for (final mine in [false, true]) {
       testWidgets(

@@ -35,6 +35,7 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/formatters/markdown_preview_formatter.dart';
+import '../chat/local_message_deletions.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -1823,6 +1824,10 @@ String _conversationSearchText(
   BuildContext context,
   ConversationSummary conversation,
 ) {
+  conversation = withoutLocallyDeletedPreview(
+    conversation,
+    ref.watch(localMessageDeletionsProvider(conversation.conversationId)),
+  );
   return _normalizedConversationSearchText(
     <String>[
       _conversationPresentationTitle(ref, conversation, context.l10n),
@@ -1993,6 +1998,10 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
+  conversation = withoutLocallyDeletedPreview(
+    conversation,
+    ref.watch(localMessageDeletionsProvider(conversation.conversationId)),
+  );
   final systemEvent =
       conversation.lastMessageSnapshot?.groupSystemEvent ??
       GroupSystemEvent.tryParse(conversation.lastMessagePayloadJson);

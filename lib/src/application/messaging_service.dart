@@ -1,5 +1,6 @@
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/chat_mention.dart';
+import '../domain/entities/message_reply_reference.dart';
 import 'models/attachment_models.dart';
 import 'models/app_conversation_read_ref.dart';
 import 'models/app_thread_ref.dart';
@@ -94,6 +95,29 @@ abstract interface class PlainDirectMessagingService {
   });
 }
 
+abstract interface class ConversationPayloadMessagingService {
+  Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+}
+
+abstract interface class QuotedAttachmentMessagingService {
+  Future<ChatMessage> sendConversationAttachment({
+    bool secure = false,
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const [],
+    MessageReplyReference? reply,
+    String? clientMessageId,
+    String? idempotencyKey,
+  });
+}
+
 abstract interface class AttachmentDownloadCancellationService {
   Future<bool> cancelAttachmentDownload(String localPath);
 }
@@ -160,6 +184,8 @@ abstract interface class CommittedControlMessagingService {
 class ImCoreMessagingService
     implements
         MessagingService,
+        ConversationPayloadMessagingService,
+        QuotedAttachmentMessagingService,
         PlainDirectMessagingService,
         AttachmentDownloadCancellationService,
         LocalHistoryMessagingService,
@@ -171,6 +197,21 @@ class ImCoreMessagingService
     : _messages = messages;
 
   final MessageCorePort _messages;
+
+  @override
+  Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) => _messages.sendConversationPayload(
+    secure: secure,
+    conversation: conversation,
+    payload: payload,
+    clientMessageId: clientMessageId,
+    idempotencyKey: idempotencyKey,
+  );
 
   @override
   Stream<ThreadMessagePatch> watchControlThreadPatches(
@@ -243,10 +284,24 @@ class ImCoreMessagingService
     required AppConversationReadRef conversation,
     required AttachmentDraft attachment,
     String? caption,
+    MessageReplyReference? reply,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? clientMessageId,
     String? idempotencyKey,
   }) {
+    if (reply != null) {
+      return (_messages as QuotedAttachmentMessageCorePort)
+          .sendConversationAttachment(
+            secure: secure,
+            conversation: conversation,
+            attachment: attachment,
+            caption: caption,
+            mentions: mentions,
+            reply: reply,
+            clientMessageId: clientMessageId,
+            idempotencyKey: idempotencyKey,
+          );
+    }
     return _messages.sendConversationAttachment(
       secure: secure,
       conversation: conversation,

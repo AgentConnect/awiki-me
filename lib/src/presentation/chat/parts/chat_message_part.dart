@@ -1166,7 +1166,21 @@ class _MessageBubble extends StatelessWidget {
       message: message,
       conversation: conversation,
       text: _copyableMessageText(context, message),
-      child: messageContent,
+      child: _MessageBubbleSurface(
+        key: Key('chat-message-bubble:${message.localId}'),
+        maxWidth: maxBubbleWidth,
+        isMine: isMine,
+        hasAttachment: attachment != null,
+        macStyle: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            messageContent,
+            _MessageQuote(message: message),
+          ],
+        ),
+      ),
     );
     final bubble = Column(
       crossAxisAlignment: isMine
@@ -1179,14 +1193,7 @@ class _MessageBubble extends StatelessWidget {
           context,
           isMine: isMine,
           macStyle: true,
-          child: _MessageBubbleSurface(
-            key: Key('chat-message-bubble:${message.localId}'),
-            maxWidth: maxBubbleWidth,
-            isMine: isMine,
-            hasAttachment: attachment != null,
-            macStyle: true,
-            child: child,
-          ),
+          child: child,
         ),
         if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
@@ -1321,7 +1328,21 @@ class _MessageBubble extends StatelessWidget {
       message: message,
       conversation: conversation,
       text: _copyableMessageText(context, message),
-      child: messageContent,
+      child: _MessageBubbleSurface(
+        key: Key('chat-message-bubble:${message.localId}'),
+        maxWidth: maxBubbleWidth,
+        isMine: isMine,
+        hasAttachment: attachment != null,
+        macStyle: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            messageContent,
+            _MessageQuote(message: message),
+          ],
+        ),
+      ),
     );
     final bubble = Column(
       crossAxisAlignment: isMine
@@ -1334,14 +1355,7 @@ class _MessageBubble extends StatelessWidget {
           context,
           isMine: isMine,
           macStyle: false,
-          child: _MessageBubbleSurface(
-            key: Key('chat-message-bubble:${message.localId}'),
-            maxWidth: maxBubbleWidth,
-            isMine: isMine,
-            hasAttachment: attachment != null,
-            macStyle: false,
-            child: content,
-          ),
+          child: content,
         ),
         if (footer != null) footer!,
         if (message.sendState == MessageSendState.failed) ...<Widget>[
@@ -1439,7 +1453,7 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMine = message.isMine;
     final responsive = context.awikiResponsive;
-    return LayoutBuilder(
+    final bubble = LayoutBuilder(
       builder: (context, constraints) {
         final fallbackWidth = responsive.displayScaled(macStyle ? 420 : 300);
         final availableWidth = constraints.maxWidth;
@@ -1452,6 +1466,10 @@ class _MessageBubble extends StatelessWidget {
         return _buildCompactBubble(context, isMine, maxBubbleWidth);
       },
     );
+    return context
+            .findAncestorStateOfType<_ChatViewState>()
+            ?._selectableMessageRow(message, bubble) ??
+        bubble;
   }
 }
 
@@ -2833,6 +2851,9 @@ class _MessageSelectableContentState
     debugLabel: 'message-selection',
   );
   final MessageActionExecutor _actionExecutor = MessageActionExecutor();
+  final _selectionKey = GlobalKey<SelectionAreaState>();
+  final _menuController = ContextMenuController();
+  bool _hovered = false;
   final StaticSelectionContainerDelegate _selectionDelegate =
       StaticSelectionContainerDelegate();
 
@@ -2848,6 +2869,7 @@ class _MessageSelectableContentState
 
   @override
   void dispose() {
+    _menuController.remove();
     _clearDeferredDesktopAction();
     _selectionDelegate.dispose();
     _selectionFocusNode.dispose();
@@ -2861,6 +2883,9 @@ class _MessageSelectableContentState
   }
 
   void _captureDesktopSelectionBeforeRightClick(PointerDownEvent event) {
+    if (event.buttons & kSecondaryMouseButton != 0) {
+      _secondaryPointer = event.pointer;
+    }
     if (defaultTargetPlatform != TargetPlatform.macOS) {
       return;
     }
@@ -2979,6 +3004,40 @@ class _MessageSelectableContentState
           );
         },
       ),
+      if (widget.message != null) ...[
+        MessageActionSpec(
+          id: MessageActionId.reply,
+          group: MessageActionGroup.communication,
+          order: 10,
+          label: context.l10n.chatReply,
+          icon: CupertinoIcons.reply,
+          isEnabled: (_) => widget.message!.sendState == MessageSendState.sent,
+          onInvoke: (_) => context
+              .findAncestorStateOfType<_ChatViewState>()
+              ?._quoteMessage(widget.message!),
+        ),
+        MessageActionSpec(
+          id: MessageActionId.multiSelect,
+          group: MessageActionGroup.management,
+          order: 10,
+          label: context.l10n.chatMultiSelect,
+          icon: CupertinoIcons.check_mark_circled,
+          onInvoke: (_) => context
+              .findAncestorStateOfType<_ChatViewState>()
+              ?._startMessageSelection(widget.message!),
+        ),
+        MessageActionSpec(
+          id: MessageActionId.delete,
+          group: MessageActionGroup.danger,
+          order: 10,
+          label: context.l10n.commonDelete,
+          icon: CupertinoIcons.delete,
+          destructive: true,
+          onInvoke: (_) => context
+              .findAncestorStateOfType<_ChatViewState>()
+              ?._deleteMessages([widget.message!]),
+        ),
+      ],
     ]);
   }
 
@@ -3016,6 +3075,7 @@ class _MessageSelectableContentState
         action: action,
         context: contextSnapshot,
         dismissMenu: ({required preserveSelection}) {
+          _menuController.remove();
           selectableRegionState.hideToolbar(!preserveSelection);
         },
         onUnexpectedError: _handleUnexpectedActionError,
@@ -3090,7 +3150,8 @@ class _MessageSelectableContentState
 
   @override
   Widget build(BuildContext context) {
-    return SelectionArea(
+    final area = SelectionArea(
+      key: _selectionKey,
       focusNode: _selectionFocusNode,
       onSelectionChanged: _handleSelectionChanged,
       contextMenuBuilder: (context, selectableRegionState) {
@@ -3140,10 +3201,100 @@ class _MessageSelectableContentState
       child: Listener(
         behavior: HitTestBehavior.translucent,
         onPointerDown: _captureDesktopSelectionBeforeRightClick,
+        onPointerUp: (event) {
+          if (event.kind == PointerDeviceKind.mouse &&
+              event.buttons == 0 &&
+              _secondaryPointer == event.pointer) {
+            _secondaryPointer = null;
+            final position = event.position;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showMessageMenu(position);
+            });
+          }
+        },
         child: SelectionContainer(
           delegate: _selectionDelegate,
           child: widget.child,
         ),
+      ),
+    );
+    if (!_createContextSnapshot().isDesktop || widget.message == null) {
+      return area;
+    }
+    final more = Opacity(
+      opacity: _hovered ? 1 : 0,
+      child: IgnorePointer(
+        ignoring: !_hovered,
+        child: CupertinoButton(
+          key: Key('chat-message-more:${widget.message!.localId}'),
+          padding: const EdgeInsets.all(6),
+          minimumSize: const Size(28, 28),
+          onPressed: () {
+            final box =
+                _selectionKey.currentContext?.findRenderObject() as RenderBox?;
+            if (box != null) {
+              _showMessageMenu(box.localToGlobal(Offset(box.size.width, 0)));
+            }
+          },
+          child: Icon(
+            CupertinoIcons.ellipsis,
+            size: 18,
+            semanticLabel: context.l10n.chatMessageMore,
+            color: context.awikiTheme.secondaryText,
+          ),
+        ),
+      ),
+    );
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (widget.message!.isMine) more,
+          Flexible(child: area),
+          if (!widget.message!.isMine) more,
+        ],
+      ),
+    );
+  }
+
+  int? _secondaryPointer;
+
+  void _showMessageMenu(Offset position) {
+    final region = _selectionKey.currentState?.selectableRegion;
+    if (region == null) return;
+    final preserved = _restoreDesktopSelectionForMenu();
+    final base = _createContextSnapshot();
+    final snapshot = MessageActionContext(
+      message: base.message,
+      conversation: base.conversation,
+      fullText: base.fullText,
+      selectedText: preserved ?? base.selectedText,
+      platform: base.platform,
+    );
+    final actions = _actionCatalog(region).resolve(snapshot);
+    _menuController.show(
+      context: context,
+      contextMenuBuilder: (_) => _MessageActionMenu(
+        contextSnapshot: snapshot,
+        actions: actions,
+        anchors: TextSelectionToolbarAnchors(primaryAnchor: position),
+        onAction: (action) => _invokeAction(
+          action: action,
+          selectableRegionState: region,
+          contextSnapshot: snapshot,
+        ),
+        onDesktopPointerDown: (action, pointer, bounds) =>
+            _handleDesktopPointerDown(
+              action: action,
+              contextSnapshot: snapshot,
+              pointer: pointer,
+              activationBounds: bounds,
+              selectableRegionState: region,
+            ),
+        onDisposed: () {},
       ),
     );
   }

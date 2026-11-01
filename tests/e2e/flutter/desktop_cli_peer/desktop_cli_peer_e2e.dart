@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
@@ -440,6 +441,7 @@ void runDesktopCliPeerE2e({
               'complete_direct_message_sequence_ordered_and_stable',
               'same_body_distinct_canonical_messages_preserved',
               'mixed_encryption_draft_lock_and_restart_verified',
+              'quote_and_device_local_batch_delete_survive_restart',
             ],
             'DISPLAY-NAME-REG-001': const <String>[
               'cached_nickname_first_nonempty_header_title',

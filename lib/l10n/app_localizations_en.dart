@@ -4751,4 +4751,27 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pinBackupNotEnabled => 'PIN backup is off';
+
+  @override
+  String get chatMultiSelect => 'Select messages';
+
+  @override
+  String get chatMessageMore => 'More message actions';
+
+  @override
+  String get chatReply => 'Quote';
+
+  @override
+  String chatDeleteMessagesTitle(int count) {
+    return 'Delete $count messages?';
+  }
+
+  @override
+  String get chatDeleteMessagesLocalNotice =>
+      'Delete from chat history on this device only. Messages on the server and other devices are unaffected.';
+
+  @override
+  String chatMessagesSelected(int count) {
+    return '$count messages selected';
+  }
 }

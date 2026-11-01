@@ -1,5 +1,7 @@
+import 'package:awiki_me/src/application/messaging_service.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'package:awiki_me/src/domain/entities/message_reply_reference.dart';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
@@ -18,6 +20,104 @@ import 'package:flutter_test/flutter_test.dart';
 const _testScopeValue = '44444444-4444-4444-8444-444444444444';
 
 void main() {
+  for (final secure in [false, true]) {
+    test(
+      'quoted reply preserves payload/security through service and retry secure=$secure',
+      () async {
+        final client = _FakeClient(ownerDid: 'did:alice');
+        final adapter = AwikiImCoreMessageAdapter(
+          runtime: _FakeRuntime(client),
+        );
+        final service = ImCoreMessagingService(messages: adapter);
+        const reply = MessageReplyReference(
+          sourceMessageId: 'original',
+          senderName: 'Bob',
+          excerpt: 'quoted text',
+        );
+        final sent = await service.sendConversationPayload(
+          secure: secure,
+          conversation: AppConversationReadRef.fromConversationId(
+            'dm:peer-scope:v1:bob',
+          ),
+          payload: {
+            'text': 'response',
+            'mentions': [],
+            'annotations': reply.annotations,
+          },
+          clientMessageId: 'quoted-client',
+          idempotencyKey: 'op-quoted-client',
+        );
+        expect(
+          client.messages.lastSecurity,
+          secure
+              ? core.MessageSecurityMode.secureDirect
+              : core.MessageSecurityMode.defaultPlain,
+        );
+        expect(sent.replyToMessageId, 'original');
+        expect(
+          MessageReplyReference.tryParse(sent.payloadJson)?.excerpt,
+          'quoted text',
+        );
+        await adapter.retryByResendOriginalContent(
+          sent.copyWith(
+            sendState: MessageSendState.failed,
+            encryptionRequired: secure,
+          ),
+        );
+        expect(
+          client.messages.lastSecurity,
+          secure
+              ? core.MessageSecurityMode.secureDirect
+              : core.MessageSecurityMode.defaultPlain,
+        );
+        expect(client.messages.lastClientMessageId, 'quoted-client');
+        expect(client.messages.lastIdempotencyKey, 'op-quoted-client');
+        expect(
+          jsonDecode(client.messages.lastPayloadJson!)['annotations'],
+          reply.annotations,
+        );
+      },
+    );
+
+    test(
+      'quoted attachment preserves annotations/security through service secure=$secure',
+      () async {
+        final client = _FakeClient(ownerDid: 'did:alice');
+        final adapter = AwikiImCoreMessageAdapter(
+          runtime: _FakeRuntime(client),
+        );
+        final service = ImCoreMessagingService(messages: adapter);
+        const reply = MessageReplyReference(
+          sourceMessageId: 'source',
+          excerpt: 'original',
+        );
+        await service.sendConversationAttachment(
+          secure: secure,
+          conversation: AppConversationReadRef.fromConversationId(
+            'dm:peer-scope:v1:bob',
+          ),
+          attachment: const AttachmentDraft(
+            filename: 'a.txt',
+            mimeType: 'text/plain',
+            localPath: '/tmp/a.txt',
+            sizeBytes: 3,
+          ),
+          reply: reply,
+        );
+        expect(
+          jsonDecode(client.attachments.lastMentionPayloadJson!)['annotations'],
+          reply.annotations,
+        );
+        expect(
+          client.attachments.lastSecurity,
+          secure
+              ? core.MessageSecurityMode.secureDirect
+              : core.MessageSecurityMode.defaultPlain,
+        );
+        expect(client.attachments.sendCalls, 0);
+      },
+    );
+  }
   test(
     'loadLocalHistory forwards limit and reuses owner did per client',
     () async {
@@ -1008,6 +1108,8 @@ class _FakeAttachmentApi implements core.AttachmentApi {
   int sendConversationCalls = 0;
   String? lastConversationId;
   String? lastCaption;
+  String? lastMentionPayloadJson;
+  core.MessageSecurityMode? lastSecurity;
   String? lastFilename;
   String? lastMimeType;
   String? lastClientMessageId;
@@ -1067,6 +1169,8 @@ class _FakeAttachmentApi implements core.AttachmentApi {
   Future<core.AttachmentSendResult> sendConversation(
     core.SendConversationAttachmentRequest request,
   ) async {
+    lastMentionPayloadJson = request.mentionPayloadJson;
+    lastSecurity = request.security;
     sendConversationCalls += 1;
     lastConversationId = request.conversation.conversationId;
     lastCaption = request.caption;

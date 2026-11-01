@@ -2,7 +2,7 @@
 
 这是 AWiki Me 的第三类测试：给 **能看见屏幕、移动鼠标、输入键盘的 AI**（或按同样步骤操作的人）用的产品路径手册。
 
-它回答的问题是：两个真实 macOS App 窗口里，用户点得到、发得出、看得到的路径通不通。它不替代 `tests/unit/` 或 `tests/e2e/`，也不宣称 CLI inbox、Core SQLite 或 case attestation 文件里的 oracle。
+它回答的问题是：同机两个真实 macOS 或 Windows App 窗口里，用户点得到、发得出、看得到的路径通不通。它不替代 `tests/unit/` 或 `tests/e2e/`，也不宣称 CLI inbox、Core SQLite 或 case attestation 文件里的 oracle。
 
 | 目录 | 回答的问题 | 谁执行 |
 | --- | --- | --- |
@@ -19,6 +19,8 @@
 3. [acceptance.md](acceptance.md)：逐条消息、顺序、稳定性、名称及外部账号回访的公共验收规则
 4. [selectors.md](selectors.md)：窗口名、中文文案、`e2e-*` semantics
 5. [cases.md](cases.md)：每个用例点什么、输入什么、屏幕上期待什么
+
+Windows x64 从 [Windows 双窗口准备](windows.md) 开始；Intel macOS 沿用原双 App 脚本。Windows 使用独立的 Admin/Joiner Debug 制品，不是复制 EXE 或启动同一个 App 两次。15 个用例仍全部登记；Windows 的 CU-DAEMON-001 当前因缺少原生安装链记 `blocked`，系统认证由真人完成，任何必测阻塞都不能算整套通过。
 
 默认租户是 `awiki.info`。提示词如果给了别的租户、手机号、验证码或 Handle，以提示词为准。
 

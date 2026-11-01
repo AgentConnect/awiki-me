@@ -2029,6 +2029,7 @@ class _DesktopAppRobot {
 class _FailOnceMessagingService
     implements
         MessagingService,
+        ConversationPayloadMessagingService,
         LocalHistoryMessagingService,
         ThreadPatchMessagingService,
         ConversationTimelineMessagingService {
@@ -2323,6 +2324,22 @@ class _FailOnceMessagingService
     mentions: mentions,
     idempotencyKey: idempotencyKey,
   );
+
+  @override
+  Future<ChatMessage> sendConversationPayload({
+    bool secure = false,
+    required AppConversationReadRef conversation,
+    required Map<String, Object?> payload,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) => (_delegate as ConversationPayloadMessagingService)
+      .sendConversationPayload(
+        secure: secure,
+        conversation: conversation,
+        payload: payload,
+        clientMessageId: clientMessageId,
+        idempotencyKey: idempotencyKey,
+      );
 
   @override
   Future<ChatMessage> sendConversationMentionText({

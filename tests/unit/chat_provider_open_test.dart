@@ -4,6 +4,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:awiki_me/src/domain/entities/message_reply_reference.dart';
+import 'package:awiki_me/src/presentation/chat/local_message_deletions.dart';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -137,6 +139,88 @@ void main() {
     expect(thread.messages.single.content, 'hello');
     expect(thread.isLoading, isFalse);
   });
+
+  for (final secure in [false, true]) {
+    test(
+      'quoted text preserves reference and security on send/retry secure=$secure',
+      () async {
+        const reply = MessageReplyReference(
+          sourceMessageId: 'source-remote',
+          senderName: 'Peer',
+          excerpt: 'original text',
+        );
+        final controller = container.read(chatThreadsProvider.notifier);
+        await controller.sendMessage(
+          conversation: conversation,
+          secure: secure,
+          content: 'quoted reply',
+          reply: reply,
+        );
+        expect(gateway.lastSentSecure, secure);
+        final sent = controller
+            .thread(conversation.conversationId)
+            .messages
+            .last;
+        expect(sent.replyToMessageId, 'source-remote');
+        expect(gateway.lastSentPayload!['annotations'], reply.annotations);
+        await controller.retryMessage(
+          conversation: conversation,
+          message: sent.copyWith(
+            sendState: MessageSendState.failed,
+            encryptionRequired: secure,
+          ),
+        );
+        expect(gateway.lastSentPayload!['annotations'], reply.annotations);
+        expect(gateway.lastSentSecure, secure);
+        expect(
+          gateway.lastSentPayloadIdempotencyKey,
+          'op-${sent.remoteId ?? sent.localId}',
+        );
+      },
+    );
+  }
+
+  test(
+    'deleted messages stay out of visible projection after Core history reset',
+    () async {
+      final controller = container.read(chatThreadsProvider.notifier);
+      await controller.openConversation(conversation);
+      await pumpEventQueue();
+      final deletion = container.read(
+        localMessageDeletionsProvider(conversation.conversationId).notifier,
+      );
+      await deletion.delete([message]);
+      controller.debugSeedMessagesForTesting(conversation.conversationId, [
+        message,
+      ]);
+      expect(
+        container
+            .read(visibleChatThreadProvider(conversation.conversationId))
+            .messages,
+        isEmpty,
+      );
+      expect(
+        container
+            .read(chatThreadProvider(conversation.conversationId))
+            .messages,
+        hasLength(1),
+      );
+      container.invalidate(
+        localMessageDeletionsProvider(conversation.conversationId),
+      );
+      await container
+          .read(
+            localMessageDeletionsProvider(conversation.conversationId).notifier,
+          )
+          .ready;
+      expect(
+        container
+            .read(visibleChatThreadProvider(conversation.conversationId))
+            .messages,
+        isEmpty,
+      );
+    },
+  );
 
   test('打开会话加载到首条本地历史后同步最近会话预览', () async {
     final emptyPreviewConversation = conversation.copyWith(

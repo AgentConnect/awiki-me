@@ -28,7 +28,24 @@ class _MessageActionMenu extends StatefulWidget {
 
 class _MessageActionMenuState extends State<_MessageActionMenu> {
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_dismissOnEscape);
+  }
+
+  bool _dismissOnEscape(KeyEvent event) {
+    if (widget.contextSnapshot.isDesktop &&
+        event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      ContextMenuController.removeAny();
+      return true;
+    }
+    return false;
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_dismissOnEscape);
     widget.onDisposed();
     super.dispose();
   }
@@ -110,58 +127,63 @@ class _DesktopMessageActionMenu extends StatelessWidget {
             },
           },
           child: FocusTraversalGroup(
-            child: Semantics(
-              container: true,
-              explicitChildNodes: true,
-              role: SemanticsRole.menu,
-              child: ConstrainedBox(
-                key: const Key('message-action-menu'),
-                constraints: BoxConstraints.tightFor(width: menuWidth),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: theme.surface,
-                    borderRadius: BorderRadius.circular(radius),
-                    border: Border.all(color: theme.border),
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: theme.title.withValues(alpha: 0.18),
-                        blurRadius: responsive.displayScaled(16),
-                        offset: Offset(0, responsive.displayScaled(6)),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(radius),
-                    child: Padding(
-                      padding: EdgeInsets.all(responsive.displayScaled(4)),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          for (
-                            var index = 0;
-                            index < actions.length;
-                            index++
-                          ) ...[
-                            if (index > 0 &&
-                                actions[index - 1].group !=
-                                    actions[index].group)
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  vertical: responsive.displayScaled(3),
-                                ),
-                                child: SizedBox(
-                                  height: 1,
-                                  child: ColoredBox(color: theme.border),
-                                ),
-                              ),
-                            _DesktopMessageActionMenuItem(
-                              action: actions[index],
-                              contextSnapshot: contextSnapshot,
-                              onAction: onAction,
-                              onPointerDown: onPointerDown,
-                            ),
-                          ],
+            child: Focus(
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                role: SemanticsRole.menu,
+                child: TapRegion(
+                  onTapOutside: (_) => ContextMenuController.removeAny(),
+                  child: ConstrainedBox(
+                    key: const Key('message-action-menu'),
+                    constraints: BoxConstraints.tightFor(width: menuWidth),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: theme.surface,
+                        borderRadius: BorderRadius.circular(radius),
+                        border: Border.all(color: theme.border),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: theme.title.withValues(alpha: 0.18),
+                            blurRadius: responsive.displayScaled(16),
+                            offset: Offset(0, responsive.displayScaled(6)),
+                          ),
                         ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(radius),
+                        child: Padding(
+                          padding: EdgeInsets.all(responsive.displayScaled(4)),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              for (
+                                var index = 0;
+                                index < actions.length;
+                                index++
+                              ) ...[
+                                if (index > 0 &&
+                                    actions[index - 1].group !=
+                                        actions[index].group)
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: responsive.displayScaled(3),
+                                    ),
+                                    child: SizedBox(
+                                      height: 1,
+                                      child: ColoredBox(color: theme.border),
+                                    ),
+                                  ),
+                                _DesktopMessageActionMenuItem(
+                                  action: actions[index],
+                                  contextSnapshot: contextSnapshot,
+                                  onAction: onAction,
+                                  onPointerDown: onPointerDown,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),

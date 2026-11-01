@@ -5,7 +5,14 @@ import 'package:flutter/widgets.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_summary.dart';
 
-enum MessageActionId { copySelection, copyAll, selectAll }
+enum MessageActionId {
+  copySelection,
+  copyAll,
+  selectAll,
+  reply,
+  multiSelect,
+  delete,
+}
 
 enum MessageActionGroup {
   selection,

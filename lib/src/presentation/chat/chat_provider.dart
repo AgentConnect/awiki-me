@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io' show File;
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -27,6 +28,7 @@ import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/message_reply_reference.dart';
 import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/app_message.dart';
@@ -38,6 +40,7 @@ import '../agents/personal_agent_feature_visibility.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
+import 'local_message_deletions.dart';
 
 const String _attachmentManifestContentType =
     'application/anp-attachment-manifest+json';
@@ -332,15 +335,20 @@ class ChatComposerDraft {
     this.pendingAttachment,
     this.mentions = const <ChatMentionDraft>[],
     this.updatedAt,
+    this.reply,
   });
 
   final String text;
+  final MessageReplyReference? reply;
   final AttachmentDraft? pendingAttachment;
   final List<ChatMentionDraft> mentions;
   final DateTime? updatedAt;
 
   bool get isEmpty =>
-      text.isEmpty && pendingAttachment == null && mentions.isEmpty;
+      text.isEmpty &&
+      pendingAttachment == null &&
+      mentions.isEmpty &&
+      reply == null;
 
   List<ChatMentionDraft> get validMentions => mentions
       .where(
@@ -355,12 +363,16 @@ class ChatComposerDraft {
   }
 
   ChatComposerDraft copyWith({
+    Object? reply = _chatComposerDraftUnset,
     String? text,
     Object? pendingAttachment = _chatComposerDraftUnset,
     List<ChatMentionDraft>? mentions,
     Object? updatedAt = _chatComposerDraftUnset,
   }) {
     return ChatComposerDraft(
+      reply: identical(reply, _chatComposerDraftUnset)
+          ? this.reply
+          : reply as MessageReplyReference?,
       text: text ?? this.text,
       pendingAttachment: identical(pendingAttachment, _chatComposerDraftUnset)
           ? this.pendingAttachment
@@ -420,6 +432,13 @@ class ChatComposerDraftsController
         updatedAt: DateTime.now().toUtc(),
       ),
     );
+  }
+
+  void setReply(
+    ConversationSummary conversation,
+    MessageReplyReference? reply,
+  ) {
+    _upsertDraft(conversation, draftFor(conversation).copyWith(reply: reply));
   }
 
   void setAttachment(
@@ -869,6 +888,7 @@ class ChatThreadsController
     ConversationSummary conversation, {
     String? displayThreadId,
   }) async {
+    ref.read(localMessageDeletionsProvider(conversation.conversationId));
     final sessionEpoch = _captureSessionEpoch();
     if (sessionEpoch == null) {
       return;
@@ -3259,12 +3279,14 @@ class ChatThreadsController
     required ConversationSummary conversation,
     bool secure = false,
     required String content,
+    MessageReplyReference? reply,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
     VoidCallback? onSendStarted,
     VoidCallback? onSendFailed,
   }) async {
+    ref.read(localMessageDeletionsProvider(conversation.conversationId));
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
@@ -3291,12 +3313,13 @@ class ChatThreadsController
     }
     final clientMessageId = _newClientMessageId();
     final idempotencyKey = 'op-$clientMessageId';
-    final mentionPayload = validMentionDrafts.isEmpty
+    final mentionPayload = validMentionDrafts.isEmpty && reply == null
         ? null
         : ChatMentionPayload.toP9Json(
             text: content,
             draftMentions: validMentionDrafts,
           );
+    if (reply != null) mentionPayload!['annotations'] = reply.annotations;
     _setLocalSendIntent(
       targetThreadId,
       ChatMessage(
@@ -3324,7 +3347,17 @@ class ChatThreadsController
     onSendStarted?.call();
     try {
       final messaging = ref.read(messagingServiceProvider);
-      final sent = validMentionDrafts.isEmpty
+      final sent = reply != null
+          ? await (messaging as ConversationPayloadMessagingService)
+                .sendConversationPayload(
+                  secure: secure,
+                  conversation: conversationRef,
+                  payload: mentionPayload!,
+                  clientMessageId: clientMessageId,
+                  idempotencyKey: idempotencyKey,
+                )
+                .timeout(_sendTimeout)
+          : validMentionDrafts.isEmpty
           ? await _sendConversationText(
               secure: secure,
               messaging: messaging,
@@ -3390,17 +3423,54 @@ class ChatThreadsController
     }
   }
 
+  Future<ChatMessage> _sendAttachmentWithReply({
+    required bool secure,
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    MessageReplyReference? reply,
+    required List<ChatMentionDraft> mentions,
+    required String clientMessageId,
+    required String idempotencyKey,
+  }) {
+    final messaging = ref.read(messagingServiceProvider);
+    if (reply != null) {
+      return (messaging as QuotedAttachmentMessagingService)
+          .sendConversationAttachment(
+            secure: secure,
+            conversation: conversation,
+            attachment: attachment,
+            caption: caption,
+            reply: reply,
+            mentions: mentions,
+            clientMessageId: clientMessageId,
+            idempotencyKey: idempotencyKey,
+          );
+    }
+    return messaging.sendConversationAttachment(
+      secure: secure,
+      conversation: conversation,
+      attachment: attachment,
+      caption: caption,
+      mentions: mentions,
+      clientMessageId: clientMessageId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
   Future<void> sendAttachment({
     required ConversationSummary conversation,
     bool secure = false,
     required AttachmentDraft attachment,
     String? caption,
+    MessageReplyReference? reply,
     List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
     String? expectedAgentReplyDid,
     String? displayThreadId,
     VoidCallback? onSendStarted,
     VoidCallback? onSendFailed,
   }) async {
+    ref.read(localMessageDeletionsProvider(conversation.conversationId));
     if (_blockRetiredDirectAgent(conversation)) return;
     final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
@@ -3419,13 +3489,14 @@ class ChatThreadsController
               )
               .toList()
         : const <ChatMentionDraft>[];
-    final mentionPayload = validMentionDrafts.isEmpty
+    final mentionPayload = validMentionDrafts.isEmpty && reply == null
         ? null
         : ChatMentionPayload.toP9Json(
             text: captionText,
             draftMentions: validMentionDrafts,
           );
     final conversationRef = _conversationReadRefFor(conversation);
+    if (reply != null) mentionPayload!['annotations'] = reply.annotations;
     if (conversationRef == null) {
       _chatProviderTrace(
         'send_attachment.skip_missing_conversation_ref',
@@ -3468,18 +3539,16 @@ class ChatThreadsController
     _setLocalSendIntent(targetThreadId, pending);
     onSendStarted?.call();
     try {
-      final sent = await ref
-          .read(messagingServiceProvider)
-          .sendConversationAttachment(
-            secure: secure,
-            conversation: conversationRef,
-            attachment: attachment,
-            caption: normalizedCaption,
-            mentions: validMentionDrafts,
-            clientMessageId: clientMessageId,
-            idempotencyKey: idempotencyKey,
-          )
-          .timeout(_attachmentSendTimeout);
+      final sent = await _sendAttachmentWithReply(
+        secure: secure,
+        conversation: conversationRef,
+        attachment: attachment,
+        caption: normalizedCaption,
+        reply: reply,
+        mentions: validMentionDrafts,
+        clientMessageId: clientMessageId,
+        idempotencyKey: idempotencyKey,
+      ).timeout(_attachmentSendTimeout);
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
@@ -3620,9 +3689,20 @@ class ChatThreadsController
     try {
       final messaging = ref.read(messagingServiceProvider);
       final retried =
-          mentionPayload != null &&
-              mentionPayload.hasValidMentions &&
-              message.mentions.isNotEmpty
+          MessageReplyReference.tryParse(message.payloadJson) != null
+          ? await (messaging as ConversationPayloadMessagingService)
+                .sendConversationPayload(
+                  secure: message.encryptionRequired || message.isEncrypted,
+                  conversation: conversationRef,
+                  payload: (jsonDecode(message.payloadJson!) as Map)
+                      .cast<String, Object?>(),
+                  clientMessageId: clientMessageId,
+                  idempotencyKey: idempotencyKey,
+                )
+                .timeout(_sendTimeout)
+          : mentionPayload != null &&
+                mentionPayload.hasValidMentions &&
+                message.mentions.isNotEmpty
           ? await messaging
                 .sendConversationMentionText(
                   secure: message.encryptionRequired || message.isEncrypted,
@@ -3777,23 +3857,21 @@ class ChatThreadsController
           .toList(),
     );
     try {
-      final retried = await ref
-          .read(messagingServiceProvider)
-          .sendConversationAttachment(
-            secure: message.encryptionRequired || message.isEncrypted,
-            conversation: conversationRef,
-            attachment: AttachmentDraft(
-              filename: attachment.filename,
-              mimeType: attachment.mimeType,
-              localPath: localPath,
-              sizeBytes: attachment.sizeBytes,
-            ),
-            caption: attachment.caption,
-            mentions: _messageMentionsToDrafts(retrying.mentions),
-            clientMessageId: clientMessageId,
-            idempotencyKey: 'op-$clientMessageId',
-          )
-          .timeout(_attachmentSendTimeout);
+      final retried = await _sendAttachmentWithReply(
+        secure: message.encryptionRequired || message.isEncrypted,
+        conversation: conversationRef,
+        attachment: AttachmentDraft(
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+          localPath: localPath,
+          sizeBytes: attachment.sizeBytes,
+        ),
+        caption: attachment.caption,
+        reply: MessageReplyReference.tryParse(message.payloadJson),
+        mentions: _messageMentionsToDrafts(retrying.mentions),
+        clientMessageId: clientMessageId,
+        idempotencyKey: 'op-$clientMessageId',
+      ).timeout(_attachmentSendTimeout);
       if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
@@ -7422,8 +7500,18 @@ String _conversationTimelineKeyFor(ConversationSummary conversation) {
   return conversation.conversationId.trim();
 }
 
+int _clientMessageSequence = 0;
+
 String _newClientMessageId() {
-  return 'msg-awiki-me-${DateTime.now().microsecondsSinceEpoch}';
+  // Windows clock resolution can give two consecutive sends the same timestamp.
+  // Message identity must remain unique for reply/deletion and reconciliation.
+  final random = math.Random.secure();
+  final nonce = List.generate(
+    4,
+    (_) => random.nextInt(1 << 32).toRadixString(16).padLeft(8, '0'),
+  ).join();
+  final sequence = (_clientMessageSequence++).toString().padLeft(12, '0');
+  return 'msg-awiki-me-${DateTime.now().microsecondsSinceEpoch}-$sequence-$nonce';
 }
 
 AppConversationReadRef? _conversationReadRefFor(
@@ -7705,6 +7793,35 @@ final chatThreadProvider = Provider.family<ChatThreadState, String>((
 ) {
   final threads = ref.watch(chatThreadsProvider);
   return threads[threadId] ?? ChatThreadState(threadId: threadId);
+});
+
+/// App-local deletion applies to visible content, never to the Core window
+/// consumed by read acknowledgements, sync, pagination or agent correlation.
+final visibleChatThreadProvider = Provider.family<ChatThreadState, String>((
+  ref,
+  threadId,
+) {
+  final thread = ref.watch(chatThreadProvider(threadId));
+  final deleted = ref.watch(localMessageDeletionsProvider(threadId));
+  final ids = deleted.asData?.value;
+  // Do not flash deleted history while loading the local overlay, or expose it
+  // after a storage error. Core windows remain untouched for sync/read/paging.
+  return thread.copyWith(
+    isHydratingLocalHistory:
+        thread.isHydratingLocalHistory || deleted.isLoading,
+    messages: ids == null
+        ? []
+        : [
+            for (final m in thread.messages)
+              if (!isMessageLocallyDeleted(m, ids)) m,
+          ],
+    localSendIntents: ids == null
+        ? {}
+        : {
+            for (final e in thread.localSendIntents.entries)
+              if (!isMessageLocallyDeleted(e.value, ids)) e.key: e.value,
+          },
+  );
 });
 
 int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {

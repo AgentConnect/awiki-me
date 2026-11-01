@@ -13,6 +13,7 @@ import 'package:flutter/gestures.dart'
         GestureBinding,
         PointerCancelEvent,
         PointerUpEvent,
+        PointerDeviceKind,
         kPrimaryMouseButton,
         kSecondaryMouseButton;
 import 'package:flutter/material.dart'
@@ -24,6 +25,7 @@ import 'package:flutter/material.dart'
         RelativeRect,
         RoundedRectangleBorder,
         SelectionArea,
+        SelectionAreaState,
         SelectionContainer,
         StaticSelectionContainerDelegate,
         showMenu;
@@ -67,6 +69,7 @@ import '../agents/agent_availability_provider.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
+import '../../domain/entities/message_reply_reference.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -124,6 +127,7 @@ import 'chat_provider.dart';
 import 'message_security_provider.dart';
 import 'message_actions.dart';
 import '../shared/widgets/awiki_glass_controls.dart';
+import 'local_message_deletions.dart';
 
 part 'parts/chat_header_part.dart';
 part 'parts/chat_information_part.dart';
@@ -133,6 +137,7 @@ part 'parts/chat_bubble_surface.dart';
 part 'parts/chat_acp_reply_part.dart';
 part 'parts/chat_message_action_menu_part.dart';
 part 'parts/chat_composer_part.dart';
+part 'parts/chat_message_management_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
 const _macChatMessageListBottomInset = 4.0;
@@ -701,6 +706,11 @@ class _ChatTimelineScrollPosition extends ScrollPositionWithSingleContext {
 }
 
 class _ChatViewState extends ConsumerState<ChatView> {
+  MessageReplyReference? _reply;
+  bool _selectionMode = false;
+  bool _deletingMessages = false;
+  final Set<String> _selectedMessageIds = {};
+  void _updateMessageManagement(VoidCallback update) => setState(update);
   final textController = TextEditingController();
   final GlobalKey _messageListViewportKey = GlobalKey(
     debugLabel: 'ChatView.messageViewport',
@@ -755,6 +765,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
           widget.conversation.isGroup) {
         unawaited(_refreshGroupSecurity(widget.conversation));
       }
+    });
+    ref.listenManual(sessionProvider.select((value) => value.activeEpoch), (
+      previous,
+      next,
+    ) {
+      if (previous == next || !mounted) return;
+      ContextMenuController.removeAny();
+      setState(() {
+        _reply = null;
+        _selectionMode = false;
+        _selectedMessageIds.clear();
+      });
     });
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
     scrollController = _ChatTimelineScrollController(
@@ -813,6 +835,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       oldWidget.conversation,
       widget.conversation,
     )) {
+      _reply = null;
+      _selectionMode = false;
+      _selectedMessageIds.clear();
+      ContextMenuController.removeAny();
       _composerFocusRequestId += 1;
       _conversationVisibilityToken += 1;
       if (_messagesDestinationActive) {
@@ -957,6 +983,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         .read(chatComposerDraftsProvider.notifier)
         .draftFor(conversation);
     void applyDraft() {
+      _reply = draft.reply;
       _pendingAttachment = draft.pendingAttachment;
       _isApplyingComposerDraft = true;
       textController.value = TextEditingValue(
@@ -983,7 +1010,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         ? responsive.displayScaled(_macChatMessageListBottomInset)
         : responsive.spacing(_chatMessageListBottomInset);
     final displayThreadId = _displayThreadId;
-    final thread = ref.watch(chatThreadProvider(displayThreadId));
+    final thread = ref.watch(visibleChatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
     ref.watch(
       acpConversationProjectionProvider((
@@ -1056,7 +1083,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       }
     });
     ref.listen<ChatThreadState>(
-      chatThreadProvider(displayThreadId),
+      visibleChatThreadProvider(displayThreadId),
       (previous, next) =>
           _handleThreadChanged(previous, next, currentConversation),
     );
@@ -1823,40 +1850,56 @@ class _ChatViewState extends ConsumerState<ChatView> {
                 ),
               ),
             ),
-          _Composer(
-            disabledStatus:
-                currentConversation.isGroup && groupSendDisabledReason != null
-                ? _groupSecurityCard(
-                    currentConversation,
-                    groupSendDisabledReason,
-                  )
-                : null,
-            conversation: currentConversation,
-            embedded: widget.embedded,
-            macStyle: macStyle,
-            controller: textController,
-            pendingAttachment: _pendingAttachment,
-            focusRequestId: _composerFocusRequestId,
-            enabled:
-                !isDeletedAgentConversation &&
-                !isRetiredAgentConversation &&
-                groupSendDisabledReason == null,
-            disabledReason: isDeletedAgentConversation
-                ? context.l10n.chatDeletedAgentDisabled
-                : isRetiredAgentConversation
-                ? context.l10n.chatRetiredAgentDisabled
-                : groupSendDisabledReason,
-            onSend: () => _submitComposer(
-              currentConversation,
-              classification: peerClassification,
+          if (ref
+              .watch(localMessageDeletionsProvider(displayThreadId))
+              .hasError)
+            CupertinoButton(
+              onPressed: () => ref.invalidate(
+                localMessageDeletionsProvider(displayThreadId),
+              ),
+              child: Text(
+                '${context.l10n.operationFailedRetry} ${context.l10n.commonRetry}',
+              ),
             ),
-            onAttach: () async {
-              await _pickAndStageAttachment();
-            },
-            onScreenshot: _captureAndStageScreenshot,
-            onPasteAttachment: _pasteClipboardAttachment,
-            onRemoveAttachment: _clearPendingAttachment,
-          ),
+          if (_selectionMode)
+            _buildMessageSelectionBar(messages)
+          else ...[
+            if (_reply != null) _buildComposerReply(),
+            _Composer(
+              disabledStatus:
+                  currentConversation.isGroup && groupSendDisabledReason != null
+                  ? _groupSecurityCard(
+                      currentConversation,
+                      groupSendDisabledReason,
+                    )
+                  : null,
+              conversation: currentConversation,
+              embedded: widget.embedded,
+              macStyle: macStyle,
+              controller: textController,
+              pendingAttachment: _pendingAttachment,
+              focusRequestId: _composerFocusRequestId,
+              enabled:
+                  !isDeletedAgentConversation &&
+                  !isRetiredAgentConversation &&
+                  groupSendDisabledReason == null,
+              disabledReason: isDeletedAgentConversation
+                  ? context.l10n.chatDeletedAgentDisabled
+                  : isRetiredAgentConversation
+                  ? context.l10n.chatRetiredAgentDisabled
+                  : groupSendDisabledReason,
+              onSend: () => _submitComposer(
+                currentConversation,
+                classification: peerClassification,
+              ),
+              onAttach: () async {
+                await _pickAndStageAttachment();
+              },
+              onScreenshot: _captureAndStageScreenshot,
+              onPasteAttachment: _pasteClipboardAttachment,
+              onRemoveAttachment: _clearPendingAttachment,
+            ),
+          ],
         ],
       ),
     );
@@ -2464,6 +2507,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           _pendingAttachment != attachment) {
         return;
       }
+      setState(() => _reply = null);
       textController.clear();
       ref.read(chatComposerDraftsProvider.notifier).clearDraft(conversation);
       if (attachment != null) {
@@ -2496,7 +2540,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
       ref
           .read(chatComposerDraftsProvider.notifier)
           .setDraft(conversation, draft);
-      if (attachment != null) setState(() => _pendingAttachment = attachment);
+      setState(() {
+        _reply = draft.reply;
+        if (attachment != null) _pendingAttachment = attachment;
+      });
     }
 
     final expectedAgentReplyDid = _expectedAgentReplyDidForConversation(
@@ -2515,6 +2562,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             conversation: conversation,
             attachment: attachment,
             caption: messageContent.trim().isEmpty ? null : messageContent,
+            reply: _reply,
             mentions: validMentionDrafts,
             expectedAgentReplyDid: expectedAgentReplyDid,
             displayThreadId: _displayThreadId,
@@ -2529,6 +2577,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           secure: security,
           conversation: conversation,
           content: messageContent,
+          reply: _reply,
           mentions: validMentionDrafts,
           expectedAgentReplyDid: expectedAgentReplyDid,
           displayThreadId: _displayThreadId,
@@ -2634,7 +2683,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           session!.waiting['source_message_id'],
       };
       final pending = ref
-          .read(chatThreadProvider(_displayThreadId))
+          .read(visibleChatThreadProvider(_displayThreadId))
           .agentPendingTurns
           .where(
             (turn) =>
@@ -3262,7 +3311,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final epoch = ref.read(sessionProvider).activeEpoch;
     if (epoch == null) return;
-    final messages = ref.read(chatThreadProvider(_displayThreadId)).messages;
+    final messages = ref
+        .read(visibleChatThreadProvider(_displayThreadId))
+        .messages;
     final groupDid = _mentionGroupDidForConversation(widget.conversation);
     final members = groupDid == null
         ? const <GroupMemberSummary>[]

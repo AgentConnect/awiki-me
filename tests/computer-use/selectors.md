@@ -9,6 +9,8 @@
 | App A / Admin | `AWikiMe (Development)` | `ai.awiki.awikime.dev` |
 | App B / Joiner | `AWikiMe Joiner` | `ai.awiki.awikime.dev.manual.joiner` |
 
+上表为 macOS。Windows 以 [windows.md](windows.md) 的 manifest 选择窗口：Admin 标题 `AWiki Me CU Admin`，Joiner 标题 `AWiki Me CU Joiner`，分别核对实际 EXE 路径。Windows 无 bundle ID，不能凭共同的进程名 `AWikiMe.exe` 选择目标。
+
 登录页大标题是「登录或注册」。已登录壳左侧有头像和导航轨，semantics `e2e-authenticated`。
 
 ## 登录 / 注册
