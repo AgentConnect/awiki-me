@@ -339,7 +339,8 @@ void main() {
     expect(signingLibrary, contains('Developer ID Application:'));
     expect(signingLibrary, contains('com.apple.security.get-task-allow'));
     expect(signingLibrary, contains('xcrun notarytool'));
-    expect(signingLibrary, contains('xcrun stapler staple'));
+    expect(signingLibrary, contains('awiki_stapler_with_network_retry staple'));
+    expect(signingLibrary, contains(r'xcrun stapler "$@"'));
     expect(signingLibrary, contains('<<< "\$details"'));
     expect(signingLibrary, contains('<<< "\$requirement"'));
     expect(signingLibrary, isNot(contains('"\$details" | grep')));

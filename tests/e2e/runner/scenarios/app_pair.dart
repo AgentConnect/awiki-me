@@ -284,8 +284,9 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
                 '600',
                 ledger.path,
               ]);
-              if (permission.exitCode != 0)
+              if (permission.exitCode != 0) {
                 throw E2eFailure('PIN cleanup ledger permissions failed.');
+              }
               await ledger.writeAsString(
                 jsonEncode({
                   'schemaVersion': 1,
@@ -336,10 +337,11 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
               appPairCompleted) {
             await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
             await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
-            if (options.e2eCase == DesktopE2eCase.pinRecovery)
+            if (options.e2eCase == DesktopE2eCase.pinRecovery) {
               await _deleteDirectoryBestEffort(
                 Directory('${appPairAdminStateRootDir.path}-v4'),
               );
+            }
           }
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
           if ((pairConfig.functional || pairConfig.contentSync) &&

@@ -309,7 +309,7 @@ void main() {
   );
 
   test(
-    'controller rejects an untrusted tenant before capability discovery',
+    'controller rejects a mismatched tenant before capability discovery',
     () async {
       final port = _FakeSkillOnboardingPort(domain: 'example.com');
       final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
@@ -317,7 +317,7 @@ void main() {
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
             AwikiEnvironmentConfig(
-              baseUrl: 'https://example.com',
+              baseUrl: 'https://foreign.example.com',
               didDomain: 'example.com',
             ),
           ),

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import '../../application/models/desktop_network_status.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/services/desktop_network_preference.dart';
@@ -106,10 +106,10 @@ class _NetworkSettingsPageState extends ConsumerState<NetworkSettingsPage> {
   Widget build(BuildContext context) {
     final l = context.l10n;
     final theme = context.awikiTheme;
-    final status = switch (_preference.status) {
-      core.AwikiNetworkStatus.systemProxy => l.settingsNetworkSystemProxy,
-      core.AwikiNetworkStatus.direct => l.settingsNetworkDirect,
-      core.AwikiNetworkStatus.proxyFallback => l.settingsNetworkFallback,
+    final status = switch (_preference.connectionStatus) {
+      DesktopNetworkStatus.systemProxy => l.settingsNetworkSystemProxy,
+      DesktopNetworkStatus.direct => l.settingsNetworkDirect,
+      DesktopNetworkStatus.proxyFallback => l.settingsNetworkFallback,
     };
     Widget group(List<Widget> children) => DecoratedBox(
       decoration: awikiGroupDecoration(context),

@@ -1,6 +1,10 @@
 import 'dart:convert';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+// Host composition accepts this adapter-owned trust configuration without
+// importing SDK symbols into App bootstrap. Existing typed callers remain valid.
+typedef PinRecoveryTenantConfig = core.PinRecoveryTenantConfig;
+
 /// Installed public trust anchors, injected by a reviewed Host build. No trust on
 /// first use: downloading a config cannot install its own signing key.
 const pinRecoveryTenantsEnvironmentKey = 'AWIKI_PIN_RECOVERY_TENANTS_BASE64';

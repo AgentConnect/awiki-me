@@ -254,8 +254,8 @@ void main() {
       '--timeout',
       r'AWIKI_MACOS_NOTARY_TIMEOUT:-1h',
       'still in progress after the wait timeout',
-      'xcrun stapler staple',
-      'xcrun stapler validate',
+      'awiki_stapler_with_network_retry staple',
+      'awiki_stapler_with_network_retry validate',
       'spctl --assess --type execute',
       'override=security disabled',
       'source=Notarized Developer ID',
@@ -276,7 +276,7 @@ void main() {
       r'details="$(codesign -dvvv "$app" 2>&1)"',
     );
     _expectBefore(signing, 'awiki_notarytool submit', 'awiki_notarytool wait');
-    _expectBefore(signing, 'awiki_notarytool wait', 'xcrun stapler staple');
+    _expectBefore(signing, 'awiki_notarytool wait', 'awiki_stapler_with_network_retry staple');
 
     final project = File(
       'macos/Runner.xcodeproj/project.pbxproj',

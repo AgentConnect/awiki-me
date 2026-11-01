@@ -135,8 +135,9 @@ integration-test provider override 中自动确认 user presence；正式 App �
 LocalAuthentication。独立的 `multi-device-app-pair-functional` 用真实双 App、Daemon、
 Agent Inventory、CLI peer 和远端消息链路验证
 Daemon/Codex/Claude Agent 跨设备收敛、普通 P3 消息的双向 sender-side sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
-其 Account State operator 固定为 Mac→`ssh ali` 的 managed-release argv，
-不得把本机误建模为 `/home/ecs-user/...` 服务主机；临时 E2E account 由服务器通过
+其 Account State operator 使用固定的 reviewed managed-release argv；服务所在 Linux 主机使用
+`local`，其他主机使用已审查的 `ssh ali`。awiki.info 两种入口均固定到 root-owned
+`user-operator-8bcec86daa1f`，不接受工作区脚本或任意命令；临时 E2E account 由服务器通过
 active Handle 的手机号绑定和受保护的测试手机号摘要授权，App runner 不接收或转发动态
 account allowlist。Stage-3 retention-gap operator 同样固定到 Ali 不可变 Message Service
 发布、已审查的 Ali `/usr/bin/python3.11` stdlib runtime 与 root-owned、service-group-readable 且不可由 group/other 写入的配置，由服务端显式门禁；Message helper 唯一解析 account 后复用 User

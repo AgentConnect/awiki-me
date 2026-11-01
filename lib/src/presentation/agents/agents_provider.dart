@@ -588,6 +588,31 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   bool get _agentsAvailable => ref.read(agentImEnabledProvider);
 
+  Future<bool> _confirmAgentsAvailable(_AgentsOwnerOperation operation) async {
+    if (!ref.read(awikiEnvironmentConfigProvider).agentImEnabled) {
+      _setTenantUnsupported();
+      return false;
+    }
+    if (!_agentsAvailable && ref.read(backendFeaturesProvider).isLoading) {
+      try {
+        await ref
+            .read(backendFeaturesFutureProvider)
+            .timeout(agentListLoadTimeout);
+      } on Object {
+        // Discovery errors remain fail-closed. No Inventory/control request is
+        // allowed until support has been confirmed for this exact session.
+      }
+    }
+    if (!_isOwnerOperationCurrent(operation)) {
+      return false;
+    }
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return false;
+    }
+    return true;
+  }
+
   _AgentsOwnerOperation _captureOwnerOperation() {
     return _AgentsOwnerOperation(
       sessionEpoch: ref.read(sessionProvider).activeEpoch,
@@ -631,10 +656,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
   }
 
-  Future<void> ensureLoaded() {
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
-      return Future<void>.value();
+  Future<void> ensureLoaded() async {
+    if (!await _confirmAgentsAvailable(_captureOwnerOperation())) {
+      return;
     }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
@@ -687,8 +711,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       return;
     }
-    if (!_agentsAvailable) {
-      _setTenantUnsupported();
+    if (!await _confirmAgentsAvailable(_captureOwnerOperation())) {
       return;
     }
     final session = ref.read(sessionProvider).session;
@@ -1467,6 +1490,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     UserSubkeyPackage? userSubkeyPackage,
     String? appInstanceId,
   }) async {
+    if (!_agentsAvailable) {
+      _setTenantUnsupported();
+      return;
+    }
     if (!ref.read(daemonBackendEnabledProvider)) {
       _setDaemonUnsupported();
       return;
@@ -1474,10 +1501,6 @@ class AgentsController extends StateNotifier<AgentsState> {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
-      return;
-    }
-    if (!ref.read(agentImEnabledProvider)) {
-      state = state.copyWith(error: AgentUiMessageCodes.personalAgentDisabled);
       return;
     }
     final ownerOperation = _captureOwnerOperation();

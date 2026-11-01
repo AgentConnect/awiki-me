@@ -112,13 +112,13 @@ extension DesktopE2eReporting on DesktopE2eRunner {
         attestation: attestation,
         expectedScenario: options.e2eCase.scenario,
         expectedRunId: runId,
-        expectedCaseIds: suiteDefinition.caseIds,
+        expectedCaseIds: activeCaseIds,
       );
       _attestedCases
         ..clear()
         ..addEntries(
           validation.caseById.entries.where(
-            (entry) => suiteDefinition.caseIds.contains(entry.key),
+            (entry) => activeCaseIds.contains(entry.key),
           ),
         );
       _caseAttestationError = validation.passed
@@ -173,7 +173,7 @@ extension DesktopE2eReporting on DesktopE2eRunner {
     if (options.prepareOnly) {
       return 'prepared';
     }
-    final allPassed = suiteDefinition.caseIds.every(
+    final allPassed = activeCaseIds.every(
       (caseId) => _caseStatus(caseId) == 'passed',
     );
     return orchestrationSucceeded && allPassed ? 'passed' : 'failed';
@@ -200,13 +200,19 @@ extension DesktopE2eReporting on DesktopE2eRunner {
             ? 'prepared'
             : 'real',
         'scenario': (config?.e2eCase ?? options.e2eCase).scenario,
-        'caseIds': suiteDefinition.caseIds,
+        'caseIds': activeCaseIds,
+        if (options.focusedCaseIds.isNotEmpty)
+          'selection': <String, Object?>{
+            'kind': 'case_subset',
+            'declaredCaseIds': suiteDefinition.caseIds,
+            'requestedCaseIds': activeCaseIds,
+          },
         'passedCaseIds': <String>[
-          for (final caseId in suiteDefinition.caseIds)
+          for (final caseId in activeCaseIds)
             if (_caseStatus(caseId) == 'passed') caseId,
         ],
         'caseResults': <Map<String, Object?>>[
-          for (final caseId in suiteDefinition.caseIds)
+          for (final caseId in activeCaseIds)
             <String, Object?>{
               'caseId': caseId,
               'status': _caseStatus(caseId),
@@ -236,7 +242,7 @@ extension DesktopE2eReporting on DesktopE2eRunner {
               : options.prepareOnly
               ? 'not_expected_prepared'
               : _caseAttestationError == null &&
-                    suiteDefinition.caseIds.every(
+                    activeCaseIds.every(
                       (caseId) => _caseStatus(caseId) == 'passed',
                     )
               ? 'verified'

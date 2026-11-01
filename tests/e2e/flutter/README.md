@@ -215,6 +215,27 @@ runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
 `step4-revoke-mls`; their scenario-owned attestations, not catalog text, are
 required remote pass evidence.
 
+The Step4 setup uses Core's public repair to align the new Manifest device.
+Only the explicitly retryable `group.local_cursor_stale` fence may repeat,
+at most three attempts within the existing 45-second App readiness deadline,
+yielding Flutter frames between attempts. Permission and invalid-cursor errors
+remain failures; the test does not alter MLS data or extend that deadline.
+Step4 enables the normal Reliable Sync receive pipeline together with group
+encryption; the base Join-only configuration keeps its narrower feature scope.
+The Devices notice records the completed one-shot repair attempt; a partial
+attempt may remain visible after normal Core receive reaches Ready. Step4
+checks that rendered attempt result separately from exact-group Core Ready,
+future encrypted send, revoked-endpoint denial and DID membership preservation.
+A partial notice alone neither proves nor disproves MLS convergence.
+Failed device scenarios retain their isolated App/CLI state for diagnosis;
+successful scenarios still remove their local fixtures.
+
+`multi-device-remote-join` accepts repeatable `--case-id` selections from its
+declared cases. The default still runs the complete group; focused reports and
+strict attestations identify the selected subset. Selecting the message Core
+case also includes its real `DEVICE-JOIN-E2E-002` prerequisite. Other suites,
+unknown IDs and duplicates reject this option before execution.
+
 `--case multi-device-app-pair-later-admin-grant` selects the real two-App
 `multi-device-app-pair` flow, including `ROOT-TRANSFER-APP-PAIR-E2E-001`.
 Both endpoints are isolated Apps: ordinary Join must expose the grant step,

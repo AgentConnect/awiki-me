@@ -8,6 +8,8 @@ macOS/Windows 的“设置 → 应用 → 网络”只有“使用系统代理�
 和租户同步。启动与 native Core 打开前恢复选项，保存失败回滚当前传输策略。
 关闭时禁止应用层环境变量代理；VPN/TUN 仍由操作系统路由。
 页面状态只显示最近路径：系统代理、直接连接、代理不可用已回退。
+native 网络调用及 SDK 状态转换统一位于 `data/im_core/` 适配器；页面读取应用层
+`DesktopNetworkStatus`。原 `data/services/` 导入入口保留兼容导出，存储位置与现有调用签名不变。
 分组布局、加载与失败反馈及定向验证见 [设置页合同](settings-pages.md)。
 
 Rust `NetworkRuntime` 统一处理 Core HTTP/WS、附件、Dart 服务适配和头像下载。

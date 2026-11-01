@@ -14,8 +14,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   unawaited(AvatarPickerRecovery.instance.initialize());
   await initializeBuiltinTenantCatalog();
-  if (supportsDesktopNetwork)
+  if (supportsDesktopNetwork) {
     await DesktopNetworkPreference.instance.initialize();
+  }
   AwikiPerformanceLogger.registerFrameTimings();
   AwikiPerformanceLogger.log(
     'main.start',

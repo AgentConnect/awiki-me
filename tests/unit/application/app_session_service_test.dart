@@ -1667,6 +1667,115 @@ void main() {
     );
 
     test(
+      'overlapping device mutation refreshes preserve scope and reload the newest binding',
+      () async {
+        final identity = _session('id-default');
+        final authGate = Completer<AppAuthState>();
+        final auth = _FakeAuth(
+          ensureCompleter: authGate,
+          ensureCompleterCall: 2,
+        );
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: identity,
+            activeBindings: [
+              _bindingForGeneration(identity, '1'),
+              _bindingForGeneration(identity, '2'),
+              _bindingForGeneration(identity, '3'),
+            ],
+          ),
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await realtime.start();
+        final first = service.refreshCurrentIdentityClientAfterDeviceMutation();
+        for (var i = 0; auth.ensureCount < 2 && i < 100; i++) {
+          await Future<void>.delayed(Duration.zero);
+        }
+        expect(auth.ensureCount, 2);
+        final second = service
+            .refreshCurrentIdentityClientAfterDeviceMutation();
+        final completion = Future.wait([first, second]);
+        authGate.complete(const AppAuthState(authenticated: true));
+        final results = await completion;
+        expect(results[0].accountBinding?.identityGeneration, '2');
+        expect(results[1].accountBinding?.identityGeneration, '3');
+        expect(
+          results.every(
+            (session) =>
+                session.authenticated &&
+                session.identityId == identity.identityId,
+          ),
+          isTrue,
+        );
+        expect(auth.ensureCount, 3);
+        expect(runtime.switchedIdentities, [
+          identity.identityId,
+          identity.identityId,
+          identity.identityId,
+        ]);
+        expect(realtime.stopCount, 2);
+        expect(realtime.isRunning, isTrue);
+      },
+    );
+
+    test('a newer login fences queued device mutation refreshes', () async {
+      final firstIdentity = _session('id-default');
+      final nextIdentity = _session('id-next');
+      final authGate = Completer<AppAuthState>();
+      final auth = _FakeAuth(ensureCompleter: authGate, ensureCompleterCall: 2);
+      final runtime = _FakeRuntime();
+      final service = ImCoreAppSessionService(
+        bootstrapEpochBarrier: const NoopAppBootstrapEpochBarrier(),
+        runtime: runtime,
+        identities: _FakeIdentities(
+          defaultIdentity: firstIdentity,
+          extraIdentities: [nextIdentity],
+          activeBindings: [
+            _bindingFor(firstIdentity),
+            _bindingFor(firstIdentity),
+            _bindingFor(nextIdentity),
+          ],
+        ),
+        auth: auth,
+        activeSessionStore: _FakeActiveSessionStore(firstIdentity.identityId),
+        realtime: _FakeRealtime(),
+      );
+      await service.restoreSession();
+      final first = service.refreshCurrentIdentityClientAfterDeviceMutation();
+      for (var i = 0; auth.ensureCount < 2 && i < 100; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(auth.ensureCount, 2);
+      final queued = service.refreshCurrentIdentityClientAfterDeviceMutation();
+      final firstRejected = expectLater(
+        first,
+        throwsA(isA<AppSessionTransitionSuperseded>()),
+      );
+      final queuedRejected = expectLater(queued, throwsStateError);
+      final latest = service.loginWithIdentity(nextIdentity.identityId);
+      authGate.complete(const AppAuthState(authenticated: true));
+      await firstRejected;
+      await queuedRejected;
+      expect((await latest).identityId, nextIdentity.identityId);
+      expect(
+        (await service.currentSession())?.identityId,
+        nextIdentity.identityId,
+      );
+      expect(runtime.switchedIdentities, [
+        firstIdentity.identityId,
+        firstIdentity.identityId,
+        nextIdentity.identityId,
+      ]);
+    });
+
+    test(
       'rejected local deletion preserves the active session and realtime',
       () async {
         final identity = _session('id-default');

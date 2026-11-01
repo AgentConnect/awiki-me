@@ -467,6 +467,9 @@ class DesktopE2eRunner {
   late final DesktopE2eSuiteManifest suiteManifest;
   late final DesktopE2eSuiteDefinition suiteDefinition;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
+  List<String> get activeCaseIds => options.focusedCaseIds.isEmpty
+      ? suiteDefinition.caseIds
+      : options.focusedCaseIds;
   final Map<String, E2eCaseAttestationResult> _attestedCases =
       <String, E2eCaseAttestationResult>{};
   String? _caseAttestationError;

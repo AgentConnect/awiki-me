@@ -8,6 +8,85 @@ import '../../e2e/runner.dart';
 import '../../e2e/performance_contract.dart';
 
 void main() {
+  group('focused remote Join case selection', () {
+    test('default selection preserves all declared cases', () {
+      final options = DesktopE2eOptions.parse([
+        '--case',
+        'multi-device-remote-join',
+      ]);
+      expect(options.caseIds, options.e2eCase.caseIds);
+      expect(options.focusedCaseIds, isEmpty);
+    });
+
+    test('selects the ordinary Join without DSH and cannot be mutated', () {
+      final options = DesktopE2eOptions.parse([
+        '--case',
+        'multi-device-remote-join',
+        '--case-id',
+        'DEVICE-JOIN-E2E-002',
+      ]);
+      expect(options.caseIds, ['DEVICE-JOIN-E2E-002']);
+      expect(
+        () => options.caseIds.add('DEVICE-JOIN-E2E-006'),
+        throwsUnsupportedError,
+      );
+      final runner = DesktopE2eRunner(
+        root: Directory.systemTemp,
+        options: options,
+      );
+      expect(runner.activeCaseIds, options.caseIds);
+    });
+
+    test('keeps a message case real Join prerequisite', () {
+      final options = DesktopE2eOptions.parse([
+        '--case',
+        'multi-device-remote-join',
+        '--case-id',
+        'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
+      ]);
+      expect(options.caseIds, [
+        'DEVICE-JOIN-E2E-002',
+        'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
+      ]);
+    });
+
+    test('keeps canonical order for multiple requested cases', () {
+      final options = DesktopE2eOptions.parse([
+        '--case-id',
+        'DEVICE-JOIN-E2E-006',
+        '--case',
+        'multi-device-remote-join',
+        '--case-id',
+        'DEVICE-JOIN-E2E-002',
+      ]);
+      expect(options.caseIds, ['DEVICE-JOIN-E2E-002', 'DEVICE-JOIN-E2E-006']);
+    });
+
+    for (final arguments in [
+      ['--case', 'smoke', '--case-id', 'DEVICE-JOIN-E2E-002'],
+      ['--case', 'multi-device-remote-join', '--case-id', 'UNKNOWN-CASE'],
+      [
+        '--case',
+        'multi-device-remote-join',
+        '--case-id',
+        'DEVICE-JOIN-E2E-002',
+        '--case-id',
+        'DEVICE-JOIN-E2E-002',
+      ],
+      ['--case', 'multi-device-remote-join', '--case-id'],
+    ]) {
+      test(
+        'rejects an unsafe selection ${arguments.length}/${arguments.last}',
+        () {
+          expect(
+            () => DesktopE2eOptions.parse(arguments),
+            throwsA(isA<E2eFailure>()),
+          );
+        },
+      );
+    }
+  });
+
   test(
     'avatar probe uses its independent cache path or standalone sibling',
     () {
@@ -1057,7 +1136,7 @@ void main() {
                 'multi-device-app-pair-content-sync, '
                 'multi-device-app-pair-paging-recovery, '
                 'step4-revoke-mls, '
-                'root-transfer, full, messaging, performance, direct, '
+                'root-transfer, pin-recovery, full, messaging, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
                 'personal-agent.',

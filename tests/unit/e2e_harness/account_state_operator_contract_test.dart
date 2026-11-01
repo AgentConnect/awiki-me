@@ -153,12 +153,13 @@ void main() {
   test('rejects mutable release scripts and unreviewed operator revisions', () {
     const script =
         '/usr/local/libexec/awiki-system-test/'
-        'user-operator-aadcaa641890/run_account_state_sync_test_action.py';
+        'user-operator-8bcec86daa1f/run_account_state_sync_test_action.py';
     expect(reviewedLocalAccountStateOperatorCommand, contains(script));
     for (final replacement in [
       '/opt/awiki/services/user-service/current/scripts/'
           'run_account_state_sync_test_action.py',
-      script.replaceFirst('aadcaa641890', 'unreviewed'),
+      script.replaceFirst('8bcec86daa1f', 'unreviewed'),
+      script.replaceFirst('8bcec86daa1f', 'aadcaa641890'),
     ]) {
       final command = reviewedLocalAccountStateOperatorCommand
           .map((arg) => arg == script ? replacement : arg)

@@ -57,6 +57,9 @@ Agent 页面 = User Service Inventory 基线
 ```
 
 - User Service Inventory 是 daemon/runtime 存在性、owner 和 binding 的 SoT。
+- 初次库存加载须等待当前租户／会话的后端能力发现结束。`loading` 不是已确认不支持，
+  不能因页面只调用一次 `ensureLoaded()` 就永久错过加载；等待期间不发 Inventory 或控制请求，
+  确认不支持／失败仍关闭能力。发现结束后重新核对 SessionEpoch，旧会话不能加载新账号库存。
 - daemon 发出的 `awiki.agent.status.v1` 必须先由 reliable sync 提交到 IM Core；
   App 通过 Core thread patch 消费同一已提交控制消息。WebSocket payload 只调度
   reliable sync，不直接改 Agent 页面。

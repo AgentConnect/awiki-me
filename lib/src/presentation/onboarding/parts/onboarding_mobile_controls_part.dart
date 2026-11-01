@@ -13,7 +13,6 @@ class _OnboardingCapabilityPanel extends StatelessWidget {
     required this.message,
     this.loading = false,
     this.icon,
-    this.detail,
     this.actionLabel,
     this.onAction,
   });
@@ -21,7 +20,6 @@ class _OnboardingCapabilityPanel extends StatelessWidget {
   final bool loading;
   final IconData? icon;
   final String message;
-  final String? detail;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -29,7 +27,6 @@ class _OnboardingCapabilityPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final detailText = detail?.trim();
     return Container(
       key: const Key('onboarding-capability-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),
@@ -71,19 +68,6 @@ class _OnboardingCapabilityPanel extends StatelessWidget {
               ),
             ],
           ),
-          if (detailText != null && detailText.isNotEmpty) ...<Widget>[
-            SizedBox(height: responsive.spacing(10)),
-            Text(
-              detailText,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: theme.secondaryText,
-                fontSize: responsive.metaSm,
-                height: 1.35,
-              ),
-            ),
-          ],
           if (actionLabel != null && onAction != null) ...<Widget>[
             SizedBox(height: responsive.spacing(14)),
             Align(

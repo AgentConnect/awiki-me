@@ -815,7 +815,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
                     color: theme.title,
                     fontSize: desktop ? 18 : 19,
                     height: 1.25,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),

@@ -266,6 +266,11 @@ void main() {
       final excludedCaseIds = <String>{
         for (final suite in excluded) ...catalog.suiteCaseIds[suite]!,
       };
+      final platform = Platform.isMacOS ? 'macos' : 'linux';
+      final applicableCaseIds = <String>{
+        for (final suite in DesktopE2eSuiteManifest.load(source).fullSuites())
+          if (suite.supportedPlatforms.contains(platform)) ...suite.caseIds,
+      };
       expect(
         result['passedCaseIds'],
         unorderedEquals(
@@ -274,10 +279,7 @@ void main() {
                 (c) =>
                     c.catalogStatus == 'active' &&
                     !c.requiredFor.contains('local-fixture') &&
-                    (Platform.isMacOS ||
-                        !catalog.suiteCaseIds['production-keychain']!.contains(
-                          c.caseId,
-                        )) &&
+                    applicableCaseIds.contains(c.caseId) &&
                     !excludedCaseIds.contains(c.caseId),
               )
               .map((c) => c.caseId),

@@ -7,7 +7,8 @@ import '../data/services/appearance_preference_service.dart';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import '../data/im_core/awiki_im_core_pin_recovery_config.dart'
+    show PinRecoveryTenantConfig;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../application/config/awiki_client_version.dart';
@@ -206,7 +207,7 @@ class AppBootstrap {
     AwikiEnvironmentConfig? environment,
     String? appStateRoot,
     AppTenantProfile? tenant,
-    List<core.PinRecoveryTenantConfig>? pinRecoveryTenants,
+    List<PinRecoveryTenantConfig>? pinRecoveryTenants,
     DesktopShellService? desktopShellService,
     NotificationFacade? notificationFacade,
     RemotePushClient? remotePushClient,

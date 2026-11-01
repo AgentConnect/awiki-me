@@ -27,7 +27,7 @@ UI 提示；仍存活的共享冷却控制器继续接收成功/限流回执的 
 前缀推断支持情况。该入口要求重新输入手机号并完成同一专用
 Recovery OTP、风险确认和 activate 流程，但必须把当前会话的 exact `localIdentityId` 交给
 Core；恢复前不退出、不删除凭证或本地数据，因此 Direct、Group、Agent 历史和智能体库存继续
-归属于同一 stable owner。恢复完成后同样直接返回消息主界面。
+归属于同一 stable owner。恢复完成后，用户选择“进入消息”并成功激活本地会话，再返回消息主界面。
 
 ## 本机续接与会话执行边界
 
@@ -118,8 +118,8 @@ Recovery 的完整断言。
   resume。远端 Commit 已成功、本机 JWT 刷新或 P5 PreKey 发布暂时失败时，Core 必须
   保留同一 operation 并投影 `local_transition_pending`；App 刷新精确 status 后自动续跑一次，
   仍失败则保留“继续恢复”操作，不得降级为“未准备完成”或要求新建 Recovery。
-  完成时持久化 Core 授权的 Registry epoch reset、激活恢复身份并直接收束到消息主界面，
-  不把用户留在 Recovery 页面。
+  完成时持久化 Core 授权的 Registry epoch reset 并显示“进入消息”；用户选择后激活恢复身份，
+  成功才收束到消息主界面。注册后重新进入已有账号的 E2E 同样执行这一步，不等待自动登录。
 - `applied` 只证明 Core Recovery 已完成，不等同于 App 会话已经激活。Recovery 页面必须同时
   确认 `sessionProvider` 与 runtime 都提交了同一个恢复身份，才允许退出页面并进入消息主界面；
   本地会话激活失败时保留完成页面和“继续进入消息”按钮，只重试本地身份激活，不新建 Recovery、

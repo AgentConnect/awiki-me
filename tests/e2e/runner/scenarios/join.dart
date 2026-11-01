@@ -7,7 +7,7 @@ part of '../../runner.dart';
 extension DesktopE2eJoinScenario on DesktopE2eRunner {
   Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
     final fullRootTransfer = options.e2eCase == DesktopE2eCase.rootTransfer;
-    final requestedCaseIds = caseIds ?? options.e2eCase.caseIds;
+    final requestedCaseIds = caseIds ?? options.caseIds;
     final includesDshInterop = requestedCaseIds.contains('DEVICE-JOIN-E2E-006');
     final joinConfig = RemoteMultiDeviceJoinConfig.from(
       fileConfig: fileConfig,

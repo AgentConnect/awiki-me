@@ -10,6 +10,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_im_core/awiki_im_core.dart' as core_sdk;
 
 import '../test_support.dart';
 import 'device_test_support.dart';
@@ -22,6 +23,128 @@ const _session = SessionIdentity(
 );
 
 void main() {
+  test(
+    'repair notice records the failed attempt independently of later readiness',
+    () async {
+      final core = FakeDeviceManagementCore()..registry = _activeRegistry();
+      final groups = _FakeGroups([
+        _group('secure').withSecurity(encrypted: true),
+      ]);
+      final encryption = _FakeGroupEncryption(
+        failingGroupId: 'secure',
+        failure: const core_sdk.AwikiImCoreException(
+          code: 'service_error',
+          serviceCode: 'group.local_cursor_stale',
+          message: 'synthetic',
+        ),
+      );
+      final container = _container(core, groups, encryption);
+      addTearDown(container.dispose);
+      final controller = container.read(devicesProvider.notifier);
+      await controller.loadManagement();
+      final target = container
+          .read(devicesProvider)
+          .registry!
+          .devices
+          .singleWhere((device) => device.protocolDeviceId == 'member-target');
+      expect(
+        await controller.revokeDevice(
+          target: target,
+          presenceReason: 'Confirm focused revoke',
+        ),
+        isTrue,
+      );
+      await _drainMicrotasks();
+      expect(encryption.repairCalls, ['secure']);
+      expect(encryption.statusCalls, isEmpty);
+      expect(
+        container.read(devicesProvider).revokeNotice,
+        DeviceRevokeNotice.revokedGroupsRepairPartial,
+      );
+      // Normal Core receive may converge after this one-shot attempt. The
+      // attempt notice does not grant or deny current encryption readiness.
+      expect((await encryption.status('secure')).canSendSecure, isTrue);
+      expect(
+        container.read(devicesProvider).revokeNotice,
+        DeviceRevokeNotice.revokedGroupsRepairPartial,
+      );
+    },
+  );
+
+  test(
+    'unknown list classification is resolved through exact public group details',
+    () async {
+      final core = FakeDeviceManagementCore()..registry = _activeRegistry();
+      final groups = _FakeGroups(
+        <GroupSummary>[_group('secure'), _group('plain')],
+        details: {
+          'secure': _group('secure').withSecurity(encrypted: true),
+          'plain': _group('plain').withSecurity(encrypted: false),
+        },
+      );
+      final encryption = _FakeGroupEncryption(failingGroupId: 'plain');
+      final container = _container(core, groups, encryption);
+      addTearDown(container.dispose);
+      final controller = container.read(devicesProvider.notifier);
+      await controller.loadManagement();
+      final target = container
+          .read(devicesProvider)
+          .registry!
+          .devices
+          .singleWhere((device) => device.protocolDeviceId == 'member-target');
+      expect(
+        await controller.revokeDevice(
+          target: target,
+          presenceReason: 'Confirm focused revoke',
+        ),
+        isTrue,
+      );
+      await _drainMicrotasks();
+      expect(groups.detailCalls, ['secure', 'plain']);
+      expect(encryption.repairCalls, ['secure']);
+      expect(
+        container.read(devicesProvider).revokeNotice,
+        DeviceRevokeNotice.revoked,
+      );
+    },
+  );
+
+  test(
+    'plaintext group does not cause a false encrypted repair failure',
+    () async {
+      final core = FakeDeviceManagementCore()..registry = _activeRegistry();
+      final groups = _FakeGroups(<GroupSummary>[
+        _group('secure').withSecurity(encrypted: true),
+        _group('plain').withSecurity(encrypted: false),
+      ]);
+      final encryption = _FakeGroupEncryption(failingGroupId: 'plain');
+      final container = _container(core, groups, encryption);
+      addTearDown(container.dispose);
+
+      final controller = container.read(devicesProvider.notifier);
+      await controller.loadManagement();
+      final target = container
+          .read(devicesProvider)
+          .registry!
+          .devices
+          .singleWhere((device) => device.protocolDeviceId == 'member-target');
+      expect(
+        await controller.revokeDevice(
+          target: target,
+          presenceReason: 'Confirm focused revoke',
+        ),
+        isTrue,
+      );
+      await _drainMicrotasks();
+
+      expect(encryption.repairCalls, <String>['secure']);
+      expect(
+        container.read(devicesProvider).revokeNotice,
+        DeviceRevokeNotice.revoked,
+      );
+    },
+  );
+
   test(
     'successful revoke immediately attempts each known group once',
     () async {
@@ -113,6 +236,7 @@ ProviderContainer _container(
   FakeAppSessionService? sessions,
 }) => ProviderContainer(
   overrides: <Override>[
+    identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
     multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(true),
     deviceManagementCorePortProvider.overrideWithValue(core),
     userPresencePortProvider.overrideWithValue(FakeUserPresence()),
@@ -129,8 +253,9 @@ ProviderContainer _container(
 );
 
 Future<void> _drainMicrotasks() async {
-  await Future<void>.delayed(Duration.zero);
-  await Future<void>.delayed(Duration.zero);
+  for (var i = 0; i < 10; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
 }
 
 DeviceRegistrySnapshot _activeRegistry() => const DeviceRegistrySnapshot(
@@ -167,9 +292,18 @@ GroupSummary _group(String groupId) => GroupSummary(
 );
 
 class _FakeGroups implements GroupApplicationService {
-  _FakeGroups(this.groups);
+  _FakeGroups(this.groups, {this.details = const {}});
 
   final List<GroupSummary> groups;
+  final Map<String, GroupSummary> details;
+  final List<String> detailCalls = [];
+
+  @override
+  Future<GroupSummary> getGroup(String groupDid) async {
+    detailCalls.add(groupDid);
+    return details[groupDid] ??
+        groups.singleWhere((group) => group.groupId == groupDid);
+  }
 
   @override
   Future<GroupCollectionPage<GroupSummary>> listGroups({
@@ -183,16 +317,18 @@ class _FakeGroups implements GroupApplicationService {
 }
 
 class _FakeGroupEncryption implements GroupEncryptionCorePort {
-  _FakeGroupEncryption({this.failingGroupId});
+  _FakeGroupEncryption({this.failingGroupId, this.failure});
 
   final String? failingGroupId;
+  final Object? failure;
   final List<String> repairCalls = <String>[];
+  final List<String> statusCalls = <String>[];
 
   @override
   Future<GroupEncryptionStatus> retry(String groupDid) async {
     repairCalls.add(groupDid);
     if (groupDid == failingGroupId) {
-      throw StateError('focused_repair_failure');
+      throw failure ?? StateError('focused_repair_failure');
     }
     return GroupEncryptionStatus(
       groupDid: groupDid,
@@ -203,5 +339,13 @@ class _FakeGroupEncryption implements GroupEncryptionCorePort {
   }
 
   @override
-  Future<GroupEncryptionStatus> status(String groupDid) => retry(groupDid);
+  Future<GroupEncryptionStatus> status(String groupDid) async {
+    statusCalls.add(groupDid);
+    return GroupEncryptionStatus(
+      groupDid: groupDid,
+      readiness: GroupEncryptionReadiness.ready,
+      canSendSecure: true,
+      retryable: false,
+    );
+  }
 }

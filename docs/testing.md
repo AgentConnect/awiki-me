@@ -422,12 +422,14 @@ an equivalent package that exposes `libsqlite3.so`.
 `tests/e2e/suite_manifest.json` 和 `tests/e2e/case_catalog.json` 中的
 `multi-device-app-pair-functional` 是当前普通消息与账号状态同步的 active App E2E
 边界。这里的 `active` 表示 case 已登记且 runner 可执行，不表示当前工作区已经运行或通过。
-它需要准备好的 macOS operator host、两个隔离 App/Core、远端 `awiki.info`、受审计 CLI
-revision、专用测试账号/OTP 和测试 scoped user-presence。最终双 App/真实 user-presence
-验收由发布负责人在 macOS 手工执行，不作为 Linux 自动化退出条件。
+它需要当前平台的 reviewed operator、两个隔离 App/Core、远端 `awiki.info`、受审计 CLI
+revision、专用测试账号/OTP 和测试 scoped user-presence。服务所在 Linux 主机使用 `local`，
+其他主机使用已审查的 SSH 入口；Account State 的精确命令与 System Test profile 必须一致，
+awiki.info 固定到 `user-operator-8bcec86daa1f`，不因执行失败放宽命令校验。
+自动化双 App 验证不替代 macOS 真实 LocalAuthentication 的手工验收。
 
-Linux 仍必须执行其可运行的真实 App + CLI peer/backend E2E，包括 `direct`、`group`、
-`attachment`、`restart`、`performance` 以及 `messaging` 中进入真实设备 Join 前的主链路。
+Linux 按 owner manifest 执行适用的真实双 App 和 App + CLI peer/backend E2E，
+包括该 functional 场景；其他独立场景的选择仍遵循用户指定范围和现有 catalog。
 Linux 结果不能冒充 macOS 双 App/user-presence attestation，但 macOS 手工项也不能阻止这些
 Linux 用例独立报告真实通过或失败。
 

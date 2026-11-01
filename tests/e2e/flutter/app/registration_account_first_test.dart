@@ -467,6 +467,19 @@ Future<void> _runExistingHandleRecovery(
       expect(reset.currentDid == previousDid, isFalse);
       expect(reset.handle, '$handle.$domain');
       expect(reset.sourceKind, HandleRecoveryTransitionSourceKind.initiator);
+      expect(container.read(sessionProvider).session, isNull);
+      await _until(
+        tester,
+        () => find
+            .bySemanticsIdentifier('handle-recovery-enter-messages')
+            .evaluate()
+            .isNotEmpty,
+        'Recovery completion offers explicit local session activation',
+      );
+      await _tap(
+        tester,
+        find.bySemanticsIdentifier('handle-recovery-enter-messages'),
+      );
       await _until(
         tester,
         () => container.read(sessionProvider).session?.did == reset.currentDid,

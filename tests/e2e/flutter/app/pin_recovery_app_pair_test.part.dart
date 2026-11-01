@@ -139,17 +139,20 @@ Future<void> _pinVerifySelect(
   await _pinFill(tester, 'pin-recovery-otp', account.fixedOtp);
   await _pinTap(tester, 'pin-recovery-verify');
   final targetButton = find.widgetWithText(AppSecondaryButton, fullHandle);
-  await _pumpUntil(
-    tester,
-    () => targetButton.evaluate().length == 1,
-    failure: 'Dedicated verified phone did not discover the exact Handle.',
-  );
   if (deviceLabel != null) {
     await _pinFill(tester, 'pin-recovery-device-label', deviceLabel);
   }
-  await tester.ensureVisible(targetButton);
-  await tester.tap(targetButton);
-  await tester.pump();
+  await tapAppPairProductControl(
+    tester,
+    'pin-recovery-selected-handle',
+    control: targetButton,
+    scrollable: find
+        .descendant(
+          of: find.byKey(const Key('pin-recovery-page')),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
 }
 
 void _pinAppAdminMain() {

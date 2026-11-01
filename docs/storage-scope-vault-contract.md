@@ -586,6 +586,11 @@ Production不读取或迁移：
 
 已 dispose 的 `AwikiImCoreRuntime` 不可再次 open；在途 open 完成时关闭其新实例，不重新发布到旧租户。Recovery 会话激活复用现有 `AppSessionTransition` 的临时 caller-validity 检查，在每个既有 transition 检查点拒绝失效页面。完成后解除该临时检查，正常会话不依赖 Recovery 页存活；失败清理仍按 exact transition，不清除新页面的会话。
 
+同一身份的设备变更可能同时触发 Registry 刷新与显式操作后的绑定刷新。正在执行的绑定刷新
+暂时清除 committed 状态时，后到调用只可捕获仍为 latest 的原 transition；它仍须排队后
+重新检查 current，并单独读取最新绑定，不能通过合并调用漏掉后一次设备变更的代次。
+新登录或退出继续围栏旧调用，临时刷新上下文仅在执行期间存在，并在成功或失败时清理。
+
 ### 单身份删除与 Scope 生命周期
 
 删除当前身份数据由 Core 按 stable owner 完成 durable purge，App 停止该身份 realtime 并释放 selected client，但保留同 Scope runtime，供其他身份和统一登录/Recovery 继续使用。它不是租户/Scope dispose；真正的 dispose 永久禁止迟到 adapter 重开旧 runtime。两者不能混用，否则删除后同进程的新 Recovery 会错误地使用已销毁 runtime。

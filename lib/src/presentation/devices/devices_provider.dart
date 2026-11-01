@@ -1646,7 +1646,17 @@ class DevicesController extends StateNotifier<DevicesState> {
             .read(groupApplicationServiceProvider)
             .listGroups(limit: 100, cursor: cursor);
         for (final group in page.items) {
+          if (group.encrypted == false) continue;
           try {
+            if (group.encrypted == null) {
+              final details = await ref
+                  .read(groupApplicationServiceProvider)
+                  .getGroup(group.groupId);
+              if (details.groupId != group.groupId) {
+                throw StateError('group_encryption_binding_mismatch');
+              }
+              if (details.encrypted == false) continue;
+            }
             await ref
                 .read(groupEncryptionCorePortProvider)
                 .retry(group.groupId);

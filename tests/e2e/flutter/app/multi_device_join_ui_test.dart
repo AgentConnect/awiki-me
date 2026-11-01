@@ -47,6 +47,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_encryption_status.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
@@ -91,6 +92,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
+import '../../group_inventory_retry.dart';
+import '../../remote_device_environment.dart';
+import '../../step4_group_diagnostics.dart';
 import '../../did_method_web_failure.dart';
 import '../../did_method_web_oracles.dart';
 import '../../case_attestation.dart';
@@ -159,6 +163,7 @@ const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';
 const String _mlsRevokeCaseId = 'MLS-MULTI-DEVICE-E2E-002';
+final _step4DiagnosticsProvider = Provider<Step4GroupDiagnostics?>((_) => null);
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
 const String _compiledAppPairConfigPath = String.fromEnvironment(
@@ -592,6 +597,9 @@ void main() {
       final cli = _JoinCli.joining(config);
       AppBootstrap? bootstrap;
       var completedScenario = false;
+      final groupDiagnostics = _invocationExpects(_deviceRevokeCaseId)
+          ? Step4GroupDiagnostics()
+          : null;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       _requireIndependentEmptyPaths(<String>[
         config.appStateRoot,
@@ -603,7 +611,7 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        if (completedScenario || !_invocationExpects(_rootTransferCaseId)) {
+        if (completedScenario) {
           await cli.deleteLocalState();
           await _deleteDirectory(config.appStateRoot);
         } else {
@@ -663,6 +671,21 @@ void main() {
           bootstrap: bootstrap,
           providerOverrides: <Override>[
             userPresencePortProvider.overrideWithValue(presence),
+            if (groupDiagnostics != null) ...[
+              _step4DiagnosticsProvider.overrideWithValue(groupDiagnostics),
+              groupApplicationServiceProvider.overrideWithValue(
+                Step4ObservedGroups(
+                  bootstrap.groupApplicationService!,
+                  groupDiagnostics,
+                ),
+              ),
+              groupEncryptionCorePortProvider.overrideWithValue(
+                Step4ObservedEncryption(
+                  bootstrap.groupEncryptionCorePort!,
+                  groupDiagnostics,
+                ),
+              ),
+            ],
             if (_invocationExpects(_rootTransferCaseId))
               deviceManagementServiceProvider.overrideWithValue(responseGate),
           ],
@@ -1142,19 +1165,49 @@ Future<void> _continueStep4RevokeAndMls({
   }
 
   final secure = container.read(groupEncryptionCorePortProvider);
-  var appReady = await secure.retry(group.groupId);
+  final groupDiagnostics = container.read(_step4DiagnosticsProvider);
+  // Reconcile through Core, sharing the existing readiness budget with a
+  // bounded retry of its explicitly retryable local inventory fence.
+  final appReadyDeadline = DateTime.now().add(const Duration(seconds: 45));
+  var appReady =
+      await retryStaleGroupInventory(
+        () => secure.retry(group.groupId),
+        deadline: appReadyDeadline,
+        yieldToReceive: () => tester.pump(const Duration(milliseconds: 200)),
+      ).catchError((Object error, StackTrace stack) {
+        if (error is core.AwikiImCoreException) {
+          final diagnostic = safeCliFailureDiagnostic(
+            exitCode: 1,
+            stdout: null,
+            stderr: jsonEncode({
+              'error': {
+                'code': error.code,
+                'details': {'service_code': error.serviceCode},
+              },
+            }),
+          );
+          fail(
+            'Initial App public group repair failed '
+            '($diagnostic, http_status=${error.statusCode ?? 0}).',
+          );
+        }
+        Error.throwWithStackTrace(error, stack);
+      });
   await cli.stopRealtimeListener();
   await cli.waitForGroupReady(group.groupId);
-  final appReadyDeadline = DateTime.now().add(const Duration(seconds: 45));
   while (!appReady.canSendSecure && DateTime.now().isBefore(appReadyDeadline)) {
-    await Future<void>.delayed(const Duration(milliseconds: 750));
-    appReady = await secure.retry(group.groupId);
+    await tester.pump(const Duration(milliseconds: 750));
+    appReady = await secure.status(group.groupId);
   }
   if (!appReady.canSendSecure) {
     fail(
       'The App controller did not reconcile the CLI Manifest device '
       '(readiness=${appReady.readiness.name}, retryable=${appReady.retryable}).',
     );
+  }
+  appReady = await secure.retry(group.groupId);
+  if (!appReady.canSendSecure) {
+    fail('The ready App did not preserve readiness after public repair.');
   }
   final twoLeafEvidence = await cli.repairGroupUntilReady(group.groupId);
   final cliReadinessFailure = twoLeafEvidence.repairGroup != group.groupId
@@ -1187,7 +1240,12 @@ Future<void> _continueStep4RevokeAndMls({
       '($cliReadinessFailure).',
     );
   }
-  final appStatusBeforeRevoke = await secure.status(group.groupId);
+  var appStatusBeforeRevoke = await secure.status(group.groupId);
+  while (!appStatusBeforeRevoke.canSendSecure &&
+      DateTime.now().isBefore(appReadyDeadline)) {
+    await tester.pump(const Duration(milliseconds: 200));
+    appStatusBeforeRevoke = await secure.status(group.groupId);
+  }
   if (appStatusBeforeRevoke.groupDid != group.groupId ||
       !appStatusBeforeRevoke.canSendSecure) {
     fail('App public status did not prove its exact ready device leaf.');
@@ -1212,6 +1270,7 @@ Future<void> _continueStep4RevokeAndMls({
     failure: 'The destructive revoke confirmation was not rendered.',
   );
   final presenceBefore = presence.calls;
+  if (groupDiagnostics != null) groupDiagnostics.phase = 'revoking';
   await _tapOne(
     tester,
     find.byKey(const Key('device-revoke-confirm-action')),
@@ -1260,14 +1319,37 @@ Future<void> _continueStep4RevokeAndMls({
           container.read(devicesProvider).revokeNotice ==
               DeviceRevokeNotice.revokedGroupsSyncing) &&
       DateTime.now().isBefore(repairDeadline)) {
-    await Future<void>.delayed(const Duration(milliseconds: 750));
+    await tester.pump(const Duration(milliseconds: 750));
     status = await secure.status(group.groupId);
   }
   final revokeNotice = container.read(devicesProvider).revokeNotice;
-  if (!status.canSendSecure || revokeNotice != DeviceRevokeNotice.revoked) {
+  // Devices shows the result of its one-shot group repair attempt. A partial
+  // attempt can precede normal Core receive convergence; it is not the current
+  // encryption status. Both projections must still describe this exact revoke.
+  final revokeAttemptFinished =
+      revokeNotice == DeviceRevokeNotice.revoked ||
+      revokeNotice == DeviceRevokeNotice.revokedGroupsRepairPartial;
+  if (status.groupDid != group.groupId ||
+      status.readiness != GroupEncryptionReadiness.ready ||
+      !status.canSendSecure ||
+      !revokeAttemptFinished) {
     fail(
-      'The App did not reach ready state after exact-device removal convergence.',
+      'The App did not reach ready state after exact-device removal convergence '
+      '(readiness=${status.readiness.name}, can_send=${status.canSendSecure}, '
+      'retryable=${status.retryable}, revoke_notice=${revokeNotice?.name ?? 'none'}). '
+      'calls_complete=${groupDiagnostics?.droppedEvents == 0}, '
+      'calls=${jsonEncode(groupDiagnostics?.summary(group.groupId) ?? const <Map<String, Object?>>[])}',
     );
+  }
+  final noticeWidget = tester.widget<Text>(
+    find.byKey(const Key('device-revoke-notice')),
+  );
+  final noticeContext = tester.element(find.byType(DevicesPage));
+  final expectedNotice = revokeNotice == DeviceRevokeNotice.revoked
+      ? noticeContext.l10n.deviceRevokeSucceeded
+      : noticeContext.l10n.deviceRevokeSucceededGroupsRepairPartial;
+  if (noticeWidget.data != expectedNotice) {
+    fail('Devices did not render the exact completed revoke attempt result.');
   }
   final members = await groups.listMembers(group.groupId);
   if (members.items.where((member) => member.did == did).length != 1) {
@@ -3270,7 +3352,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   bool enableAppPairFunctional = false,
   bool enableMessageSyncCore = false,
   bool enableDeviceRevoke = false,
-}) => AwikiEnvironmentConfig(
+}) => remoteDeviceEnvironment(
   baseUrl: config.baseUrl,
   userServiceUrl: config.userServiceUrl,
   messageServiceUrl: config.messageServiceUrl,
@@ -3278,12 +3360,11 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   didDomain: config.didDomain,
   anpServiceUrl: config.anpServiceUrl,
   anpServiceDid: config.anpServiceDid,
-  agentImEnabled: enableAppPairFunctional,
-  messageSyncV2ReadEnabled: enableAppPairFunctional || enableMessageSyncCore,
-  multiDeviceDeviceRevokeEnabled:
-      enableStep4 || enableAppPairFunctional || enableDeviceRevoke,
-  multiDeviceDirectE2eeEnabled: enableRootTransfer,
-  multiDeviceGroupE2eeEnabled: enableStep4,
+  enableRootTransfer: enableRootTransfer,
+  enableStep4: enableStep4,
+  enableAppPairFunctional: enableAppPairFunctional,
+  enableMessageSyncCore: enableMessageSyncCore,
+  enableDeviceRevoke: enableDeviceRevoke,
 );
 
 Future<void> _openNewDeviceJoin(WidgetTester tester) async {

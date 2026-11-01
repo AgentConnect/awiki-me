@@ -21,7 +21,7 @@ AgentSummary runtime(String brand, {String? protocol, bool retired = false}) =>
       runtime: brand,
       displayName: 'Agent',
       activeState: 'active',
-      handle: 'hermes-personal-test',
+      handle: 'runtime-test',
       latest: AgentLatestStatus(
         status: retired ? 'needs_config' : 'ready',
         diagnosticsSummary: {

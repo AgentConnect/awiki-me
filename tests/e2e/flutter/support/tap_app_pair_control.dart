@@ -2,13 +2,17 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Waits for the visible control within one deadline, including route motion.
+/// Waits within one deadline, including route motion and an explicitly supplied
+/// lazy scrollable. The caller can name the exact rendered control without
+/// exposing its text in failure diagnostics.
 Future<void> tapAppPairProductControl(
   WidgetTester tester,
   String key, {
   Duration timeout = const Duration(seconds: 60),
+  Finder? control,
+  Finder? scrollable,
 }) async {
-  final finder = find.byKey(Key(key));
+  final finder = control ?? find.byKey(Key(key));
   final deadline = DateTime.now().add(timeout);
   do {
     if (finder.evaluate().length == 1) {
@@ -26,6 +30,10 @@ Future<void> tapAppPairProductControl(
           return;
         }
       }
+    } else if (finder.evaluate().isEmpty &&
+        scrollable != null &&
+        scrollable.evaluate().length == 1) {
+      await tester.drag(scrollable, const Offset(0, -300));
     }
     await tester.pump(const Duration(milliseconds: 100));
   } while (DateTime.now().isBefore(deadline));

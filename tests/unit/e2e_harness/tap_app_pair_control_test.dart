@@ -8,6 +8,43 @@ import '../../e2e/flutter/support/tap_app_pair_control.dart';
 import '../test_support.dart';
 
 void main() {
+  testWidgets('tap discovers the exact Handle beyond lazy list cache', (
+    tester,
+  ) async {
+    var selected = 0;
+    var other = 0;
+    const target = 'expected.handler.example';
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ListView(
+          children: [
+            for (var i = 0; i < 50; i++)
+              SizedBox(
+                height: 80,
+                child: AppSecondaryButton(
+                  label: 'Other Handle $i',
+                  onPressed: () => other++,
+                ),
+              ),
+            AppSecondaryButton(label: target, onPressed: () => selected++),
+          ],
+        ),
+      ),
+    );
+    final finder = find.widgetWithText(AppSecondaryButton, target);
+    expect(finder, findsNothing, reason: 'Target has not been built yet.');
+    await tapAppPairProductControl(
+      tester,
+      'selected-handle',
+      control: finder,
+      scrollable: find.byType(Scrollable).first,
+      timeout: const Duration(seconds: 5),
+    );
+    expect(selected, 1);
+    expect(other, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tap waits for a Cupertino action sheet to enter the viewport', (
     tester,
   ) async {

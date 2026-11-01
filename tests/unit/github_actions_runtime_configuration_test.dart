@@ -93,7 +93,7 @@ void main() {
       final pins = source
           .split('\n')
           .where(
-            (line) => line.contains('c483b51500058ffc6dac2e9db5517a5df0ce1262'),
+            (line) => line.contains('92576021650fb587203bdd856286f62a73bc71b2'),
           );
       expect(pins, hasLength(10));
       for (final line in pins) {
@@ -101,7 +101,7 @@ void main() {
         expect(
           line,
           contains(
-            "github.event.inputs.cli_ref || 'c483b51500058ffc6dac2e9db5517a5df0ce1262'",
+            "github.event.inputs.cli_ref || '92576021650fb587203bdd856286f62a73bc71b2'",
           ),
         );
         expect(line, isNot(contains('github.base_ref')));
@@ -120,9 +120,9 @@ void main() {
     final jobs = workflow['jobs'] as YamlMap;
     expect(
       jobs['remote-product']['if'],
-      "github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)",
+      r"${{ !inputs.package_smoke_run && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.validation_only)) }}",
     );
-    expect(jobs['validate'].containsKey('if'), isFalse);
+    expect(jobs['validate']['if'], r'${{ !inputs.package_smoke_run }}');
     expect(jobs['remote-product']['needs'], [
       'validate',
       'cross-repository-contracts',
@@ -192,7 +192,7 @@ void main() {
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
-    const pin = 'c483b51500058ffc6dac2e9db5517a5df0ce1262';
+    const pin = '92576021650fb587203bdd856286f62a73bc71b2';
     for (final name in [
       'validate',
       'cross-repository-contracts',
@@ -282,7 +282,7 @@ void main() {
     }.entries) {
       final job = jobs[entry.key] as YamlMap;
       expect(job.containsKey('needs'), isFalse);
-      expect(job.containsKey('if'), isFalse);
+      expect(job['if'], r'${{ !inputs.package_smoke_run }}');
       expect(job.containsKey('continue-on-error'), isFalse);
       final steps = (job['steps'] as YamlList).cast<YamlMap>().toList();
       expect(

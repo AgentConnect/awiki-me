@@ -13,7 +13,8 @@ class DesktopE2eOptions {
     this.configPath = _defaultDesktopE2eConfigPath,
     this.runId,
     this.e2eCase = DesktopE2eCase.smoke,
-  });
+    List<String> focusedCaseIds = const <String>[],
+  }) : focusedCaseIds = _validateFocusedCaseIds(e2eCase, focusedCaseIds);
 
   final bool dryRun;
   final bool prepareOnly;
@@ -22,6 +23,29 @@ class DesktopE2eOptions {
   final String configPath;
   final String? runId;
   final DesktopE2eCase e2eCase;
+  final List<String> focusedCaseIds;
+
+  List<String> get caseIds =>
+      focusedCaseIds.isEmpty ? e2eCase.caseIds : focusedCaseIds;
+
+  static List<String> _validateFocusedCaseIds(
+    DesktopE2eCase suite,
+    List<String> requested,
+  ) {
+    if (requested.isEmpty) return const <String>[];
+    if (suite != DesktopE2eCase.multiDeviceRemoteJoin ||
+        requested.toSet().length != requested.length ||
+        requested.any((id) => !suite.caseIds.contains(id))) {
+      throw E2eFailure(
+        '--case-id must select distinct declared multi-device-remote-join cases.',
+      );
+    }
+    final selected = requested.toSet();
+    if (selected.contains('DEVICE-JOIN-MESSAGE-CORE-E2E-001')) {
+      selected.add('DEVICE-JOIN-E2E-002');
+    }
+    return List<String>.unmodifiable(suite.caseIds.where(selected.contains));
+  }
 
   static DesktopE2eOptions parse(List<String> args) {
     var dryRun = false;
@@ -31,6 +55,7 @@ class DesktopE2eOptions {
     var configPath = _defaultDesktopE2eConfigPath;
     String? runId;
     var e2eCase = DesktopE2eCase.smoke;
+    final focusedCaseIds = <String>[];
 
     for (var index = 0; index < args.length; index += 1) {
       final arg = args[index];
@@ -43,6 +68,9 @@ class DesktopE2eOptions {
           break;
         case '--case':
           e2eCase = DesktopE2eCase.parse(_takeValue(args, ++index, '--case'));
+          break;
+        case '--case-id':
+          focusedCaseIds.add(_takeValue(args, ++index, '--case-id'));
           break;
         case '--dry-run':
           dryRun = true;
@@ -70,6 +98,7 @@ class DesktopE2eOptions {
       configPath: configPath,
       runId: runId,
       e2eCase: e2eCase,
+      focusedCaseIds: focusedCaseIds,
     );
   }
 
@@ -83,6 +112,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device
   dart run tests/e2e/runner.dart --case registration-domain-discovery
   dart run tests/e2e/runner.dart --case multi-device-remote-join
+  dart run tests/e2e/runner.dart --case multi-device-remote-join --case-id DEVICE-JOIN-E2E-002
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery-fresh
   dart run tests/e2e/runner.dart --case handle-recovery-local-data
@@ -617,7 +647,8 @@ enum DesktopE2eCase implements DesktopE2eCaseContract {
       'identity_deletion_recovery_guard' =>
         DesktopE2eCase.identityDeletionRecoveryGuard,
       'multi-device-app-pair-later-admin-grant' ||
-      'multi_device_app_pair_later_admin_grant' ||
+      'multi_device_app_pair_later_admin_grant' =>
+        DesktopE2eCase.multiDeviceAppPair,
       'pin-recovery' => DesktopE2eCase.pinRecovery,
       'multi-device-app-pair' ||
       'multi_device_app_pair' => DesktopE2eCase.multiDeviceAppPair,

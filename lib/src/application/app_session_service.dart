@@ -201,6 +201,7 @@ class ImCoreAppSessionService
 
   AppSession? _current;
   Future<void> _sessionTransitionTail = Future<void>.value();
+  AppSessionTransition? _activeDeviceMutationRefreshTransition;
 
   @override
   Future<AppSession?> restoreSession() {
@@ -491,7 +492,12 @@ class ImCoreAppSessionService
 
   @override
   Future<AppSession> refreshCurrentIdentityClientAfterDeviceMutation() {
-    final transition = _committedSessionTransition;
+    final refreshing = _activeDeviceMutationRefreshTransition;
+    final transition =
+        _committedSessionTransition ??
+        (refreshing != null && isLatestSessionTransition(refreshing)
+            ? refreshing
+            : null);
     return _runSessionTransition(() async {
       final current = _current;
       if (current == null ||
@@ -499,24 +505,31 @@ class ImCoreAppSessionService
           !isSessionTransitionCurrent(transition)) {
         throw StateError('identity_binding_refresh_unavailable');
       }
-      final realtimeWasRunning = _realtime?.isRunning ?? false;
-      final refreshed = await _activateIdentity(
-        current,
-        transition: transition,
-        allowTransientAuth: false,
-      );
-      if (!refreshed.authenticated) {
-        throw StateError('identity_binding_refresh_unauthenticated');
-      }
-      if (realtimeWasRunning) {
-        try {
-          await _realtime?.start();
-        } catch (_) {
-          // The identity client is already current. The App realtime
-          // supervisor owns connection recovery independently.
+      _activeDeviceMutationRefreshTransition = transition;
+      try {
+        final realtimeWasRunning = _realtime?.isRunning ?? false;
+        final refreshed = await _activateIdentity(
+          current,
+          transition: transition,
+          allowTransientAuth: false,
+        );
+        if (!refreshed.authenticated) {
+          throw StateError('identity_binding_refresh_unauthenticated');
+        }
+        if (realtimeWasRunning) {
+          try {
+            await _realtime?.start();
+          } catch (_) {
+            // The identity client is already current. The App realtime
+            // supervisor owns connection recovery independently.
+          }
+        }
+        return refreshed;
+      } finally {
+        if (identical(_activeDeviceMutationRefreshTransition, transition)) {
+          _activeDeviceMutationRefreshTransition = null;
         }
       }
-      return refreshed;
     });
   }
 
