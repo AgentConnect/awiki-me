@@ -82,6 +82,22 @@ try{
     throw 'Prepare the native Windows awiki-system-test venv for the owning Agent avatar fixture.'
   }
   if(-not $env:CARGO_BUILD_JOBS){$env:CARGO_BUILD_JOBS='2'}
+  if($Case -in @('full','multi-device-remote-join')){
+    $dshRoot=Join-Path $WorkspaceRoot 'dsh-awiki'
+    $pnpm=(Get-Command pnpm.cmd -CommandType Application -ErrorAction Stop).Source
+    if(-not (Test-Path -LiteralPath (Join-Path $dshRoot 'scripts/device-join-e2e.mjs'))){
+      throw 'The owning dsh-awiki Device Join driver is required for this suite.'
+    }
+    Push-Location $dshRoot
+    try{
+      & $env:AWIKI_E2E_NODE_BIN scripts/check-dependency-sources.mjs
+      if($LASTEXITCODE -ne 0){throw 'Prepare the selected DSH dependencies with its owning dependency workflow.'}
+      & $pnpm run prepare:test-native
+      if($LASTEXITCODE -ne 0){throw 'The selected native Windows DSH providers could not be loaded.'}
+      & $pnpm run build
+      if($LASTEXITCODE -ne 0){throw 'The current DSH Device Join host could not be built on Windows.'}
+    }finally{Pop-Location}
+  }
   $env:AWIKI_E2E_WINDOWS_PTY_BRIDGE=Join-Path $ProjectRoot 'tests/e2e/windows/pty_bridge.cjs'
   & $env:AWIKI_E2E_NODE_BIN $env:AWIKI_E2E_WINDOWS_PTY_BRIDGE --check *> $null
   if($LASTEXITCODE -ne 0){
