@@ -2539,6 +2539,8 @@ class _JoinCli {
     String? sas;
     var invalidOutput = false;
     var exitCode = -1;
+    var observedBytes = 0;
+    String? processFailure;
     try {
       process = await _processHost.startForeground(config.cliBin, <String>[
         '--format',
@@ -2567,14 +2569,16 @@ class _JoinCli {
       ]);
       try {
         exitCode = await process.exitCode.timeout(_remoteTimeout);
-      } on TimeoutException {
+      } on TimeoutException catch (error) {
+        processFailure = safeCliProcessFailureDiagnostic(error);
         process.kill(ProcessSignal.sigkill);
       }
       await outputDone;
       if (!invalidOutput && exitCode == 0) {
         sas = remoteMultiDeviceCliPollSas(transcript);
       }
-    } on Object {
+    } on Object catch (error) {
+      processFailure = safeCliProcessFailureDiagnostic(error);
       invalidOutput = true;
     } finally {
       if (process != null && exitCode < 0) {
@@ -2585,12 +2589,15 @@ class _JoinCli {
           // The in-memory transcript is scrubbed below.
         }
       }
+      observedBytes = transcript.length;
       transcript.fillRange(0, transcript.length, 0);
       transcript.clear();
     }
     if (invalidOutput || exitCode != 0 || !_validSas(sas ?? '')) {
       fail(
-        'The joining CLI did not expose its SAS through the foreground TTY.',
+        'The joining CLI did not expose its SAS through the foreground TTY '
+        '(exit=$exitCode, bytes=$observedBytes, invalidOutput=$invalidOutput, '
+        '${processFailure ?? 'no_process_exception'}).',
       );
     }
     return sas!;
@@ -2610,6 +2617,8 @@ class _JoinCli {
     var approvalSubmitted = false;
     var invalidOutput = false;
     var exitCode = -1;
+    var observedBytes = 0;
+    String? processFailure;
     try {
       process = await _processHost.startForeground(config.cliBin, <String>[
         '--format',
@@ -2663,7 +2672,8 @@ class _JoinCli {
       ]);
       try {
         exitCode = await process.exitCode.timeout(const Duration(minutes: 2));
-      } on TimeoutException {
+      } on TimeoutException catch (error) {
+        processFailure = safeCliProcessFailureDiagnostic(error);
         process.kill(ProcessSignal.sigkill);
       }
       await outputDone;
@@ -2672,7 +2682,8 @@ class _JoinCli {
       } on Object {
         // The child can close its TTY immediately after success.
       }
-    } on Object {
+    } on Object catch (error) {
+      processFailure = safeCliProcessFailureDiagnostic(error);
       invalidOutput = true;
     } finally {
       if (process != null && exitCode < 0) {
@@ -2683,6 +2694,7 @@ class _JoinCli {
           // The scrubbed transcript below is the only retained process state.
         }
       }
+      observedBytes = transcript.length;
       transcript.fillRange(0, transcript.length, 0);
       transcript.clear();
     }
@@ -2691,7 +2703,13 @@ class _JoinCli {
         !sasMatched ||
         !sasSubmitted ||
         !approvalSubmitted) {
-      fail('The foreground CLI member approval failed safely.');
+      fail(
+        'The foreground CLI member approval failed safely '
+        '(exit=$exitCode, bytes=$observedBytes, invalidOutput=$invalidOutput, '
+        'sasMatched=$sasMatched, sasSubmitted=$sasSubmitted, '
+        'approvalSubmitted=$approvalSubmitted, '
+        '${processFailure ?? 'no_process_exception'}).',
+      );
     }
   }
 
