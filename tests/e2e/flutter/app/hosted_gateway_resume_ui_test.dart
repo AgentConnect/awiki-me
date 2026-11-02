@@ -36,10 +36,10 @@ void main() {
         'AWIKI_HOSTED_FIXTURE_PATH',
         compiledValue: '',
       );
-      if (!Platform.isMacOS ||
-          !root.startsWith('/') ||
+      if (!(Platform.isMacOS || Platform.isWindows) ||
+          !Directory(root).isAbsolute ||
           !Directory(root).existsSync()) {
-        fail('hosted_requires_retained_mac_device');
+        fail('hosted_requires_retained_desktop_device');
       }
       AppBootstrap? bootstrap;
       HostedGatewayFixture? fixture;

@@ -1,5 +1,7 @@
 library desktop_cli_peer_e2e;
 
+import '../../desktop_subprocess_environment.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

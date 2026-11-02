@@ -1,12 +1,29 @@
 part of '../../runner.dart';
 
 extension HostedGatewayJoinScenario on DesktopE2eRunner {
+  Future<void> _verifyHostedDesktopNativeArtifact() async {
+    if (platform == DesktopE2ePlatform.windows) {
+      if (!options.dryRun && !commands.dryRun) {
+        await WindowsImCoreArtifactGuard(projectRoot: root).ensure(
+          rebuildIfStale: !preparedArtifactsRequired(Platform.environment),
+        );
+      }
+      return;
+    }
+    await commands.run('bash', const [
+      'scripts/verify_im_core_native_artifact.sh',
+    ], timeout: const Duration(minutes: 1));
+  }
+
   Future<void> _runHostedGatewayResume() async {
     final fixture = Platform.environment['AWIKI_HOSTED_FIXTURE_PATH'] ?? '';
     final retained =
         Platform.environment['AWIKI_HOSTED_RESUME_STATE_ROOT'] ?? '';
-    if (platform != DesktopE2ePlatform.macos) {
-      throw E2eFailure('Hosted Gateway resume requires macOS.');
+    if (platform != DesktopE2ePlatform.macos &&
+        platform != DesktopE2ePlatform.windows) {
+      throw E2eFailure(
+        'Hosted Gateway resume requires a supported desktop target.',
+      );
     }
     if (!options.dryRun && !options.prepareOnly) {
       final allowed = Directory('.e2e/hosted-gateway-join').absolute.path;
@@ -14,10 +31,11 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
           !File(fixture).existsSync() ||
           !Directory(retained).isAbsolute ||
           !Directory(retained).existsSync() ||
-          !Directory(
-            retained,
-          ).resolveSymbolicLinksSync().startsWith('$allowed/') ||
-          !retained.endsWith('/app/joining-device')) {
+          !desktopPathIsWithin(
+            allowed,
+            Directory(retained).resolveSymbolicLinksSync(),
+          ) ||
+          !normalizeDesktopPath(retained).endsWith('/app/joining-device')) {
         throw E2eFailure(
           'Select an existing isolated hosted joining-device root.',
         );
@@ -29,9 +47,7 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
     }
     _addRuntimeSecret(fixture);
     _addRuntimeSecret(retained);
-    await commands.run('bash', const [
-      'scripts/verify_im_core_native_artifact.sh',
-    ], timeout: const Duration(minutes: 1));
+    await _verifyHostedDesktopNativeArtifact();
     if (options.dryRun) return;
     final artifact = await _prepareIntegrationExecutable(
       name: 'hosted-gateway-resume',
@@ -56,9 +72,10 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
     final emailOnly = options.e2eCase == DesktopE2eCase.hostedGatewayEmailJoin;
     final phoneFixture =
         Platform.environment['AWIKI_HOSTED_PHONE_FIXTURE_PATH']?.trim() ?? '';
-    if (platform != DesktopE2ePlatform.macos) {
+    if (platform != DesktopE2ePlatform.macos &&
+        platform != DesktopE2ePlatform.windows) {
       throw E2eFailure(
-        'Hosted Gateway App acceptance currently requires macOS.',
+        'Hosted Gateway App acceptance requires a supported desktop target.',
       );
     }
     if (!options.dryRun && !options.prepareOnly) {
@@ -87,9 +104,7 @@ extension HostedGatewayJoinScenario on DesktopE2eRunner {
     _addRuntimeSecret(fixture);
     _addRuntimeSecret(phoneFixture);
     await commands.requireExecutable('ssh');
-    await commands.run('bash', const [
-      'scripts/verify_im_core_native_artifact.sh',
-    ], timeout: const Duration(minutes: 1));
+    await _verifyHostedDesktopNativeArtifact();
     if (options.dryRun) {
       _line(
         'Plan: build isolated hosted join App; execute only against mcp-adapt.anpclaw.com.',

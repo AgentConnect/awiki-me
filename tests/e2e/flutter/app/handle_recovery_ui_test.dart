@@ -14,6 +14,9 @@
 
 import 'dart:async';
 import '../../delete_isolated_directory.dart';
+import '../../desktop_subprocess_environment.dart';
+import '../../desktop_tool_executable.dart';
+import '../../protected_files.dart';
 
 import '../support/enter_existing_account.dart';
 import '../support/confirm_local_credential_deletion.dart';
@@ -3294,7 +3297,9 @@ PlainDirectMessagingService _plainDirectMessaging(MessagingService messaging) {
 }
 
 Future<File> _writeContinuityHermesAcp(_ContinuityDaemonConfig config) async {
-  final script = File('${config.stateRoot}/acp-home/.local/bin/hermes');
+  final script = File(
+    '${config.stateRoot}/acp-home/.local/bin/hermes${Platform.isWindows ? '.py' : ''}',
+  );
   await script.parent.create(recursive: true);
   await script.writeAsString('''#!/usr/bin/env python3
 """Offline native Hermes ACP peer; session state lives only in the test home."""
@@ -3376,6 +3381,21 @@ for line in sys.stdin:
     if 'id' in request:
         emit({'jsonrpc': '2.0', 'id': request['id'], 'result': result})
 ''', flush: true);
+  if (Platform.isWindows) {
+    final python = desktopToolExecutable('python3');
+    if (RegExp(r'["%\r\n]').hasMatch(python) ||
+        RegExp(r'["%\r\n]').hasMatch(script.path)) {
+      throw StateError('Unsafe offline ACP fixture executable path');
+    }
+    final wrapper = File('${script.parent.path}/hermes.cmd');
+    await wrapper.writeAsString(
+      '@echo off\r\nset PYTHONUTF8=1\r\n"$python" "${script.path}" %*\r\n',
+      flush: true,
+    );
+    protectE2ePathSync(script.path);
+    protectE2ePathSync(wrapper.path);
+    return wrapper;
+  }
   final chmod = await Process.run('chmod', ['700', script.path]);
   if (chmod.exitCode != 0) {
     throw StateError('Cannot prepare offline ACP fixture');
@@ -3386,13 +3406,17 @@ for line in sys.stdin:
 Map<String, String> _continuityDaemonEnvironment(
   _RemoteRecoveryRunConfig config, {
   File? gatewayScript,
-}) => <String, String>{
+}) => desktopSubprocessEnvironment(<String, String>{
   'AWIKI_DAEMON_SERVICE_BASE_URL': config.baseUrl,
   'AWIKI_DAEMON_USER_SERVICE_BASE_URL': config.userServiceUrl,
   'AWIKI_DAEMON_MESSAGE_SERVICE_BASE_URL': config.messageServiceUrl,
   'AWIKI_DAEMON_DID_DOMAIN': config.didDomain,
   'AWIKI_DAEMON_ALLOW_PLAIN_CONTROL': '1',
   if (gatewayScript != null) 'HOME': gatewayScript.parent.parent.parent.path,
+  if (gatewayScript == null && Platform.isWindows)
+    'HOME': (Directory(
+      '${config.appStateRoot}/daemon-fixture-home',
+    )..createSync(recursive: true)).path,
   'AWIKI_DAEMON_AGENT_PROXY_MODE': 'inherit',
   for (final key in [
     'PATH',
@@ -3402,7 +3426,7 @@ Map<String, String> _continuityDaemonEnvironment(
     'AWIKI_IM_CORE_VAULT_ROOT_KEY_B64',
   ])
     if (Platform.environment[key] != null) key: Platform.environment[key]!,
-};
+});
 
 class _RunningContinuityDaemon {
   _RunningContinuityDaemon._(
@@ -3473,6 +3497,25 @@ class _RunningContinuityDaemon {
   }
 
   Future<void> stop() async {
+    if (Platform.isWindows) {
+      try {
+        await _process.exitCode.timeout(Duration.zero);
+      } on TimeoutException {
+        // The process is still owned and live: kill its offline ACP children
+        // together, so they cannot retain files after fixture disposal.
+        await Process.run('taskkill.exe', [
+          '/PID',
+          '${_process.pid}',
+          '/T',
+          '/F',
+        ]);
+        await _process.exitCode.timeout(const Duration(seconds: 10));
+      } finally {
+        await _stdoutSubscription.cancel();
+        await _stderrSubscription.cancel();
+      }
+      return;
+    }
     if (!_process.kill(ProcessSignal.sigterm)) {
       _process.kill(ProcessSignal.sigkill);
     }
@@ -5977,9 +6020,7 @@ Future<void> _writeFreshRestartHandoff({
   final temporary = File('${file.path}.tmp');
   await temporary.writeAsString(jsonEncode(payload), flush: true);
   await temporary.rename(file.path);
-  if (!Platform.isWindows) {
-    await Process.run('chmod', <String>['600', file.path]);
-  }
+  protectE2ePathSync(file.path);
 }
 
 Future<void> _runFreshRecoveryRestart(WidgetTester tester) async {
@@ -6210,9 +6251,7 @@ Future<void> _writeCrashCutHandoff(
   final temporary = File('$path.tmp');
   await temporary.writeAsString(jsonEncode(handoff.toJson()), flush: true);
   await temporary.rename(path);
-  if (!Platform.isWindows) {
-    await Process.run('chmod', <String>['600', path]);
-  }
+  protectE2ePathSync(path);
 }
 
 Future<void> _writeRegistrationJoinResumeHandoff({
@@ -6245,9 +6284,7 @@ Future<void> _writeRegistrationJoinResumeHandoff({
   final temporary = File('${file.path}.tmp');
   await temporary.writeAsString(jsonEncode(handoff.toJson()), flush: true);
   await temporary.rename(file.path);
-  if (!Platform.isWindows) {
-    await Process.run('chmod', <String>['600', file.path]);
-  }
+  protectE2ePathSync(file.path);
 }
 
 ProviderContainer _recoveryUiContainer(WidgetTester tester) =>

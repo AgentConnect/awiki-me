@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import '../../protected_files.dart';
 
 const hostedDomain = 'mcp-adapt.anpclaw.com';
 const hostedOrigin = 'https://$hostedDomain';
@@ -47,8 +48,7 @@ class HostedGatewayFixture {
 
   static Future<HostedGatewayFixture> load(String path) async {
     final file = File(path);
-    final stat = await file.stat();
-    if (await FileSystemEntity.isLink(path) || stat.mode & 0x3f != 0) {
+    if (!isPrivateE2eFile(file)) {
       throw StateError('hosted_fixture_permissions');
     }
     final value = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
@@ -74,8 +74,7 @@ class HostedGatewayFixture {
   static Future<({HostedGatewayFixture gateway, String code})>
   loadPhoneRegistration(String path) async {
     final file = File(path);
-    final stat = await file.stat();
-    if (await FileSystemEntity.isLink(path) || stat.mode & 0x3f != 0) {
+    if (!isPrivateE2eFile(file)) {
       throw StateError('hosted_fixture_permissions');
     }
     final value = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
@@ -177,7 +176,7 @@ class HostedGatewayFixture {
     Map<String, dynamic>? body,
     int expectedStatus = 200,
   ]) async {
-    if (!RegExp(r'^/_awiki/mcp/connect(?:/[a-z-]+)?$').hasMatch(path)) {
+    if (!RegExp(r'^/connect(?:/[a-z-]+)?$').hasMatch(path)) {
       throw StateError('hosted_path_invalid');
     }
     final headers = {
@@ -207,7 +206,7 @@ class HostedGatewayFixture {
       }
     }
     if (response.statusCode != expectedStatus) {
-      if (path == '/_awiki/mcp/connect/pair-device' &&
+      if (path == '/connect/pair-device' &&
           body?['refresh'] == true &&
           response.statusCode == 409) {
         final value = jsonDecode(utf8.decode(bytes));
@@ -230,7 +229,7 @@ class HostedGatewayFixture {
       }
       _cookie = parsed.value;
     }
-    if (path == '/_awiki/mcp/connect') return {};
+    if (path == '/connect') return {};
     return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 
@@ -239,15 +238,15 @@ class HostedGatewayFixture {
     Map<String, dynamic> body, {
     int expectedStatus = 200,
   }) async {
-    final state = await request('/_awiki/mcp/connect/state');
-    return request('/_awiki/mcp/connect/$action', {
+    final state = await request('/connect/state');
+    return request('/connect/$action', {
       ...body,
       'csrf': state['csrf'],
     }, expectedStatus);
   }
 
   Future<void> login() async {
-    await request('/_awiki/mcp/connect');
+    await request('/connect');
     final code = await otp(
       'gateway',
       sha256.convert(utf8.encode(_cookie)).toString(),
@@ -257,7 +256,7 @@ class HostedGatewayFixture {
       'contact': contact,
       'code': code,
     });
-    if ((await request('/_awiki/mcp/connect/state'))['logged_in'] != true) {
+    if ((await request('/connect/state'))['logged_in'] != true) {
       throw StateError('hosted_login_failed');
     }
   }

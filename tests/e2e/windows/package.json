@@ -1,0 +1,9 @@
+{
+  "name": "awiki-windows-e2e-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Native ConPTY transport for the existing AWiki desktop E2E CLI flows",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test pty_bridge.test.cjs" },
+  "dependencies": { "node-pty": "1.1.0" }
+}

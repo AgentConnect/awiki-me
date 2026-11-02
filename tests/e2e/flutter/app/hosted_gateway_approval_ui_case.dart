@@ -41,11 +41,11 @@ void registerHostedGatewayApprovalCase() {
           'AWIKI_HOSTED_APP_STATE_ROOT',
         ),
       );
-      if (!Platform.isMacOS ||
-          !path.startsWith('/') ||
-          !root.startsWith('/') ||
+      if (!(Platform.isMacOS || Platform.isWindows) ||
+          !File(path).isAbsolute ||
+          !Directory(root).isAbsolute ||
           await Directory('$root-approval').exists()) {
-        fail('hosted_approval_requires_fresh_mac_scope');
+        fail('hosted_approval_requires_fresh_desktop_scope');
       }
       AppBootstrap? bootstrap;
       HostedGatewayFixture? gateway;

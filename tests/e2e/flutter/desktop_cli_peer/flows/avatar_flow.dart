@@ -235,11 +235,11 @@ Future<void> _uploadPeerAvatarFixture(_DesktopCliPeerSmokeConfig config) async {
   final process = await Process.start(
     binary,
     const [],
-    environment: {
+    environment: desktopSubprocessEnvironment({
       'HOME': config.cliHome,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
       'AWIKI_CLI_UPDATE_CACHE_ONLY': '1',
-    },
+    }),
     includeParentEnvironment: false,
   );
   unawaited(process.stderr.drain<void>());

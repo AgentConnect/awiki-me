@@ -121,6 +121,11 @@ build/native-smoke CI remains authoritative for that lane. The Mac/Linux E2E
 runner must not silently treat Windows as an unknown platform or delete that
 gate.
 
+Windows native desktop E2E uses `scripts/run_windows_e2e.ps1`; see
+[Windows native E2E](docs/windows-native-e2e.md) for native Daemon/ConPTY/ACP,
+private fixtures, full matrix and platform-specific evidence boundaries. Keep
+all client test processes local when the Windows lane is requested.
+
 Use focused unit/provider/widget coverage for App behavior. Review native/bootstrap
 smoke coverage when routing, platform bindings, native plugins or visual surfaces
 change, and product E2E when real backend, CLI peer, account/OTP, multi-client or

@@ -76,7 +76,9 @@ final class E2eAppArtifactSpecManifest {
       }
       final platforms = _uniqueStrings(entry, 'supportedPlatforms');
       if (platforms.isEmpty ||
-          platforms.any((value) => !const {'macos', 'linux'}.contains(value))) {
+          platforms.any(
+            (value) => !const {'macos', 'linux', 'windows'}.contains(value),
+          )) {
         throw FormatException(
           'App artifact spec has invalid supportedPlatforms: $name',
         );

@@ -53,12 +53,12 @@ void main() {
           'AWIKI_HOSTED_APP_STATE_ROOT',
         ),
       );
-      if (!Platform.isMacOS ||
+      if (!(Platform.isMacOS || Platform.isWindows) ||
           fixturePath.isEmpty ||
           stateRoot.isEmpty ||
-          !stateRoot.startsWith('/') ||
+          !Directory(stateRoot).isAbsolute ||
           await Directory(stateRoot).exists()) {
-        fail('hosted_requires_mac_and_fresh_explicit_state');
+        fail('hosted_requires_supported_desktop_and_fresh_explicit_state');
       }
       AppBootstrap? bootstrap;
       HostedGatewayFixture? fixture;

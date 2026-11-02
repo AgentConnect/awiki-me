@@ -1,5 +1,5 @@
 // [INPUT]: One E2E target, isolated runtime/artifact roots, a reusable role build root, bundle identity, and stable Dart defines.
-// [OUTPUT]: An isolated Debug macOS or Linux App bundle plus a machine-readable artifact manifest.
+// [OUTPUT]: An isolated Debug desktop App bundle plus a machine-readable artifact manifest.
 // [POS]: Reusable incremental build boundary for E2E modes that need concurrently runnable App processes.
 
 import 'dart:convert';
@@ -9,25 +9,32 @@ import 'package:crypto/crypto.dart';
 
 import '../tests/e2e/app_artifact_spec.dart';
 import '../tests/e2e/host_platform.dart';
+import '../tests/e2e/desktop_tool_executable.dart';
+import '../tests/e2e/desktop_paths.dart';
 import 'ensure_linux_im_core.dart';
+import 'ensure_windows_im_core.dart';
+import 'windows_e2e_workspace.dart';
 
 enum IsolatedE2eAppPlatform {
   macos,
-  linux;
+  linux,
+  windows;
 
   static IsolatedE2eAppPlatform parse(String value) => switch (value) {
     'macos' => IsolatedE2eAppPlatform.macos,
     'linux' => IsolatedE2eAppPlatform.linux,
+    'windows' => IsolatedE2eAppPlatform.windows,
     _ => throw const IsolatedE2eAppBuildException(
-      'The isolated App platform must be macos or linux.',
+      'The isolated App platform must be macos, linux, or windows.',
     ),
   };
 
   static IsolatedE2eAppPlatform fromHost() {
     if (Platform.isMacOS) return IsolatedE2eAppPlatform.macos;
     if (Platform.isLinux) return IsolatedE2eAppPlatform.linux;
+    if (Platform.isWindows) return IsolatedE2eAppPlatform.windows;
     throw const IsolatedE2eAppBuildException(
-      'Isolated E2E App builds require macOS or Linux.',
+      'Isolated E2E App builds require macOS, Linux, or Windows.',
     );
   }
 }
@@ -218,8 +225,27 @@ class IsolatedE2eAppBuildRequest {
     );
   }
 
+  Directory get windowsSourceProject {
+    final slot = sha256
+        .convert(utf8.encode('$bundleId\n$target'))
+        .toString()
+        .substring(0, 10);
+    return Directory('${projectRoot.path}/.e2e/wb/$slot/s');
+  }
+
   IsolatedE2eAppBuildPlan toPlan({String? processArchitecture}) {
-    final buildDirectory = Directory('${workRoot.path}/flutter-build');
+    if (platform == IsolatedE2eAppPlatform.windows &&
+        (_pathsOverlap(windowsSourceProject.path, stateRoot.path) ||
+            _pathsOverlap(windowsSourceProject.path, artifactRoot.path))) {
+      throw const IsolatedE2eAppBuildException(
+        'Windows generated sources cannot overlap runtime state or exported artifacts.',
+      );
+    }
+    final buildDirectory = Directory(
+      platform == IsolatedE2eAppPlatform.windows
+          ? '${windowsSourceProject.path}/build'
+          : '${workRoot.path}/flutter-build',
+    );
     final flutterConfigDirectory = Directory('${workRoot.path}/flutter-config');
     final overrideConfig = File('${workRoot.path}/AppPair.xcconfig');
     final sourceApp = switch (platform) {
@@ -231,6 +257,9 @@ class IsolatedE2eAppBuildRequest {
         '${_flutterLinuxArchitecture(processArchitecture ?? 'x86_64')}/'
         'debug/bundle',
       ),
+      IsolatedE2eAppPlatform.windows => Directory(
+        '${buildDirectory.path}/windows/x64/runner/Debug',
+      ),
     };
     final artifactApp = switch (platform) {
       IsolatedE2eAppPlatform.macos => Directory(
@@ -239,20 +268,28 @@ class IsolatedE2eAppBuildRequest {
       IsolatedE2eAppPlatform.linux => Directory(
         '${artifactRoot.path}/AWikiMe-$name-linux',
       ),
+      IsolatedE2eAppPlatform.windows => Directory(
+        '${artifactRoot.path}/AWikiMe-$name-windows',
+      ),
     };
     return IsolatedE2eAppBuildPlan(
       buildDirectory: buildDirectory,
-      flutterBuildDirectorySetting: buildDirectory.path.substring(
-        projectRoot.path.length + 1,
-      ),
+      flutterBuildDirectorySetting: platform == IsolatedE2eAppPlatform.windows
+          ? 'build'
+          : buildDirectory.path.substring(projectRoot.path.length + 1),
       flutterConfigDirectory: flutterConfigDirectory,
-      flutterSettingsFile: File('${flutterConfigDirectory.path}/settings'),
+      flutterSettingsFile: File(
+        '${flutterConfigDirectory.path}/'
+        '${platform == IsolatedE2eAppPlatform.windows ? '.flutter_settings' : 'settings'}',
+      ),
       overrideConfig: overrideConfig,
       sourceApp: sourceApp,
       artifactApp: artifactApp,
       executable: File(
         platform == IsolatedE2eAppPlatform.macos
             ? '${artifactApp.path}/Contents/MacOS/AWikiMe'
+            : platform == IsolatedE2eAppPlatform.windows
+            ? '${artifactApp.path}/AWikiMe.exe'
             : '${artifactApp.path}/awiki_me',
       ),
       manifest: File('${artifactRoot.path}/$name.json'),
@@ -451,6 +488,8 @@ class IsolatedE2eAppBuilder {
           'enable-macos-desktop': true,
         if (request.platform == IsolatedE2eAppPlatform.linux)
           'enable-linux-desktop': true,
+        if (request.platform == IsolatedE2eAppPlatform.windows)
+          'enable-windows-desktop': true,
       }),
       flush: true,
     );
@@ -461,6 +500,39 @@ class IsolatedE2eAppBuilder {
       );
     }
 
+    var buildProject = request.projectRoot;
+    if (request.platform == IsolatedE2eAppPlatform.windows) {
+      if (hostPlatform.processArchitecture != 'x86_64') {
+        throw const IsolatedE2eAppBuildException(
+          'Windows E2E requires the native x64 Flutter and IM Core toolchain.',
+        );
+      }
+      buildProject = await prepareWindowsE2eWorkspace(
+        projectRoot: request.projectRoot,
+        destination: request.windowsSourceProject,
+        bundleId: request.bundleId,
+        name: request.name,
+      );
+      final packages = await Process.run(
+        desktopToolExecutable(request.flutterBin),
+        const ['pub', 'get', '--enforce-lockfile'],
+        workingDirectory: buildProject.path,
+        environment: {
+          ...Platform.environment,
+          'APPDATA': plan.flutterConfigDirectory.path,
+          'PUB_HOSTED_URL':
+              Platform.environment['PUB_HOSTED_URL'] ??
+              'https://mirrors.tuna.tsinghua.edu.cn/dart-pub',
+        },
+      );
+      if (packages.exitCode != 0) {
+        throw IsolatedE2eAppBuildException(
+          'Windows E2E dependency preparation failed.${_commandFailureTail(packages)}',
+        );
+      }
+      verifyWindowsSnapshotDependencies(request.projectRoot, buildProject);
+    }
+
     final linuxNativeAssetsLink = prepareIsolatedLinuxNativeAssetsCompatibility(
       projectRoot: request.projectRoot,
       buildDirectory: plan.buildDirectory,
@@ -469,9 +541,9 @@ class IsolatedE2eAppBuilder {
     late final ProcessResult build;
     try {
       build = await Process.run(
-        request.flutterBin,
+        desktopToolExecutable(request.flutterBin),
         plan.flutterArguments,
-        workingDirectory: request.projectRoot.path,
+        workingDirectory: buildProject.path,
         environment: <String, String>{
           ...Platform.environment,
           'LANG': request.platform == IsolatedE2eAppPlatform.macos
@@ -480,7 +552,10 @@ class IsolatedE2eAppBuilder {
           'LC_ALL': request.platform == IsolatedE2eAppPlatform.macos
               ? 'en_US.UTF-8'
               : 'C.UTF-8',
-          'XDG_CONFIG_HOME': plan.flutterConfigDirectory.path,
+          if (request.platform == IsolatedE2eAppPlatform.windows)
+            'APPDATA': plan.flutterConfigDirectory.path
+          else
+            'XDG_CONFIG_HOME': plan.flutterConfigDirectory.path,
           if (request.platform == IsolatedE2eAppPlatform.macos)
             'XCODE_XCCONFIG_FILE': plan.overrideConfig.path,
         },
@@ -501,17 +576,12 @@ class IsolatedE2eAppBuilder {
     if (plan.artifactApp.existsSync()) {
       plan.artifactApp.deleteSync(recursive: true);
     }
-    final copy = request.platform == IsolatedE2eAppPlatform.macos
-        ? await Process.run('/usr/bin/ditto', <String>[
-            plan.sourceApp.path,
-            plan.artifactApp.path,
-          ])
-        : await Process.run('/bin/cp', <String>[
-            '-a',
-            plan.sourceApp.path,
-            plan.artifactApp.path,
-          ]);
-    if (copy.exitCode != 0 || !plan.executable.existsSync()) {
+    await copyIsolatedAppBundle(
+      source: plan.sourceApp,
+      destination: plan.artifactApp,
+      platform: request.platform,
+    );
+    if (!plan.executable.existsSync()) {
       throw IsolatedE2eAppBuildException(
         'The isolated App artifact copy failed for ${request.name}.',
       );
@@ -525,6 +595,18 @@ class IsolatedE2eAppBuilder {
           await fileSha256(bundledCore) != await fileSha256(layout.artifact)) {
         throw const IsolatedE2eAppBuildException(
           'The isolated Linux App contains a stale IM Core shared library.',
+        );
+      }
+    }
+    if (request.platform == IsolatedE2eAppPlatform.windows) {
+      final layout = await WindowsImCoreLayout.resolve(request.projectRoot);
+      final bundled = File('${plan.artifactApp.path}/awiki_im_core.dll');
+      if (!bundled.existsSync() ||
+          await windowsFileSha256(bundled) !=
+              await windowsFileSha256(layout.artifact) ||
+          windowsPeMachine(bundled.readAsBytesSync()) != 0x8664) {
+        throw const IsolatedE2eAppBuildException(
+          'The isolated Windows App contains a stale or non-x64 SDK.',
         );
       }
     }
@@ -647,6 +729,26 @@ Future<E2eAppCachePruneReport> requireE2eBuildDiskBudget(
 }
 
 Future<int> e2eBuildAvailableDiskBytes(Directory projectRoot) async {
+  if (Platform.isWindows) {
+    final result = await Process.run(
+      'powershell.exe',
+      <String>[
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        r'$root = [IO.Path]::GetPathRoot($env:AWIKI_E2E_DISK_PATH); '
+            r'([IO.DriveInfo]::new($root)).AvailableFreeSpace',
+      ],
+      environment: {'AWIKI_E2E_DISK_PATH': projectRoot.absolute.path},
+    ).timeout(const Duration(seconds: 10));
+    final available = int.tryParse(result.stdout.toString().trim());
+    if (result.exitCode != 0 || available == null || available < 0) {
+      throw const IsolatedE2eAppBuildException(
+        'Available Windows disk space could not be measured.',
+      );
+    }
+    return available;
+  }
   final result = await Process.run('df', <String>['-Pk', projectRoot.path]);
   if (result.exitCode != 0) {
     throw const IsolatedE2eAppBuildException(
@@ -755,7 +857,7 @@ Iterable<Directory> _isolatedArtifactCacheEntries(Directory projectRoot) sync* {
   final keyPattern = RegExp(r'^[0-9a-f]{64}$');
   for (final platform
       in cache.listSync(followLinks: false).whereType<Directory>()) {
-    if (!const <String>{'linux', 'macos'}.contains(
+    if (!const <String>{'linux', 'macos', 'windows'}.contains(
       platform.uri.pathSegments.where((segment) => segment.isNotEmpty).last,
     )) {
       continue;
@@ -789,6 +891,20 @@ Future<int> _directoryBytes(Directory directory) async {
 }
 
 Future<bool> _processExists(int processId) async {
+  if (Platform.isWindows) {
+    final result = await Process.run('tasklist.exe', <String>[
+      '/FI',
+      'PID eq $processId',
+      '/FO',
+      'CSV',
+      '/NH',
+    ]);
+    return result.exitCode == 0 &&
+        RegExp(
+          '^"[^"\\r\\n]+","$processId",',
+          multiLine: true,
+        ).hasMatch(result.stdout.toString());
+  }
   final result = await Process.run('/bin/kill', <String>['-0', '$processId']);
   return result.exitCode == 0;
 }
@@ -809,6 +925,8 @@ IsolatedE2eAppArtifact _isolatedArtifact({
   final executable = File(
     request.platform == IsolatedE2eAppPlatform.macos
         ? '${selectedApp.path}/Contents/MacOS/AWikiMe'
+        : request.platform == IsolatedE2eAppPlatform.windows
+        ? '${selectedApp.path}/AWikiMe.exe'
         : '${selectedApp.path}/awiki_me',
   );
   return IsolatedE2eAppArtifact(
@@ -831,6 +949,8 @@ IsolatedE2eAppArtifact _isolatedArtifact({
     ),
     executableRelativePath: request.platform == IsolatedE2eAppPlatform.macos
         ? 'Contents/MacOS/AWikiMe'
+        : request.platform == IsolatedE2eAppPlatform.windows
+        ? 'AWikiMe.exe'
         : 'awiki_me',
     consumerSuites: List<String>.unmodifiable(request.consumerSuites),
     compileKeyPayload: Map<String, Object?>.unmodifiable(compileKeyPayload),
@@ -858,10 +978,11 @@ Future<IsolatedE2eAppBuildIdentity> isolatedBuildIdentity({
   required IsolatedE2eAppBuildRequest request,
   required E2eHostPlatform hostPlatform,
 }) async {
-  final flutter = await Process.run(request.flutterBin, const <String>[
-    '--version',
-    '--machine',
-  ], workingDirectory: request.projectRoot.path);
+  final flutter = await Process.run(
+    desktopToolExecutable(request.flutterBin),
+    const <String>['--version', '--machine'],
+    workingDirectory: request.projectRoot.path,
+  );
   if (flutter.exitCode != 0) {
     throw const IsolatedE2eAppBuildException(
       'Flutter toolchain identity is unavailable.',
@@ -884,6 +1005,14 @@ Future<IsolatedE2eAppBuildIdentity> isolatedBuildIdentity({
     final layout = await LinuxImCoreLayout.resolve(request.projectRoot);
     nativeCoreSha256 = await fileSha256(layout.artifact);
     nativeCoreProvenanceSha256 = await fileSha256(layout.manifest);
+  } else if (request.platform == IsolatedE2eAppPlatform.windows) {
+    final current = await WindowsImCoreArtifactGuard(
+      projectRoot: request.projectRoot,
+    ).ensure(rebuildIfStale: false);
+    nativeCoreSha256 = current.sha256;
+    nativeCoreProvenanceSha256 = await windowsFileSha256(
+      current.layout.manifest,
+    );
   } else if (request.platform == IsolatedE2eAppPlatform.macos) {
     final nativeLibraries =
         Directory(
@@ -982,7 +1111,9 @@ Map<String, Object?> isolatedCompileKeyPayload({
   required String rustcVersion,
 }) => <String, Object?>{
   'schemaVersion': 1,
-  'cacheContractVersion': 4,
+  'cacheContractVersion': request.platform == IsolatedE2eAppPlatform.windows
+      ? 5
+      : 4,
   'target': request.target,
   'bundleId': request.bundleId,
   'platform': request.platform.name,
@@ -1027,11 +1158,9 @@ String _projectRelativePath({
   required String entityPath,
   required String label,
 }) {
-  final rootPath = root.absolute.path;
-  final absolute = entityPath.startsWith('/')
-      ? entityPath
-      : '${Directory.current.absolute.path}/$entityPath';
-  if (!absolute.startsWith('$rootPath/')) {
+  final rootPath = normalizeDesktopPath(root.absolute.path);
+  final absolute = normalizeDesktopPath(File(entityPath).absolute.path);
+  if (!desktopPathIsWithin(rootPath, absolute)) {
     throw IsolatedE2eAppBuildException(
       '$label must remain inside the App project root.',
     );
@@ -1085,6 +1214,12 @@ Future<String> trackedBuildInputsSha256(
     'pubspec.yaml',
     'pubspec.lock',
     'pubspec_overrides.yaml',
+    if (platform == IsolatedE2eAppPlatform.windows) ...[
+      'tool/isolated_e2e_app_builder.dart',
+      'tool/windows_e2e_workspace.dart',
+      'tool/ensure_windows_im_core.dart',
+      'tests/e2e/desktop_tool_executable.dart',
+    ],
   ], workingDirectory: projectRoot.path);
   if (listed.exitCode != 0) {
     throw const IsolatedE2eAppBuildException(
@@ -1147,13 +1282,18 @@ Future<List<String>> transitiveLocalDartInputsSha256Paths(
       if (reference.startsWith('dart:') || reference.startsWith('package:')) {
         continue;
       }
-      final resolved = File.fromUri(file.uri.resolve(reference)).absolute.path;
-      if (resolved != root && !resolved.startsWith('$root/')) {
+      final resolved = normalizeDesktopPath(
+        File.fromUri(file.uri.resolve(reference)).absolute.path,
+      );
+      if (resolved != normalizeDesktopPath(root) &&
+          !desktopPathIsWithin(root, resolved)) {
         throw const IsolatedE2eAppBuildException(
           'App target dependency escapes the project root.',
         );
       }
-      final dependency = resolved.substring(root.length + 1);
+      final dependency = resolved.substring(
+        normalizeDesktopPath(root).length + 1,
+      );
       if (!visited.contains(dependency)) pending.add(dependency);
     }
   }
@@ -1286,6 +1426,8 @@ _restoreIsolatedArtifactCache({
   final cachedExecutable = File(
     request.platform == IsolatedE2eAppPlatform.macos
         ? '${cachedApp.path}/Contents/MacOS/AWikiMe'
+        : request.platform == IsolatedE2eAppPlatform.windows
+        ? '${cachedApp.path}/AWikiMe.exe'
         : '${cachedApp.path}/awiki_me',
   );
   if (!cachedExecutable.existsSync() ||
@@ -1323,7 +1465,7 @@ Future<Directory> _storeIsolatedArtifactCache({
   temporary.createSync();
   final cachedApp = Directory('${temporary.path}/app');
   try {
-    await _copyAppDirectory(
+    await copyIsolatedAppBundle(
       source: plan.artifactApp,
       destination: cachedApp,
       platform: request.platform,
@@ -1381,12 +1523,38 @@ void _deleteBuildScratch(IsolatedE2eAppBuildPlan plan) {
   if (plan.overrideConfig.existsSync()) plan.overrideConfig.deleteSync();
 }
 
-Future<void> _copyAppDirectory({
+Future<void> copyIsolatedAppBundle({
   required Directory source,
   required Directory destination,
   required IsolatedE2eAppPlatform platform,
 }) async {
   destination.parent.createSync(recursive: true);
+  if (platform == IsolatedE2eAppPlatform.windows) {
+    if (!source.existsSync() || destination.existsSync()) {
+      throw const IsolatedE2eAppBuildException(
+        'Windows App copy requires a source bundle and an absent destination.',
+      );
+    }
+    await destination.create();
+    await for (final entity in source.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      final relative = entity.path.substring(source.path.length + 1);
+      final targetPath = '${destination.path}/$relative';
+      if (entity is Link) {
+        throw const IsolatedE2eAppBuildException(
+          'Windows App bundles cannot contain symbolic links.',
+        );
+      } else if (entity is Directory) {
+        await Directory(targetPath).create(recursive: true);
+      } else if (entity is File) {
+        await File(targetPath).parent.create(recursive: true);
+        await entity.copy(targetPath);
+      }
+    }
+    return;
+  }
   final copy = platform == IsolatedE2eAppPlatform.macos
       ? await Process.run('/usr/bin/ditto', <String>[
           source.path,
@@ -1516,11 +1684,13 @@ void recoverStaleIsolatedLinuxNativeAssetsCompatibility({
   ).absolute.path;
   if (FileSystemEntity.typeSync(linuxLink.path, followLinks: false) !=
           FileSystemEntityType.link ||
-      linuxLink.targetSync() == expectedLinuxTarget) {
+      normalizeDesktopPath(linuxLink.targetSync()) ==
+          normalizeDesktopPath(expectedLinuxTarget)) {
     return;
   }
-  final staleTarget = linuxLink.targetSync();
-  final cachePrefix = '${projectRoot.absolute.path}/.e2e/build-cache/';
+  final staleTarget = normalizeDesktopPath(linuxLink.targetSync());
+  final cachePrefix =
+      '${normalizeDesktopPath(projectRoot.absolute.path)}/.e2e/build-cache/';
   if (!staleTarget.startsWith(cachePrefix)) {
     throw const IsolatedE2eAppBuildException(
       'Isolated App recovery refuses an unrelated Linux build link.',
@@ -1531,8 +1701,9 @@ void recoverStaleIsolatedLinuxNativeAssetsCompatibility({
       .listSync(followLinks: false)
       .whereType<Directory>()
       .where(
-        (directory) =>
-            directory.path.contains('/native_assets.awiki-isolated-backup-'),
+        (directory) => normalizeDesktopPath(
+          directory.path,
+        ).contains('/native_assets.awiki-isolated-backup-'),
       )
       .toList();
   if (backups.length != 1) {
@@ -1549,7 +1720,9 @@ void recoverStaleIsolatedLinuxNativeAssetsCompatibility({
   final nativeAssetsLink = Link('${buildRoot.path}/native_assets');
   if (FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false) !=
           FileSystemEntityType.link ||
-      !nativeAssetsLink.targetSync().startsWith(cachePrefix)) {
+      !normalizeDesktopPath(
+        nativeAssetsLink.targetSync(),
+      ).startsWith(cachePrefix)) {
     throw const IsolatedE2eAppBuildException(
       'Interrupted isolated App native-assets link is not recoverable.',
     );
@@ -1570,15 +1743,19 @@ void removeIsolatedLinuxNativeAssetsCompatibility(
     throw const IsolatedE2eAppBuildException(
       'Isolated App Linux compatibility link changed during the build.',
     );
-  } else if (link.targetSync() ==
-      Directory('${buildDirectory.path}/linux').absolute.path) {
+  } else if (normalizeDesktopPath(link.targetSync()) ==
+      normalizeDesktopPath(
+        Directory('${buildDirectory.path}/linux').absolute.path,
+      )) {
     link.deleteSync();
   }
   final nativeAssetsLink = compatibility.nativeAssetsLink;
   if (FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false) ==
           FileSystemEntityType.link &&
-      nativeAssetsLink.targetSync() ==
-          Directory('${buildDirectory.path}/native_assets').absolute.path) {
+      normalizeDesktopPath(nativeAssetsLink.targetSync()) ==
+          normalizeDesktopPath(
+            Directory('${buildDirectory.path}/native_assets').absolute.path,
+          )) {
     nativeAssetsLink.deleteSync();
   } else {
     throw const IsolatedE2eAppBuildException(
@@ -1606,7 +1783,8 @@ Directory _validatedRoot(
   }
   final root = projectRoot.absolute.path;
   final directory = Directory(value).absolute;
-  if (directory.path == root || !directory.path.startsWith('$root/')) {
+  if (normalizeDesktopPath(directory.path) == normalizeDesktopPath(root) ||
+      !desktopPathIsWithin(root, directory.path)) {
     throw IsolatedE2eAppBuildException(
       '--$label must be inside the project root.',
     );
@@ -1615,9 +1793,9 @@ Directory _validatedRoot(
 }
 
 bool _pathsOverlap(String first, String second) =>
-    first == second ||
-    first.startsWith('$second/') ||
-    second.startsWith('$first/');
+    normalizeDesktopPath(first) == normalizeDesktopPath(second) ||
+    desktopPathIsWithin(first, second) ||
+    desktopPathIsWithin(second, first);
 
 String _commandFailureTail(ProcessResult result) {
   final combined = '${result.stdout}\n${result.stderr}'.trim();

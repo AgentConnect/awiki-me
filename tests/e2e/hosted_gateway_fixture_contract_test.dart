@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'flutter/support/hosted_gateway_fixture.dart';
+import 'protected_files.dart';
 
 void main() {
   test('pairing waits only for a retryable missing response notice', () async {
@@ -16,7 +17,7 @@ void main() {
       'synthetic',
       'synthetic',
       client: MockClient((request) async {
-        if (request.url.path == '/_awiki/mcp/connect/state') {
+        if (request.url.path == '/connect/state') {
           return http.Response('{"csrf":"synthetic"}', 200);
         }
         expect(jsonDecode(request.body)['refresh'], true);
@@ -64,10 +65,10 @@ void main() {
         'synthetic',
         'synthetic',
         client: MockClient((request) async {
-          if (request.url.path == '/_awiki/mcp/connect/state') {
+          if (request.url.path == '/connect/state') {
             return http.Response('{"csrf":"synthetic"}', 200);
           }
-          expect(request.url.path, '/_awiki/mcp/connect/device-requests');
+          expect(request.url.path, '/connect/device-requests');
           polls++;
           return http.Response(
             jsonEncode({
@@ -102,13 +103,13 @@ void main() {
       },
     };
     await file.writeAsString(jsonEncode(state));
-    await Process.run('chmod', ['600', file.path]);
+    protectE2ePathSync(file.path);
     final fixture = await HostedGatewayFixture.load(file.path);
     fixture.close();
     await file.writeAsString(jsonEncode({...state, 'domain': 'awiki.info'}));
     await expectLater(HostedGatewayFixture.load(file.path), throwsStateError);
     await file.writeAsString(jsonEncode(state));
-    await Process.run('chmod', ['644', file.path]);
+    await _grantBroadRead(file);
     await expectLater(HostedGatewayFixture.load(file.path), throwsStateError);
   });
 
@@ -128,7 +129,7 @@ void main() {
         'code': '123456',
       };
       await file.writeAsString(jsonEncode(state));
-      await Process.run('chmod', ['600', file.path]);
+      protectE2ePathSync(file.path);
       final fixture = await HostedGatewayFixture.loadPhoneRegistration(
         file.path,
       );
@@ -149,12 +150,12 @@ void main() {
         );
       }
       await file.writeAsString(jsonEncode(state));
-      await Process.run('chmod', ['644', file.path]);
+      await _grantBroadRead(file);
       await expectLater(
         HostedGatewayFixture.loadPhoneRegistration(file.path),
         throwsStateError,
       );
-      await Process.run('chmod', ['600', file.path]);
+      protectE2ePathSync(file.path);
       final link = Link('${root.path}/linked.json');
       await link.create(file.path);
       await expectLater(
@@ -174,10 +175,10 @@ void main() {
         '',
         client: MockClient(
           (request) async => http.Response(
-            request.url.path == '/_awiki/mcp/connect/state'
+            request.url.path == '/connect/state'
                 ? '{"csrf":"synthetic"}'
                 : '{"error":"root_key_not_hosted","retryable":false}',
-            request.url.path == '/_awiki/mcp/connect/state' ? 200 : status,
+            request.url.path == '/connect/state' ? 200 : status,
           ),
         ),
       );
@@ -216,10 +217,7 @@ void main() {
         }),
       );
       addTearDown(fixture.close);
-      await expectLater(
-        fixture.request('/_awiki/mcp/connect'),
-        throwsStateError,
-      );
+      await expectLater(fixture.request('/connect'), throwsStateError);
       await expectLater(fixture.request('//other.test'), throwsStateError);
       expect(requests, 1);
     },
@@ -250,8 +248,8 @@ void main() {
         }),
       );
       addTearDown(fixture.close);
-      await fixture.request('/_awiki/mcp/connect');
-      await fixture.request('/_awiki/mcp/connect/state');
+      await fixture.request('/connect');
+      await fixture.request('/connect/state');
       final operations = List.generate(20, (_) => fixture.operationId());
       expect(operations.toSet().length, 20);
       for (final value in operations) {
@@ -264,4 +262,23 @@ void main() {
       }
     },
   );
+}
+
+Future<void> _grantBroadRead(File file) async {
+  final result = Platform.isWindows
+      ? await Process.run(
+          'pwsh.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            r'$p=$env:AWIKI_ACL_FIXTURE; $a=Get-Acl -LiteralPath $p; '
+                r'$s=[Security.Principal.SecurityIdentifier]::new("S-1-5-32-545"); '
+                r'$a.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($s,"Read","Allow")); '
+                r'Set-Acl -LiteralPath $p -AclObject $a',
+          ],
+          environment: {'AWIKI_ACL_FIXTURE': file.path},
+        )
+      : await Process.run('chmod', ['644', file.path]);
+  expect(result.exitCode, 0);
 }

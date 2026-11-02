@@ -8,6 +8,85 @@ import '../../e2e/case_attestation.dart';
 import '../../e2e/prepared_integration_process.dart';
 
 void main() {
+  for (final failures in [0, 1]) {
+    test(
+      'Windows prepared completion validates result and owns its child tree failures=$failures',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_windows_completion_',
+        );
+        addTearDown(() => root.delete(recursive: true));
+        final completion = File('${root.path}/completion.json');
+        final executable = File('${root.path}/prepared.exe');
+        final payload = E2eInvocationCompletion(
+          scenario: 'fixture',
+          runId: 'fixture-run',
+          expectedCaseIds: const ['CASE-001'],
+          finishedAt: '2026-11-02T00:00:00Z',
+          failedTestCount: failures,
+        );
+        final source = File('${root.path}/fixture.cs');
+        final pathBase64 = base64Encode(utf8.encode(completion.path));
+        final payloadBase64 = base64Encode(
+          utf8.encode(jsonEncode(payload.toJson())),
+        );
+        await source.writeAsString('''
+using System;
+using System.IO;
+using System.Text;
+public class Fixture {
+  public static void Main(string[] args) {
+    string path = Encoding.UTF8.GetString(Convert.FromBase64String("$pathBase64"));
+    string payload = Encoding.UTF8.GetString(Convert.FromBase64String("$payloadBase64"));
+    File.WriteAllText(path + ".tmp", payload, new UTF8Encoding(false));
+    File.Move(path + ".tmp", path);
+    Console.WriteLine("00:00 +0${failures == 0 ? '' : ' -1'}: ${failures == 0 ? 'All tests passed!' : 'Some tests failed.'}");
+    System.Threading.Thread.Sleep(30000);
+  }
+}
+''');
+        final compiled = await Process.run(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            r'Add-Type -TypeDefinition ([IO.File]::ReadAllText($env:AWIKI_FIXTURE_SOURCE)) '
+                r'-OutputAssembly $env:AWIKI_FIXTURE_EXE -OutputType ConsoleApplication',
+          ],
+          environment: {
+            'AWIKI_FIXTURE_SOURCE': source.path,
+            'AWIKI_FIXTURE_EXE': executable.path,
+          },
+        );
+        expect(
+          compiled.exitCode,
+          0,
+          reason: 'The Windows fixture must compile.',
+        );
+        final execution = runPreparedIntegrationExecutable(
+          executable: executable,
+          operatingSystem: 'windows',
+          environment: const {},
+          completionFile: completion,
+          expectedScenario: 'fixture',
+          expectedRunId: 'fixture-run',
+          expectedCaseIds: const ['CASE-001'],
+          timeout: const Duration(seconds: 10),
+        );
+        if (failures == 0) {
+          expect((await execution).terminatedAfterCompletion, isTrue);
+        } else {
+          await expectLater(
+            execution,
+            throwsA(isA<PreparedIntegrationProcessException>()),
+          );
+        }
+      },
+      skip: !Platform.isWindows,
+    );
+  }
+
   for (final failures in <int>[0, 1]) {
     for (final foreground in [false, true]) {
       test(

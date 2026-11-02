@@ -8,8 +8,11 @@ Future<void> deleteIsolatedDirectory(Directory directory) async {
       await directory.delete(recursive: true);
       return;
     } on FileSystemException catch (error) {
-      if (!const <int>{39, 66}.contains(error.osError?.errorCode) ||
-          attempt == 9) {
+      final transient =
+          const <int>{39, 66}.contains(error.osError?.errorCode) ||
+          (Platform.isWindows &&
+              const <int>{32, 145}.contains(error.osError?.errorCode));
+      if (!transient || attempt == 9) {
         rethrow;
       }
       await Future<void>.delayed(const Duration(milliseconds: 150));

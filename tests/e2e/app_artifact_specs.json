@@ -12,7 +12,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.regdiscovery",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E=true"
@@ -27,7 +28,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.agentavatars",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -40,7 +42,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.avatars",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -53,7 +56,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.smoke.app",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -66,7 +70,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.smoke.core",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -79,7 +84,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.full",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true"
@@ -94,7 +100,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.direct",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -107,7 +114,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.group",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -120,7 +128,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.attachment",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -133,7 +142,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.contacts",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -146,7 +156,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.contact.first",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -159,7 +170,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.inbound",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -172,7 +184,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.identity.switch",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -185,7 +198,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.display.name.fallback",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -198,7 +212,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.performance",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -211,7 +226,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.multi.device",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -224,7 +240,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.remote.join",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -239,7 +256,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.pair.admin",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin"
@@ -259,7 +277,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.pair.joiner",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=joiner"
@@ -279,7 +298,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -296,7 +316,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.crash.a",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true",
@@ -313,7 +334,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.crash.b",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b"
@@ -329,7 +351,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.fresh.restart",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart"
@@ -344,7 +367,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.registration.a",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a"
@@ -359,7 +383,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.recovery.registration.b",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b"
@@ -374,7 +399,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.a",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE=true",
@@ -390,7 +416,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.b",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_b"
@@ -405,7 +432,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.restart.a",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -418,7 +446,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.restart.b",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -431,7 +460,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.restart.c",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -444,7 +474,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.personal.agent",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [],
       "consumerSuites": [
@@ -457,7 +488,8 @@
       "bundleId": "ai.awiki.awikime.dev.e2e.registration",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E=true"
@@ -471,7 +503,8 @@
       "target": "integration_test/hosted_gateway_join_ui_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.mcpadapt.joiner",
       "supportedPlatforms": [
-        "macos"
+        "macos",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E=true",
@@ -487,7 +520,8 @@
       "target": "integration_test/hosted_gateway_resume_ui_test.dart",
       "bundleId": "ai.awiki.awikime.dev.e2e.mcpadapt.joiner",
       "supportedPlatforms": [
-        "macos"
+        "macos",
+        "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E=true",

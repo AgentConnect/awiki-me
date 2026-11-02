@@ -8,6 +8,10 @@
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
 
 import 'dart:async';
+import '../../protected_files.dart';
+import '../../desktop_subprocess_environment.dart';
+import '../../delete_isolated_directory.dart';
+import '../../ready_observation.dart';
 
 import '../support/enter_existing_account.dart';
 import '../support/read_rendered_sas.dart';
@@ -3205,7 +3209,7 @@ class _JoinCli {
         environment[name] = value;
       }
     }
-    return environment;
+    return desktopSubprocessEnvironment(environment);
   }
 
   Future<void> deleteLocalState() async {
@@ -3784,10 +3788,7 @@ void _requireIndependentEmptyPaths(List<String> paths) {
 }
 
 Future<void> _deleteDirectory(String path) async {
-  final directory = Directory(path);
-  if (await directory.exists()) {
-    await directory.delete(recursive: true);
-  }
+  await deleteIsolatedDirectory(Directory(path));
 }
 
 Future<void> _pumpUntil(

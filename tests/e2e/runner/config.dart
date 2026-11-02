@@ -142,6 +142,7 @@ class RemoteHandleRecoveryConfig {
       supportedPlatforms: const <DesktopE2ePlatform>{
         DesktopE2ePlatform.macos,
         DesktopE2ePlatform.linux,
+        DesktopE2ePlatform.windows,
       },
     );
     return RemoteHandleRecoveryConfig._(
@@ -197,6 +198,7 @@ class RemoteMultiDeviceAppPairConfig {
       supportedPlatforms: const <DesktopE2ePlatform>{
         DesktopE2ePlatform.macos,
         DesktopE2ePlatform.linux,
+        DesktopE2ePlatform.windows,
       },
     );
     if (functional && contentSync) {

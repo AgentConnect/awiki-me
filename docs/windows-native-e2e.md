@@ -1,0 +1,84 @@
+# Windows 原生桌面 E2E
+
+入口为 `scripts/run_windows_e2e.ps1`，在 Windows x64 上运行 owning
+`tests/e2e/runner.dart`，保留相同 case ID 和业务断言。App、CLI、Daemon、
+ConPTY 和离线 ACP 子进程均在 Windows 本机执行；User、Message、Realm 仍使用
+明确配置的远程测试后端。WSL 或远程 Linux Daemon 不能替代本平台证据。
+
+## 本机依赖与私有输入
+
+需要 PowerShell 7、Git、Rust MSVC 工具链及 Windows SDK、Flutter/Dart、Node.js
+和原生 Windows x64 Python。Python 必须通过 `-PythonBin` 或
+`AWIKI_E2E_PYTHON_BIN` 指定真实 `python.exe`；不接受 Windows Store alias。
+Flutter/Dart/Node 可复用工作区 `.tools/`。Rust 工具链以 Core 仓库为准。
+全量中的 Agent 头像 fixture 使用 sibling `awiki-system-test` 的原生 Windows
+`.venv/Scripts/python.exe` 及其锁定依赖；其私有 ledger 同样使用 NTFS ACL。
+
+输入来自已审核、Git 忽略且仅当前用户/SYSTEM 可读的文件：
+
+- `ConfigPath`：服务 origin/DID domain、测试账号及现有 runner 配置。
+- `PinFixturePath`：Realm/PIN 用例的专用测试 fixture。
+- `OtpPresetPath`：可选的受保护手机号/验证码预设；不放入命令行或报告。
+- 全量额外需要 `RegistrationFixturePath`、`RegistrationDiscoveryFixturePath`、
+  `HostedFixturePath`、`HostedPhoneFixturePath`；对应已有 owning fixture 合同。
+
+入口当前只接受 `https://awiki.info` / `awiki.info` 主目标。它从当前已提交的
+Core HEAD 构建并验证 Windows x64 CLI、probe、Daemon，检查 PE、版本和源码
+SHA；校验当前 SDK DLL、绑定 hash 及源码摘要。离线 ACP fixture 使用独立
+HOME/USERPROFILE，不调用真实模型 API 或个人安装的 Agent CLI。
+
+## 执行
+
+在本仓库根目录运行，例如：
+
+```powershell
+./scripts/run_windows_e2e.ps1 `
+  -ConfigPath <private-config.yaml> `
+  -PinFixturePath <private-pin-fixture.json> `
+  -OtpPresetPath <private-otp-preset.json> `
+  -PythonBin <native-python.exe> `
+  -Case full -RunId <unique-run-id> `
+  -RegistrationFixturePath <private-registration.json> `
+  -RegistrationDiscoveryFixturePath <private-discovery.json> `
+  -HostedFixturePath <private-hosted-email.json> `
+  -HostedPhoneFixturePath <private-hosted-phone.json>
+```
+
+`-PrepareOnly` 只准备产物，不创建远程账号或启动测试 App；它不能作为通过证据。
+定向复验使用既有 suite 名称，例如 `pin-recovery` 或
+`multi-device-app-pair-functional`，不能代替 full。准备产物的来源、摘要与平台
+仍由原有 manifest 校验；required 模式禁止静默回退到新构建。
+
+NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `SystemRoot`，
+并将 USERPROFILE、临时文件和 AppData 指向测试 HOME。交互 CLI 使用本仓库
+固定版本 ConPTY 桥接；终止时仅清理本轮拥有的进程树。
+
+## 服务端与专用 fixture
+
+必须先按服务 owner 的运维合同准备 scoped OTP、设备/Recovery allowlist、有限
+注册配额及测试算子。Windows launcher 不自行扩大这些后端权限，也不恢复或复用
+其他运行的临时配置。临时窗口应保存原始值，并在成功、失败时都恢复和核验。
+
+主目标使用 SSH alias `ali`。Hosted Gateway 用例继续固定访问隔离实例
+`mcp-adapt.anpclaw.com`，其 OTP operator 使用 `singapore-dev`；两者不能互换。
+SSH alias 必须有已核实的严格 host key、正确用户及身份文件。
+
+`dart run tool/prepare_windows_hosted_gateway_fixture.dart <run-id>` 可在 Windows
+本机准备该固定实例的合成邮箱身份及手机号 fixture。输出仅含私有文件路径；
+远程仅运行已有 OTP 算子。失败保留 intent，先检查失败原因；需要续办时使用同一
+run ID 加 `--resume`，沿用原 operation ID，并验证 task ID 不变。成功后保留
+隔离 Gateway 身份/设备恢复材料，不声称零残留。
+
+短 Handle 邀请与客户域能力发现依然由各自 fixture owner 准备，必须与当前部署的
+数据库和接口匹配。缺 fixture、权限、算子或编译资产属于失败/未运行，不能转成跳过。
+
+## 证据边界
+
+full 保留全部 114 个 case ID；Windows 必须声明全部可移植成员 suite，矩阵缺项
+直接拒绝。`did-method-web` 按用户已有决定记录为 `user_excluded`；签名 macOS
+Keychain 专属 `NATIVE-E2E-002` 为平台不适用，不能描述为 Windows 凭据验收。
+
+报告使用 `.e2e/<scope>/<run-id>/reports/`，原始日志、状态、私有配置与构建产物
+保留在忽略目录。正式交付按 Verification Policy 导出脱敏 HTML 到
+`html-docs/test-reports/`，提供 awiki.info HTTPS 链接。编译、unit、prepare-only
+和定向通过都不能表述为 Windows 全量通过；以实际 full 报告和 case attestation 为准。

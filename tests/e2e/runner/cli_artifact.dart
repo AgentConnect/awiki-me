@@ -82,9 +82,58 @@ Future<VersionedCliArtifact> prepareVersionedCliArtifact({
     'AWIKI_CLI_VERSION': version,
     'CARGO_TARGET_DIR': targetDir.path,
   };
-  await commands.run(
-    'cargo',
-    <String>[
+  for (final args in versionedCliBuildCommands(
+    includeAvatarProbe: includeAvatarProbe,
+  )) {
+    await commands.run(
+      'cargo',
+      args,
+      workingDirectory: repo,
+      environment: environment,
+      timeout: const Duration(minutes: 20),
+    );
+  }
+  final binary = File(
+    '${targetDir.path}/debug/${Platform.isWindows ? 'awiki-cli.exe' : 'awiki-cli'}',
+  );
+  if (!binary.existsSync()) {
+    throw E2eFailure('Versioned awiki-cli build did not produce its binary.');
+  }
+  return VersionedCliArtifact(
+    binary: binary,
+    sourceRef: sourceRef,
+    version: version,
+  );
+}
+
+List<List<String>> versionedCliBuildCommands({
+  required bool includeAvatarProbe,
+  String? operatingSystem,
+}) {
+  if ((operatingSystem ?? Platform.operatingSystem) == 'windows') {
+    // Debug's large async command future exceeds the Windows default main
+    // stack. Reserve address space for the native CLI, without changing APIs.
+    return [
+      for (final bin in [
+        'awiki-cli',
+        if (includeAvatarProbe) 'awiki-system-test-probe',
+      ])
+        [
+          'rustc',
+          '--locked',
+          '-p',
+          'awiki-cli',
+          if (includeAvatarProbe) ...['--features', 'system-test-probe'],
+          '--bin',
+          bin,
+          '--',
+          '-C',
+          'link-arg=/STACK:8388608',
+        ],
+    ];
+  }
+  return [
+    [
       'build',
       '--locked',
       '-p',
@@ -98,21 +147,7 @@ Future<VersionedCliArtifact> prepareVersionedCliArtifact({
       '--bin',
       'awiki-cli',
     ],
-    workingDirectory: repo,
-    environment: environment,
-    timeout: const Duration(minutes: 20),
-  );
-  final binary = File(
-    '${targetDir.path}/debug/${Platform.isWindows ? 'awiki-cli.exe' : 'awiki-cli'}',
-  );
-  if (!binary.existsSync()) {
-    throw E2eFailure('Versioned awiki-cli build did not produce its binary.');
-  }
-  return VersionedCliArtifact(
-    binary: binary,
-    sourceRef: sourceRef,
-    version: version,
-  );
+  ];
 }
 
 /// The orchestrator caches the CLI and probe independently. Standalone builds

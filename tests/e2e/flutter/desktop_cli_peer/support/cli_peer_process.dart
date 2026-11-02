@@ -271,7 +271,7 @@ Future<_CliResult> _runCli(
   final result = await Process.run(
     config.cliBin,
     args,
-    environment: <String, String>{
+    environment: desktopSubprocessEnvironment(<String, String>{
       for (final name in const <String>[
         'PATH',
         'LANG',
@@ -286,7 +286,7 @@ Future<_CliResult> _runCli(
       'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       'HOME': config.cliHome,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
-    },
+    }),
     includeParentEnvironment: false,
     runInShell: false,
   ).timeout(timeout);

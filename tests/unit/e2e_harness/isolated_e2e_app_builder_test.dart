@@ -11,6 +11,78 @@ import '../../../tool/build_isolated_e2e_app.dart';
 
 void main() {
   test(
+    'Windows bundle copying preserves DLLs and nested Flutter assets',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki-windows-bundle-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final source = await Directory('${root.path}/source').create();
+      await File('${source.path}/AWikiMe.exe').writeAsBytes([0x4d, 0x5a]);
+      await File('${source.path}/awiki_im_core.dll').writeAsBytes([1, 2, 3]);
+      final assets = await Directory(
+        '${source.path}/data/flutter_assets',
+      ).create(recursive: true);
+      await File('${assets.path}/fixture.txt').writeAsString('asset');
+      final destination = Directory('${root.path}/destination');
+      await copyIsolatedAppBundle(
+        source: source,
+        destination: destination,
+        platform: IsolatedE2eAppPlatform.parse('windows'),
+      );
+      expect(
+        await File('${destination.path}/awiki_im_core.dll').readAsBytes(),
+        [1, 2, 3],
+      );
+      expect(
+        await File(
+          '${destination.path}/data/flutter_assets/fixture.txt',
+        ).readAsString(),
+        'asset',
+      );
+      expect(File('${source.path}/AWikiMe.exe').existsSync(), isTrue);
+      await expectLater(
+        copyIsolatedAppBundle(
+          source: source,
+          destination: destination,
+          platform: IsolatedE2eAppPlatform.parse('windows'),
+        ),
+        throwsA(isA<IsolatedE2eAppBuildException>()),
+      );
+    },
+  );
+
+  test(
+    'Windows isolated plans retain a complete native application bundle',
+    () {
+      final project = Directory(
+        '${Directory.systemTemp.path}/awiki-windows-plan',
+      );
+      final request = IsolatedE2eAppBuildRequest.parse([
+        '--name=admin',
+        '--target=integration_test/multi_device_join_test.dart',
+        '--state-root=${project.path}/state',
+        '--work-root=${project.path}/work',
+        '--artifact-root=${project.path}/artifacts',
+        '--bundle-id=ai.awiki.e2e.admin',
+        '--platform=windows',
+        '--dry-run',
+      ], projectRoot: project);
+      final plan = request.toPlan(processArchitecture: 'x86_64');
+      expect(plan.flutterArguments.take(2), ['build', 'windows']);
+      expect(
+        plan.sourceApp.path.replaceAll('\\', '/'),
+        endsWith('/windows/x64/runner/Debug'),
+      );
+      expect(
+        plan.executable.path.replaceAll('\\', '/'),
+        endsWith('/AWikiMe-admin-windows/AWikiMe.exe'),
+      );
+      expect(plan.artifactApp.path, isNot(plan.sourceApp.path));
+    },
+  );
+
+  test(
     'deployment override changes build configuration and cache identity',
     () {
       IsolatedE2eAppBuildRequest request(
@@ -121,7 +193,9 @@ void main() {
   );
 
   test('build plan isolates bundle, state, build, and artifact paths', () {
-    final project = Directory('/tmp/awiki-app-pair-builder-test/project');
+    final project = Directory(
+      '${Directory.systemTemp.path}/awiki-app-pair-builder-test/project',
+    );
     final root = Directory('${project.path}/.e2e/pair');
     final request = IsolatedE2eAppBuildRequest.parse(<String>[
       '--name=joiner',
@@ -196,7 +270,9 @@ void main() {
   );
 
   test('Linux build plan creates a relocatable isolated desktop bundle', () {
-    final project = Directory('/tmp/awiki-app-pair-builder-test/project');
+    final project = Directory(
+      '${Directory.systemTemp.path}/awiki-app-pair-builder-test/project',
+    );
     final root = Directory('${project.path}/.e2e/pair');
     final request = IsolatedE2eAppBuildRequest.parse(<String>[
       '--name=admin',
@@ -231,7 +307,9 @@ void main() {
   });
 
   test('Linux build plan selects the detected arm64 bundle directory', () {
-    final project = Directory('/tmp/awiki-app-pair-builder-test/project');
+    final project = Directory(
+      '${Directory.systemTemp.path}/awiki-app-pair-builder-test/project',
+    );
     final root = Directory('${project.path}/.e2e/pair');
     final request = IsolatedE2eAppBuildRequest.parse(<String>[
       '--name=admin',
@@ -283,7 +361,7 @@ void main() {
 
     expect(
       cache.path,
-      '/workspace/awiki-me/.e2e/build-cache/v2/linux/x86_64/$compileKey',
+      '${Directory('/workspace/awiki-me').absolute.path}/.e2e/build-cache/v2/linux/x86_64/$compileKey',
     );
     expect(cache.path, isNot(contains('/work/admin')));
   });
@@ -488,11 +566,18 @@ void main() {
 
     expect(compatibility, isNotNull);
     final link = compatibility!.linuxLink;
-    expect(link.targetSync(), '${isolatedBuild.absolute.path}/linux');
+    expect(
+      Directory(link.targetSync()).resolveSymbolicLinksSync(),
+      Directory(
+        '${isolatedBuild.absolute.path}/linux',
+      ).resolveSymbolicLinksSync(),
+    );
     final nativeAssetsLink = Link('${project.path}/build/native_assets');
     expect(
-      nativeAssetsLink.targetSync(),
-      '${isolatedBuild.absolute.path}/native_assets',
+      Directory(nativeAssetsLink.targetSync()).resolveSymbolicLinksSync(),
+      Directory(
+        '${isolatedBuild.absolute.path}/native_assets',
+      ).resolveSymbolicLinksSync(),
     );
     expect(
       Directory('${isolatedBuild.path}/native_assets/linux').existsSync(),

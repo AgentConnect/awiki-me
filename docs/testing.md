@@ -16,6 +16,9 @@ to root shims.
 
 ## Choosing The Right Test
 
+Windows 原生桌面入口、私有环境准备和全量证据边界见
+[Windows 原生桌面 E2E](windows-native-e2e.md)。
+
 Routine desktop UI runs should use Linux/Xvfb; macOS-specific checks belong in
 an isolated desktop session or CI. The macOS runner no longer enables repeated
 window activation through `AWIKI_E2E_MACOS_FOREGROUND`. Use the explicit

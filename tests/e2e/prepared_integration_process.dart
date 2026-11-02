@@ -47,9 +47,9 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
       'Prepared integration executable is missing.',
     );
   }
-  if (!const <String>{'linux', 'macos'}.contains(operatingSystem)) {
+  if (!const <String>{'linux', 'macos', 'windows'}.contains(operatingSystem)) {
     throw const PreparedIntegrationProcessException(
-      'Prepared integration execution requires Linux or macOS.',
+      'Prepared integration execution requires Linux, macOS, or Windows.',
     );
   }
   if (macosForeground && operatingSystem != 'macos') {
@@ -213,6 +213,16 @@ Future<int> _terminatePreparedIntegrationProcess(
   required String operatingSystem,
   required Future<int> exitFuture,
 }) async {
+  if (!await _processStillRunning(exitFuture)) return exitFuture;
+  if (operatingSystem == 'windows') {
+    await Process.run('taskkill.exe', <String>[
+      '/PID',
+      '${process.pid}',
+      '/T',
+      '/F',
+    ]);
+    return exitFuture.timeout(const Duration(seconds: 5), onTimeout: () => -1);
+  }
   if (operatingSystem == 'linux') {
     await Process.run('/bin/kill', <String>['-TERM', '--', '-${process.pid}']);
   } else {

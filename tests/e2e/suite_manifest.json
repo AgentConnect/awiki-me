@@ -6,7 +6,8 @@
       "tier": "portable_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter"
@@ -35,7 +36,8 @@
       "tier": "portable_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter"
@@ -61,7 +63,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -102,7 +105,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -145,7 +149,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -184,7 +189,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -221,7 +227,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -267,7 +274,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -305,7 +313,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -342,7 +351,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -375,7 +385,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -408,7 +419,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -448,7 +460,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -510,7 +523,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -556,7 +570,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -629,7 +644,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -699,7 +715,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -766,7 +783,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -984,7 +1002,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1022,7 +1041,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1060,7 +1080,8 @@
       "tier": "remote_product_application",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1095,7 +1116,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1136,7 +1158,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1177,7 +1200,8 @@
       "tier": "remote_integration_diagnostic",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1266,7 +1290,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1459,7 +1484,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter"
@@ -1487,7 +1513,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1525,7 +1552,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1563,7 +1591,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter"
@@ -1588,7 +1617,8 @@
     "hosted-gateway-join": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
-        "macos"
+        "macos",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1620,7 +1650,8 @@
     "hosted-gateway-resume": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
-        "macos"
+        "macos",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1651,7 +1682,8 @@
     "hosted-gateway-email-join": {
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
-        "macos"
+        "macos",
+        "windows"
       ],
       "requiredTools": [
         "flutter",
@@ -1683,7 +1715,8 @@
       "tier": "remote_product_ui_security",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",

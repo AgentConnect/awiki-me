@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 
 import 'failure.dart';
 import 'platform.dart';
@@ -26,10 +27,16 @@ class DesktopFlutterBuildIsolation {
   Directory get configDirectory =>
       Directory('${root.path}/.e2e/flutter-config/${platform.name}');
 
-  File get settingsFile => File('${configDirectory.path}/settings');
+  File get settingsFile => File(
+    '${configDirectory.path}/'
+    '${platform == DesktopE2ePlatform.windows ? '.flutter_settings' : 'settings'}',
+  );
 
   Map<String, String> get environment => <String, String>{
-    'XDG_CONFIG_HOME': configDirectory.path,
+    if (platform == DesktopE2ePlatform.windows)
+      'APPDATA': configDirectory.path
+    else
+      'XDG_CONFIG_HOME': configDirectory.path,
   };
 
   Link? prepareLinuxNativeAssetsCompatibility({required bool dryRun}) {
@@ -47,7 +54,7 @@ class DesktopFlutterBuildIsolation {
     final type = FileSystemEntity.typeSync(link.path, followLinks: false);
     if (type != FileSystemEntityType.notFound) {
       if (type != FileSystemEntityType.link ||
-          link.targetSync() != target.absolute.path) {
+          !p.equals(link.targetSync(), target.absolute.path)) {
         throw E2eFailure(
           'Flutter E2E native-assets compatibility refuses to replace '
           '${link.path}.',
@@ -60,8 +67,10 @@ class DesktopFlutterBuildIsolation {
     );
     if (nativeAssetsType != FileSystemEntityType.notFound &&
         (nativeAssetsType != FileSystemEntityType.link ||
-            nativeAssetsLink.targetSync() !=
-                nativeAssetsTarget.absolute.path)) {
+            !p.equals(
+              nativeAssetsLink.targetSync(),
+              nativeAssetsTarget.absolute.path,
+            ))) {
       throw E2eFailure(
         'Flutter E2E native-assets compatibility refuses to replace '
         '${nativeAssetsLink.path}.',
@@ -86,7 +95,7 @@ class DesktopFlutterBuildIsolation {
     final expected = Directory(
       '${root.path}/$buildDirectory/linux',
     ).absolute.path;
-    if (link.targetSync() == expected) {
+    if (p.equals(link.targetSync(), expected)) {
       link.deleteSync();
     }
     final nativeAssetsLink = Link('${link.parent.path}/native_assets');
@@ -95,7 +104,7 @@ class DesktopFlutterBuildIsolation {
     ).absolute.path;
     if (FileSystemEntity.typeSync(nativeAssetsLink.path, followLinks: false) ==
             FileSystemEntityType.link &&
-        nativeAssetsLink.targetSync() == expectedNativeAssets) {
+        p.equals(nativeAssetsLink.targetSync(), expectedNativeAssets)) {
       nativeAssetsLink.deleteSync();
     }
   }
@@ -105,7 +114,9 @@ class DesktopFlutterBuildIsolation {
       return;
     }
     final home = userHome?.trim();
-    if (home != null && home.isNotEmpty) {
+    if (platform != DesktopE2ePlatform.windows &&
+        home != null &&
+        home.isNotEmpty) {
       final legacySettings = File('$home/.flutter_settings');
       if (legacySettings.existsSync()) {
         throw E2eFailure(
@@ -140,6 +151,9 @@ class DesktopFlutterBuildIsolation {
         break;
       case DesktopE2ePlatform.linux:
         settings['enable-linux-desktop'] = true;
+        break;
+      case DesktopE2ePlatform.windows:
+        settings['enable-windows-desktop'] = true;
         break;
     }
 

@@ -10,7 +10,7 @@ const String _pinAppCaseId = 'PIN-RECOVERY-APP-E2E-001';
     throw StateError('PIN fixture is required.');
   }
   final file = File(path);
-  if ((file.statSync().mode & 0x3f) != 0) {
+  if (!isPrivateE2eFile(file)) {
     throw StateError('PIN fixture permissions are unsafe.');
   }
   final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
@@ -139,6 +139,30 @@ Future<void> _pinVerifySelect(
   await _pinFill(tester, 'pin-recovery-otp', account.fixedOtp);
   await _pinTap(tester, 'pin-recovery-verify');
   final targetButton = find.widgetWithText(AppSecondaryButton, fullHandle);
+  final error = find.byKey(const Key('pin-recovery-error'));
+  final pageContext = tester.element(
+    find.byKey(const Key('pin-recovery-page')),
+  );
+  final noTargets = find.text(pageContext.l10n.pinRecoveryNoTargets);
+  final targetsReady = find.text(pageContext.l10n.pinRecoveryTargets);
+  await _pumpUntil(
+    tester,
+    () =>
+        targetButton.evaluate().length == 1 ||
+        targetsReady.evaluate().isNotEmpty ||
+        error.evaluate().isNotEmpty ||
+        noTargets.evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 60),
+    failure: 'PIN phone verification and Handle discovery did not complete.',
+  );
+  if (error.evaluate().isNotEmpty) {
+    fail(
+      'PIN phone verification or Handle discovery returned a visible error.',
+    );
+  }
+  if (noTargets.evaluate().isNotEmpty) {
+    fail('PIN discovery did not include the registered identity.');
+  }
   if (deviceLabel != null) {
     await _pinFill(tester, 'pin-recovery-device-label', deviceLabel);
   }

@@ -30,7 +30,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           Platform.environment['AWIKI_PIN_RECOVERY_E2E_FIXTURE'];
       if (fixturePath == null ||
           !File(fixturePath).existsSync() ||
-          (File(fixturePath).statSync().mode & 0x3f) != 0) {
+          !isPrivateE2eFile(File(fixturePath))) {
         throw E2eFailure(
           'PIN recovery requires its dedicated permission-restricted fixture.',
         );
@@ -275,18 +275,33 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
             await _cleanupAppPairMessages(coordinator.cleanupAccountIds);
           }
           try {
+            if (pairConfig.platform == DesktopE2ePlatform.windows) {
+              final ledger = File(
+                '${reportDir.parent.path}/native_resources.private.json',
+              );
+              await ledger.create();
+              protectE2ePathSync(ledger.path);
+              await ledger.writeAsString(
+                jsonEncode({
+                  'schemaVersion': 1,
+                  'runId': runId,
+                  'accountIds': coordinator.cleanupAccountIds,
+                  'localRootsRetained': !appPairCompleted,
+                  'adminStateRoot': appPairAdminStateRootDir.path,
+                  'joinerStateRoot': appPairJoinerStateRootDir.path,
+                  'daemonStateRoot': appPairDaemonStateRootDir.path,
+                  'cliWorkspace': cliWorkspaceDir.path,
+                  'cliHome': cliHomeDir.path,
+                }),
+                flush: true,
+              );
+            }
             if (options.e2eCase == DesktopE2eCase.pinRecovery) {
               final ledger = File(
                 '${reportDir.parent.path}/pin_resources.private.json',
               );
               await ledger.create();
-              final permission = await Process.run('chmod', [
-                '600',
-                ledger.path,
-              ]);
-              if (permission.exitCode != 0) {
-                throw E2eFailure('PIN cleanup ledger permissions failed.');
-              }
+              protectE2ePathSync(ledger.path);
               await ledger.writeAsString(
                 jsonEncode({
                   'schemaVersion': 1,
@@ -305,13 +320,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
                 '${reportDir.parent.path}/web_resources.private.json',
               );
               await ledger.create();
-              final permission = await Process.run('chmod', [
-                '600',
-                ledger.path,
-              ]);
-              if (permission.exitCode != 0) {
-                throw E2eFailure('Web cleanup ledger permissions failed.');
-              }
+              protectE2ePathSync(ledger.path);
               await ledger.writeAsString(
                 jsonEncode({
                   'schemaVersion': 1,
@@ -332,9 +341,13 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           }
           // A failed Web publication may still own a pending candidate key.
           // Preserve both roots for explicit result inspection and cleanup.
-          if ((options.e2eCase != DesktopE2eCase.didMethodWeb &&
-                  options.e2eCase != DesktopE2eCase.pinRecovery) ||
-              appPairCompleted) {
+          final retainFailedWindows =
+              pairConfig.platform == DesktopE2ePlatform.windows &&
+              !appPairCompleted;
+          if (!retainFailedWindows &&
+              ((options.e2eCase != DesktopE2eCase.didMethodWeb &&
+                      options.e2eCase != DesktopE2eCase.pinRecovery) ||
+                  appPairCompleted)) {
             await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
             await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
             if (options.e2eCase == DesktopE2eCase.pinRecovery) {
@@ -343,14 +356,16 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
               );
             }
           }
-          await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
-          if ((pairConfig.functional || pairConfig.contentSync) &&
+          if (!retainFailedWindows)
+            await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
+          if (!retainFailedWindows &&
+              (pairConfig.functional || pairConfig.contentSync) &&
               (options.e2eCase != DesktopE2eCase.didMethodWeb ||
                   appPairCompleted)) {
             await _deleteDirectoryBestEffort(cliWorkspaceDir);
             await _deleteDirectoryBestEffort(cliHomeDir);
           }
-          if (appPairDaemonReadyFile.existsSync()) {
+          if (!retainFailedWindows && appPairDaemonReadyFile.existsSync()) {
             appPairDaemonReadyFile.deleteSync();
           }
           if (appPairCompleted &&
@@ -430,10 +445,7 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
         '${reportDir.parent.path}/cleanup_scope.private.json',
       );
       await checkpoint.create();
-      final permission = await Process.run('chmod', ['600', checkpoint.path]);
-      if (permission.exitCode != 0) {
-        throw const FormatException('cleanup_checkpoint_permissions');
-      }
+      protectE2ePathSync(checkpoint.path);
       await checkpoint.writeAsString(
         appPairCleanupRequest(accountIds),
         flush: true,
@@ -477,6 +489,8 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
     AppPairCoordinatorServer coordinator,
     String token,
   ) async {
+    await appPairRunConfigFile.parent.create(recursive: true);
+    protectE2ePathSync(appPairRunConfigFile.parent.path, directory: true);
     String? fixtureEnvFile;
     if (pairConfig.functional) {
       final repo = Directory(
@@ -572,19 +586,12 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
       },
     };
     await appPairRunConfigFile.parent.create(recursive: true);
-    if (!Platform.isWindows) {
-      await Process.run('chmod', <String>[
-        '700',
-        appPairRunConfigFile.parent.path,
-      ]);
-    }
+    protectE2ePathSync(appPairRunConfigFile.parent.path, directory: true);
     await appPairRunConfigFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
       flush: true,
     );
-    if (!Platform.isWindows) {
-      await Process.run('chmod', <String>['600', appPairRunConfigFile.path]);
-    }
+    protectE2ePathSync(appPairRunConfigFile.path);
   }
 
   Future<_IsolatedAppArtifact> _prepareAppPairRole({required String role}) =>

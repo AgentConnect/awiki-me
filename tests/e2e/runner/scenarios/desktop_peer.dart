@@ -817,7 +817,7 @@ extension DesktopE2ePeerScenario on DesktopE2eRunner {
     return commands.captureResult(
       _requireConfig().cliBin,
       args,
-      environment: environment,
+      environment: desktopSubprocessEnvironment(environment),
       includeParentEnvironment: false,
       allowFailure: allowFailure,
       stdinText: stdinText,

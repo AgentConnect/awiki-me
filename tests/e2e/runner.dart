@@ -16,6 +16,10 @@ import 'app_pair_cleanup_contract.dart';
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'host_platform.dart';
+import 'desktop_paths.dart';
+import 'desktop_tool_executable.dart';
+import 'desktop_subprocess_environment.dart';
+import 'protected_files.dart';
 import 'performance_contract.dart';
 import 'prepared_integration_process.dart';
 import 'remote_multi_device_join_contract.dart';
@@ -27,6 +31,7 @@ import 'runner/platform.dart';
 import 'runner/process_runner.dart';
 import 'runner/redaction.dart';
 import '../../tool/ensure_linux_im_core.dart';
+import '../../tool/ensure_windows_im_core.dart';
 import '../../tool/isolated_e2e_app_builder.dart'
     show
         IsolatedE2eAppBuildRequest,
@@ -897,6 +902,13 @@ class DesktopE2eRunner {
     required String name,
     required Directory stateRoot,
   }) async {
+    if (platform == DesktopE2ePlatform.windows &&
+        !options.dryRun &&
+        !commands.dryRun) {
+      await WindowsImCoreArtifactGuard(projectRoot: root).ensure(
+        rebuildIfStale: !preparedArtifactsRequired(Platform.environment),
+      );
+    }
     final spec = _appArtifactSpecs.requireSpec(name);
     if (!spec.supportedPlatforms.contains(platform.name)) {
       throw E2eFailure(
@@ -952,9 +964,7 @@ class DesktopE2eRunner {
             ),
             artifactRoot: Directory(preparedDirectory),
             bundleId: spec.bundleId,
-            platform: platform == DesktopE2ePlatform.macos
-                ? IsolatedE2eAppPlatform.macos
-                : IsolatedE2eAppPlatform.linux,
+            platform: IsolatedE2eAppPlatform.parse(platform.name),
             flutterBin: 'flutter',
             dartDefines: spec.dartDefines,
             dryRun: false,
@@ -969,7 +979,8 @@ class DesktopE2eRunner {
         }
         final appRoot = artifact.appDirectory.resolveSymbolicLinksSync();
         final executable = artifact.executable.resolveSymbolicLinksSync();
-        if (executable != appRoot && !executable.startsWith('$appRoot/')) {
+        if (executable != appRoot &&
+            !desktopPathIsWithin(appRoot, executable)) {
           throw E2eFailure(
             'Prepared integration executable escapes its App artifact.',
           );
@@ -1107,6 +1118,9 @@ class DesktopE2eRunner {
           'AWIKI_REGISTRATION_DISCOVERY_FIXTURE must name the reviewed remote fixture.',
         );
       }
+      if (!isPrivateE2eFile(File(fixturePath))) {
+        throw E2eFailure('Registration discovery fixture must be private.');
+      }
       final fixture =
           jsonDecode(await File(fixturePath).readAsString())
               as Map<String, dynamic>;
@@ -1158,6 +1172,9 @@ class DesktopE2eRunner {
         throw E2eFailure(
           'AWIKI_REGISTRATION_FIXTURE must name a provisioned reviewed test fixture.',
         );
+      }
+      if (!isPrivateE2eFile(File(fixturePath))) {
+        throw E2eFailure('Registration fixture must be private.');
       }
       final fixture =
           jsonDecode(await File(fixturePath).readAsString())
@@ -1659,11 +1676,7 @@ void _requireAppPairAccountStateOperatorEnvironment({
       environment[_remoteTargetManifestEnv]?.trim().isNotEmpty == true
       ? environment[_remoteTargetManifestEnv]!.trim()
       : _defaultRemoteTargetManifestPath;
-  final manifestFile = File(
-    configuredPath.startsWith('/')
-        ? configuredPath
-        : '${root.path}/$configuredPath',
-  );
+  final manifestFile = File(_resolvePath(root, configuredPath));
   Object? decoded;
   try {
     decoded = jsonDecode(manifestFile.readAsStringSync());
@@ -1802,14 +1815,7 @@ String _requiredConfig(String? value, String key, String sourcePath) {
 }
 
 String _resolvePath(Directory root, String path) {
-  final value = path.trim();
-  if (value.isEmpty) {
-    return value;
-  }
-  if (value.startsWith('/')) {
-    return value;
-  }
-  return '${root.path}/$value';
+  return resolveDesktopConfigPath(root, path);
 }
 
 String? _resolveOptionalPath(Directory root, String? path) {

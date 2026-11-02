@@ -23,10 +23,12 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
           ? const <DesktopE2ePlatform>{
               DesktopE2ePlatform.macos,
               DesktopE2ePlatform.linux,
+              DesktopE2ePlatform.windows,
             }
           : const <DesktopE2ePlatform>{
               DesktopE2ePlatform.macos,
               DesktopE2ePlatform.linux,
+              DesktopE2ePlatform.windows,
             },
     );
     remoteMultiDeviceJoinConfig = joinConfig;
@@ -59,7 +61,7 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
 
     await _timed('Checking remote Join tooling and source', () async {
       await commands.requireExecutable('flutter');
-      await commands.requireExecutable('script');
+      await commands.requirePseudoTerminal(joinConfig.platform.name);
       if (includesDshInterop) {
         await commands.requireExecutable('node');
         final dshRoot = Directory(
@@ -249,21 +251,14 @@ extension DesktopE2eJoinScenario on DesktopE2eRunner {
       return;
     }
     await remoteMultiDeviceRunConfigFile.parent.create(recursive: true);
-    if (!Platform.isWindows) {
-      await Process.run('chmod', <String>[
-        '700',
-        remoteMultiDeviceRunConfigFile.parent.path,
-      ]);
-    }
+    protectE2ePathSync(
+      remoteMultiDeviceRunConfigFile.parent.path,
+      directory: true,
+    );
     await remoteMultiDeviceRunConfigFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
       flush: true,
     );
-    if (!Platform.isWindows) {
-      await Process.run('chmod', <String>[
-        '600',
-        remoteMultiDeviceRunConfigFile.path,
-      ]);
-    }
+    protectE2ePathSync(remoteMultiDeviceRunConfigFile.path, directory: false);
   }
 }

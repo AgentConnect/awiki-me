@@ -9,6 +9,7 @@ Map<String, String> driverEnvironment(Map<String, String> parent) =>
       parent: parent,
       locale: 'en_US.UTF-8',
       flutterConfigPath: '/tmp/app-pair/driver-config',
+      operatingSystem: 'linux',
     );
 
 String route(String url, Map<String, String> environment) =>
@@ -18,6 +19,19 @@ String route(String url, Map<String, String> environment) =>
     );
 
 void main() {
+  test(
+    'Windows driver configuration stays in private APPDATA without moving caches',
+    () {
+      final environment = appPairDriverEnvironment(
+        parent: {'APPDATA': 'original', 'LOCALAPPDATA': 'cache'},
+        locale: 'C.UTF-8',
+        flutterConfigPath: r'D:\test\driver',
+        operatingSystem: 'windows',
+      );
+      expect(environment['APPDATA'], r'D:\test\driver');
+      expect(environment['LOCALAPPDATA'], 'cache');
+    },
+  );
   const proxies = <String, String>{
     'HTTP_PROXY': 'http://127.0.0.1:7890',
     'HTTPS_PROXY': 'http://127.0.0.1:7890',

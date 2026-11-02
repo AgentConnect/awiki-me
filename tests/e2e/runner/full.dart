@@ -18,10 +18,8 @@ Future<void> runDesktopFull({
   final suites = manifest.fullSuites();
   final userExclusions = DesktopE2eUserExclusions.load(root);
   userExclusions.validateAgainst(manifest);
-  manifest
-      .definitionFor(DesktopE2eCase.full)
-      .validateCodeCaseIds(DesktopE2eCase.full.caseIds);
-  final catalog = AppTestCatalog.load(root);
+  final aggregate = manifest.definitionFor(DesktopE2eCase.full);
+  aggregate.validateCodeCaseIds(DesktopE2eCase.full.caseIds);
   final config = DesktopE2eFileConfig.load(
     root: root,
     path: options.configPath,
@@ -35,6 +33,33 @@ Future<void> runDesktopFull({
     commands.redactor.addSecret(secret);
   }
   final platform = config.platform ?? DesktopE2ePlatform.fromHost();
+  if (!aggregate.supportedPlatforms.contains(platform.name)) {
+    throw E2eFailure(
+      'full does not support ${platform.name} in this manifest.',
+    );
+  }
+  if (!suites.any(
+    (suite) =>
+        suite.supportedPlatforms.contains(platform.name) &&
+        !userExclusions.excludes(suite.name),
+  )) {
+    throw E2eFailure('full has no executable suites for ${platform.name}.');
+  }
+  if (platform == DesktopE2ePlatform.windows) {
+    final missing = suites.where(
+      (suite) =>
+          !userExclusions.excludes(suite.name) &&
+          suite.name != 'production-keychain' &&
+          !suite.supportedPlatforms.contains('windows'),
+    );
+    if (missing.isNotEmpty) {
+      throw E2eFailure(
+        'Windows full is missing portable suites: '
+        '${missing.map((suite) => suite.name).join(', ')}.',
+      );
+    }
+  }
+  final catalog = AppTestCatalog.load(root);
   if (options.macosForeground && platform != DesktopE2ePlatform.macos) {
     throw E2eFailure('--macos-foreground requires a macOS target.');
   }

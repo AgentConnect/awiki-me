@@ -51,7 +51,9 @@ void appPairAdminMain() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        if (!didWeb) await _deleteDirectory(config.adminStateRoot);
+        if (!didWeb && !Platform.isWindows) {
+          await _deleteDirectory(config.adminStateRoot);
+        }
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -545,7 +547,9 @@ void appPairJoinerMain() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pump();
         await bootstrap?.dispose();
-        if (!didWeb) await _deleteDirectory(config.joinerStateRoot);
+        if (!didWeb && !Platform.isWindows) {
+          await _deleteDirectory(config.joinerStateRoot);
+        }
         await tester.binding.setSurfaceSize(null);
       });
 
@@ -1881,10 +1885,33 @@ Future<void> _runAppPairJoinerFunctional({
   await config.coordinator.publish('joiner', 'functional_own_sync_visible');
 
   final joinedOutboundText = _appPairMessage(config.runId, 'joiner-outbound');
-  final joinedOutbound = await bootstrap.messagingService!.sendConversationText(
-    conversation: AppConversationReadRef.fromConversationId(conversationId),
-    content: joinedOutboundText,
-  );
+  final ChatMessage joinedOutbound;
+  try {
+    joinedOutbound = await bootstrap.messagingService!.sendConversationText(
+      conversation: AppConversationReadRef.fromConversationId(conversationId),
+      content: joinedOutboundText,
+    );
+  } catch (error, stack) {
+    final session = container.read(sessionProvider).session;
+    var registryState = 'not_observed';
+    try {
+      final registry = await container
+          .read(deviceManagementServiceProvider)
+          .loadRegistry(session!.credentialName);
+      registryState =
+          'currentMatches=${registry.currentDevice?.protocolDeviceId == joinedDeviceId}'
+          ',active=${registry.currentDevice?.status == DeviceStatus.active}';
+    } catch (registryError) {
+      registryState = 'errorType=${registryError.runtimeType}';
+    }
+    // No retry: retain the first failure and only publish closed diagnostic
+    // fields, never raw device IDs, backend responses or credentials.
+    print(
+      'first_joined_direct_failed errorType=${error.runtimeType} '
+      'sessionMatches=${session?.did == accountDid} registry=$registryState',
+    );
+    Error.throwWithStackTrace(error, stack);
+  }
   final joinedOutboundId = joinedOutbound.remoteId?.trim() ?? '';
   if (joinedOutboundId.isEmpty ||
       joinedOutbound.conversationId != conversationId ||
@@ -3060,19 +3087,22 @@ Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({
   await container
       .read(accountStateSyncCoordinatorProvider.notifier)
       .request(reason, force: true);
-  await _pumpUntil(
-    tester,
-    () {
-      final current = container.read(accountStateSyncCoordinatorProvider);
-      return !current.isSyncing &&
-          current.pendingReason == null &&
-          current.lastCompletedAt != null &&
-          current.lastCompletedAt != previousCompletedAt;
-    },
-    timeout: const Duration(seconds: 30),
-    failure: 'The Account State coordinator did not quiesce for $reason.',
-  );
-  final state = container.read(accountStateSyncCoordinatorProvider);
+  final AccountStateSyncCoordinatorState state;
+  try {
+    state = await waitForE2eObservation(
+      read: () => container.read(accountStateSyncCoordinatorProvider),
+      ready: (current) {
+        return !current.isSyncing &&
+            current.pendingReason == null &&
+            current.lastCompletedAt != null &&
+            current.lastCompletedAt != previousCompletedAt;
+      },
+      pump: () => tester.pump(const Duration(milliseconds: 200)),
+      timeout: const Duration(seconds: 30),
+    );
+  } on TimeoutException {
+    fail('The Account State coordinator did not quiesce for $reason.');
+  }
   if (!allowPartialFailure &&
       (state.status != AccountStateSyncCoordinatorStatus.ready ||
           state.domainErrors.isNotEmpty)) {
@@ -3504,7 +3534,16 @@ class _AppPairFunctionalAdminResources {
     final currentDaemon = daemon;
     daemon = null;
     if (currentDaemon != null && !await _processExited(currentDaemon.process)) {
-      currentDaemon.process.kill(ProcessSignal.sigterm);
+      if (Platform.isWindows) {
+        await Process.run('taskkill.exe', <String>[
+          '/PID',
+          '${currentDaemon.process.pid}',
+          '/T',
+          '/F',
+        ]);
+      } else {
+        currentDaemon.process.kill(ProcessSignal.sigterm);
+      }
       try {
         await currentDaemon.process.exitCode.timeout(
           const Duration(seconds: 5),
@@ -3516,7 +3555,11 @@ class _AppPairFunctionalAdminResources {
     }
     final currentPeer = peer;
     peer = null;
-    await currentPeer?.deleteLocalState();
+    if (Platform.isWindows) {
+      await currentPeer?.stopRealtimeListener();
+    } else {
+      await currentPeer?.deleteLocalState();
+    }
   }
 }
 
@@ -3602,7 +3645,9 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
     controllerHandle: controllerHandle,
-    clientPlatform: 'darwin-amd64',
+    clientPlatform: Platform.isWindows
+        ? 'windows-amd64'
+        : Platform.operatingSystem,
   );
   final result = await Process.run(
     config.daemonBinary,
@@ -3769,6 +3814,29 @@ Map<String, String> _appPairDaemonEnvironment(_AppPairRunConfig config) {
   if (environment['AWIKI_ACP_TEST_COMPONENTS_DIR'] == null ||
       environment['HOME'] == null) {
     fail('The App-pair test requires the runner-prepared offline ACP fixture.');
+  }
+  if (Platform.isWindows) {
+    final profile = environment['USERPROFILE'];
+    if (profile == null || profile != environment['HOME']) {
+      fail(
+        'Windows daemon tests require one explicit isolated native profile.',
+      );
+    }
+    for (final key in ['SystemRoot', 'WINDIR', 'ComSpec']) {
+      if (Platform.environment[key] != null)
+        environment[key] = Platform.environment[key]!;
+    }
+    final temporary = Directory('$profile/tmp')..createSync(recursive: true);
+    final roaming = Directory('$profile/AppData/Roaming')
+      ..createSync(recursive: true);
+    final local = Directory('$profile/AppData/Local')
+      ..createSync(recursive: true);
+    environment.addAll({
+      'TEMP': temporary.path,
+      'TMP': temporary.path,
+      'APPDATA': roaming.path,
+      'LOCALAPPDATA': local.path,
+    });
   }
   environment.addAll(<String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.baseUrl,

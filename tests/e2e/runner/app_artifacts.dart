@@ -102,8 +102,8 @@ class _IsolatedAppArtifact {
     final canonicalProject = projectRoot.absolute.resolveSymbolicLinksSync();
     final canonicalApp = appDirectory.resolveSymbolicLinksSync();
     final canonicalExecutable = executable.resolveSymbolicLinksSync();
-    if (!canonicalApp.startsWith('$canonicalProject/') ||
-        !canonicalExecutable.startsWith('$canonicalApp/')) {
+    if (!desktopPathIsWithin(canonicalProject, canonicalApp) ||
+        !desktopPathIsWithin(canonicalApp, canonicalExecutable)) {
       throw E2eFailure(
         'The isolated App artifact escaped the project cache boundary.',
       );
@@ -174,7 +174,7 @@ class _RunningIsolatedApp {
           ]
         : const <String>['--enable-vm-service=0'];
     final process = await Process.start(
-      executable,
+      desktopToolExecutable(executable),
       arguments,
       environment: environment,
       includeParentEnvironment: true,
@@ -254,6 +254,7 @@ Map<String, String> appPairDriverEnvironment({
   required Map<String, String> parent,
   required String locale,
   required String flutterConfigPath,
+  String? operatingSystem,
 }) {
   // Dart gives lowercase no_proxy precedence, even when its value is empty.
   final existing = parent['no_proxy'] ?? parent['NO_PROXY'] ?? '';
@@ -268,7 +269,10 @@ Map<String, String> appPairDriverEnvironment({
     ...parent,
     'LANG': locale,
     'LC_ALL': locale,
-    'XDG_CONFIG_HOME': flutterConfigPath,
+    if ((operatingSystem ?? Platform.operatingSystem) == 'windows')
+      'APPDATA': flutterConfigPath
+    else
+      'XDG_CONFIG_HOME': flutterConfigPath,
     'NO_PROXY': noProxy,
     'no_proxy': noProxy,
   };
@@ -331,7 +335,7 @@ class _RunningAppPairDriver {
           ]
         : flutterArguments;
     final process = await Process.start(
-      executable,
+      desktopToolExecutable(executable),
       arguments,
       workingDirectory: root.path,
       environment: appPairDriverEnvironment(
@@ -429,14 +433,7 @@ void resetAppPairRuntimeDirectories({
       directory.deleteSync(recursive: true);
     }
     directory.createSync(recursive: true);
-    if (!Platform.isWindows) {
-      final chmod = Process.runSync('chmod', <String>['700', directory.path]);
-      if (chmod.exitCode != 0) {
-        throw E2eFailure(
-          'App-pair runtime isolation could not protect a state root.',
-        );
-      }
-    }
+    protectE2ePathSync(directory.path, directory: true);
   }
 }
 

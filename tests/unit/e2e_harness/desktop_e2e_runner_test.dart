@@ -2,12 +2,86 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import '../../e2e/case_attestation.dart';
 import '../../e2e/runner.dart';
 import '../../e2e/performance_contract.dart';
 
 void main() {
+  test(
+    'non-interactive commands receive stdin EOF without an input payload',
+    () async {
+      final runner = DesktopCommandRunner(
+        root: Directory.current,
+        dryRun: false,
+        redactor: DesktopSecretRedactor([]),
+        logLine: (_) {},
+      );
+      final result = await runner.captureResult(
+        Platform.isWindows ? 'powershell.exe' : '/bin/sh',
+        Platform.isWindows
+            ? [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                r'$null=[Console]::In.ReadToEnd(); [Console]::Out.Write("eof-received")',
+              ]
+            : ['-c', 'cat >/dev/null; printf eof-received'],
+        timeout: const Duration(seconds: 10),
+      );
+      expect(result.exitCode, 0);
+      expect(result.output, 'eof-received');
+    },
+  );
+  test(
+    'Windows CLI and probe builds reserve stack for debug async dispatch',
+    () {
+      final commands = versionedCliBuildCommands(
+        includeAvatarProbe: true,
+        operatingSystem: 'windows',
+      );
+      expect(commands, hasLength(2));
+      for (final command in commands) {
+        expect(command.first, 'rustc');
+        expect(command, contains('--locked'));
+        expect(command.last, 'link-arg=/STACK:8388608');
+      }
+      expect(
+        versionedCliBuildCommands(
+          includeAvatarProbe: false,
+          operatingSystem: 'linux',
+        ).single.first,
+        'build',
+      );
+    },
+  );
+  test('Windows is an explicit native desktop E2E target', () {
+    expect(DesktopE2ePlatform.parse('windows').name, 'windows');
+    if (Platform.isWindows) {
+      expect(DesktopE2ePlatform.fromHost().name, 'windows');
+    }
+  });
+
+  test('Windows Flutter settings are isolated using APPDATA', () {
+    final root = Directory.systemTemp.createTempSync(
+      'awiki-win-flutter-config-',
+    );
+    addTearDown(() => root.deleteSync(recursive: true));
+    final isolation = DesktopFlutterBuildIsolation(
+      root: root,
+      platform: DesktopE2ePlatform.parse('windows'),
+    );
+    isolation.prepare(dryRun: false);
+    expect(isolation.settingsFile.uri.pathSegments.last, '.flutter_settings');
+    expect(isolation.environment['APPDATA'], isolation.configDirectory.path);
+    expect(isolation.environment.containsKey('XDG_CONFIG_HOME'), isFalse);
+    final settings =
+        jsonDecode(isolation.settingsFile.readAsStringSync()) as Map;
+    expect(settings['build-dir'], '.e2e/flutter-build/windows');
+    expect(settings['enable-windows-desktop'], isTrue);
+  });
+
   group('focused remote Join case selection', () {
     test('default selection preserves all declared cases', () {
       final options = DesktopE2eOptions.parse([
@@ -233,7 +307,7 @@ void main() {
 
       expect(
         cache.path,
-        '/workspace/awiki-me/.e2e/build-cache/multi-device-app-pair',
+        '${root.absolute.path}/.e2e/build-cache/multi-device-app-pair',
       );
       expect(cache.path, isNot(contains('/reports/')));
       expect(cache.path, isNot(contains('/app-pair/admin-state')));
@@ -388,13 +462,13 @@ void main() {
 
         expect(link, isNotNull);
         expect(
-          link!.targetSync(),
-          '${root.path}/.e2e/flutter-build/linux/linux',
+          p.normalize(link!.targetSync()),
+          p.normalize('${root.path}/.e2e/flutter-build/linux/linux'),
         );
         final nativeAssetsLink = Link('${root.path}/build/native_assets');
         expect(
-          nativeAssetsLink.targetSync(),
-          '${root.path}/.e2e/flutter-build/linux/native_assets',
+          p.normalize(nativeAssetsLink.targetSync()),
+          p.normalize('${root.path}/.e2e/flutter-build/linux/native_assets'),
         );
         expect(
           Directory(
@@ -1520,7 +1594,10 @@ void main() {
       systemTemporaryDirectory: Directory('/tmp'),
     );
 
-    expect(selected.path, startsWith('/run/user/1000/aw-e2e-'));
+    expect(
+      selected.path,
+      startsWith('${Directory('/run/user/1000').absolute.path}/aw-e2e-'),
+    );
     expect(selected.path, isNot(contains('/workspace/')));
     expect(daemonStateRootFitsUnixSocket(selected.path), isTrue);
   });
@@ -1528,7 +1605,8 @@ void main() {
   test(
     'long explicit IPC roots support canonical run IDs without leaving the root',
     () {
-      final base = '/${List.filled(73, 'x').join()}';
+      final base =
+          '/${List.filled(74 - Directory('/').absolute.path.length, 'x').join()}';
       Directory select(String runId) => shortAppPairDaemonStateRoot(
         runId,
         environment: {'XDG_RUNTIME_DIR': base},
@@ -1536,7 +1614,10 @@ void main() {
       );
       final first = select('run-a-20261008-abcdef123456');
       final second = select('run-b-20261008-abcdef123456');
-      expect(first.parent.path, base);
+      expect(
+        p.normalize(first.parent.path),
+        p.normalize(Directory(base).absolute.path),
+      );
       expect(daemonStateRootFitsUnixSocket(first.path), isTrue);
       expect(second.path, isNot(first.path));
       expect(select('run-a-20261008-abcdef123456').path, first.path);
@@ -3067,6 +3148,7 @@ cliPeer:
         'awiki_desktop_smoke_runner_test_',
       );
       _writeUserExclusions(root);
+      _writeLocalConfig(root, platform: Platform.isLinux ? 'linux' : 'macos');
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
@@ -3129,7 +3211,7 @@ cliPeer:
       expect(decoded['case'], 'smoke');
       expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
       final hostPlatform = decoded['hostPlatform'] as Map<String, dynamic>;
-      expect(hostPlatform['os'], Platform.isLinux ? 'linux' : 'macos');
+      expect(hostPlatform['os'], Platform.operatingSystem);
       expect(hostPlatform['processArchitecture'], isNotEmpty);
       expect(hostPlatform['hardwareArchitecture'], isNotEmpty);
       expect(hostPlatform['translated'], isA<bool>());
@@ -3153,6 +3235,7 @@ cliPeer:
         'awiki_multi_device_capability_runner_test_',
       );
       _writeUserExclusions(root);
+      _writeLocalConfig(root, platform: Platform.isLinux ? 'linux' : 'macos');
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
@@ -3305,10 +3388,10 @@ cliPeer:
       final log = lines.join('\n');
       expect(
         lines,
-        containsAllInOrder(const <String>[
-          r'$ which flutter',
+        containsAllInOrder(<String>[
+          '\$ ${Platform.isWindows ? 'where' : 'which'} flutter',
           'flutter: dry-run',
-          r'$ which xvfb-run',
+          '\$ ${Platform.isWindows ? 'where' : 'which'} xvfb-run',
           'xvfb-run: dry-run',
           'check file: <redacted>',
           r'$ <redacted> --format json init',

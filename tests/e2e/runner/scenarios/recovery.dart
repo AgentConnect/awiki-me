@@ -175,16 +175,12 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
       return;
     }
     await runConfigFile.parent.create(recursive: true);
-    if (!Platform.isWindows) {
-      await Process.run('chmod', <String>['700', runConfigFile.parent.path]);
-    }
+    protectE2ePathSync(runConfigFile.parent.path, directory: true);
     await runConfigFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
       flush: true,
     );
-    if (!Platform.isWindows) {
-      await Process.run('chmod', <String>['600', runConfigFile.path]);
-    }
+    protectE2ePathSync(runConfigFile.path, directory: false);
   }
 
   Future<void> _runRemoteHandleRecovery() async {
@@ -264,7 +260,7 @@ extension DesktopE2eRecoveryScenario on DesktopE2eRunner {
 
     await _timed('Checking remote Handle Recovery tooling', () async {
       await commands.requireExecutable('flutter');
-      await commands.requireExecutable('script');
+      await commands.requirePseudoTerminal(recoveryConfig.platform.name);
       if (recoveryConfig.platform == DesktopE2ePlatform.linux) {
         await commands.requireExecutable('xvfb-run');
       }

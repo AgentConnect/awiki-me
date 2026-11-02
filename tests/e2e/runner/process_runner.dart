@@ -8,6 +8,8 @@ import 'dart:io';
 
 import 'failure.dart';
 import 'redaction.dart';
+import '../desktop_tool_executable.dart';
+import '../desktop_process_host.dart';
 
 class DesktopCommandRunner {
   DesktopCommandRunner({
@@ -42,6 +44,20 @@ class DesktopCommandRunner {
     if (!dryRun && !File(path).existsSync()) {
       throw E2eFailure('Required file was not found: $path');
     }
+  }
+
+  Future<void> requirePseudoTerminal(String operatingSystem) async {
+    if (operatingSystem != 'windows') {
+      await requireExecutable('script');
+      return;
+    }
+    const host = DesktopProcessHost(DesktopHostPlatform.windows);
+    await requireExecutable(host.pseudoTerminalExecutable);
+    await requireFile(host.windowsBridge);
+    if (!dryRun && !host.isAvailable) {
+      throw E2eFailure('The native Windows ConPTY transport is unavailable.');
+    }
+    logLine('Windows ConPTY: ${dryRun ? 'dry-run' : 'available'}');
   }
 
   Future<void> run(
@@ -82,7 +98,7 @@ class DesktopCommandRunner {
       return const DesktopCommandResult(exitCode: 0, output: '');
     }
     final process = await Process.start(
-      executable,
+      desktopToolExecutable(executable),
       args,
       workingDirectory: (workingDirectory ?? root).path,
       environment: environment,
@@ -93,8 +109,8 @@ class DesktopCommandRunner {
     final stderrFuture = process.stderr.transform(utf8.decoder).join();
     if (stdinText != null) {
       process.stdin.write(stdinText);
-      await process.stdin.close();
     }
+    await process.stdin.close();
     final exitFuture = process.exitCode;
     final startedAt = DateTime.now().toUtc();
     int processExitCode;
