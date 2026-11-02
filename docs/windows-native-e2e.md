@@ -55,6 +55,8 @@ HOME/USERPROFILE，不调用真实模型 API 或个人安装的 Agent CLI。
 定向复验使用既有 suite 名称，例如 `pin-recovery` 或
 `multi-device-app-pair-functional`，不能代替 full。准备产物的来源、摘要与平台
 仍由原有 manifest 校验；required 模式禁止静默回退到新构建。
+Remote Join 可附加 `-CaseId DEVICE-JOIN-E2E-002` 定向复验；选择范围和依赖仍由
+owning runner 校验，其他 suite 不因此获得跳过成员的入口。
 
 NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `SystemRoot`，
 并将 USERPROFILE、临时文件和 AppData 指向测试 HOME。交互 CLI 使用本仓库

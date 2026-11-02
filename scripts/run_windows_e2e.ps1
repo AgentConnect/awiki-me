@@ -10,6 +10,7 @@ param(
   [string]$HostedFixturePath,
   [string]$HostedPhoneFixturePath,
   [string]$Case = 'full',
+  [string[]]$CaseId = @(),
   [string]$RunId = ('windows-' + (Get-Date -Format 'yyyyMMdd-HHmmss')),
   [switch]$PrepareOnly
 )
@@ -152,6 +153,7 @@ try{
   }
   $run=@('run','tests/e2e/runner.dart','--case',$Case,'--config',$environment.configPath,
     '--run-id',$RunId)
+  foreach($selectedId in $CaseId){$run+=@('--case-id',$selectedId)}
   if($PrepareOnly){$run+='--prepare-only'}
   & $dart @run
   $result=$LASTEXITCODE
