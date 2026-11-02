@@ -2541,6 +2541,7 @@ class _JoinCli {
     var exitCode = -1;
     var observedBytes = 0;
     String? processFailure;
+    var terminalObservation = 'unobserved';
     try {
       process = await _processHost.startForeground(config.cliBin, <String>[
         '--format',
@@ -2590,6 +2591,7 @@ class _JoinCli {
         }
       }
       observedBytes = transcript.length;
+      terminalObservation = remoteMultiDeviceCliSasDiagnostic(transcript);
       transcript.fillRange(0, transcript.length, 0);
       transcript.clear();
     }
@@ -2597,7 +2599,7 @@ class _JoinCli {
       fail(
         'The joining CLI did not expose its SAS through the foreground TTY '
         '(exit=$exitCode, bytes=$observedBytes, invalidOutput=$invalidOutput, '
-        '${processFailure ?? 'no_process_exception'}).',
+        '${processFailure ?? 'no_process_exception'}, $terminalObservation).',
       );
     }
     return sas!;

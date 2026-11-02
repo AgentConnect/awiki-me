@@ -100,6 +100,22 @@ void main() {
 
   group('remote foreground CLI Join SAS prompts', () {
     test(
+      'terminal diagnostics distinguish prompt framing without exposing SAS',
+      () {
+        final observation = remoteMultiDeviceCliSasDiagnostic(
+          utf8.encode(
+            '\u001b[2JThis device\'s one-time SAS: 482917\u001b[K\r\n'
+            '{"remote_state":"response_verified","token":"private-value"}',
+          ),
+        );
+        expect(observation, contains('pollPrompt=true'));
+        expect(observation, contains('pollSasAfterAnsi=true'));
+        expect(observation, contains('remoteState=response_verified'));
+        expect(observation, isNot(contains('482917')));
+        expect(observation, isNot(contains('private-value')));
+      },
+    );
+    test(
       'recognizes the joining-device poll prompt only at its TTY boundary',
       () {
         expect(

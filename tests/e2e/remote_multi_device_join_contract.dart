@@ -73,6 +73,25 @@ String? remoteMultiDeviceCliPollSas(List<int> transcript) =>
 String? remoteMultiDeviceCliApprovalSas(List<int> transcript) =>
     _cliSasAfterPrefix(transcript, _cliApprovalSasPrefix);
 
+/// Closed observations only; never include a SAS, JSON body or terminal text.
+String remoteMultiDeviceCliSasDiagnostic(List<int> transcript) {
+  final text = String.fromCharCodes(transcript);
+  final clean = text.replaceAll(RegExp(r'\x1b\[[0-?]*[ -/]*[@-~]'), '');
+  final cleanBytes = clean.codeUnits.toList();
+  try {
+    final state = RegExp(
+      r'"remote_state"\s*:\s*"(pending|challenge_sent|response_verified|consumed|expired|cancelled|rejected)"',
+    ).firstMatch(clean)?.group(1);
+    return 'pollPrompt=${text.contains(_cliPollSasPrefix)}, '
+        'approvalPrompt=${text.contains(_cliApprovalSasPrefix)}, '
+        'ansi=${transcript.contains(27)}, '
+        'pollSasAfterAnsi=${remoteMultiDeviceCliPollSas(cleanBytes) != null}, '
+        'remoteState=${state ?? 'unclassified'}';
+  } finally {
+    cleanBytes.fillRange(0, cleanBytes.length, 0);
+  }
+}
+
 String? _cliSasAfterPrefix(List<int> transcript, String promptPrefix) {
   final prefix = promptPrefix.codeUnits;
   final offset = _indexOfBytes(transcript, prefix);
