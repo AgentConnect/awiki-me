@@ -63,6 +63,10 @@ try{
     }
   }
   $dart=(Get-Command dart.bat -CommandType Application | Select-Object -First 1).Source
+  if($Case -in @('full','pin-recovery')){
+    & $dart run tool/check_windows_pin_backend.dart
+    if($LASTEXITCODE -ne 0){throw 'Realm configuration is unavailable; repair the reviewed backend before building/running PIN E2E.'}
+  }
   $env:AWIKI_E2E_NODE_BIN=(Get-Command node.exe -CommandType Application | Select-Object -First 1).Source
   if(-not $PythonBin){$PythonBin=$env:AWIKI_E2E_PYTHON_BIN}
   if($PythonBin){

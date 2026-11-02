@@ -86,6 +86,11 @@ SQLite 源码使用锁定插件中固定的下载 URL，缓存包和编译所需
 注册配额及测试算子。Windows launcher 不自行扩大这些后端权限，也不恢复或复用
 其他运行的临时配置。临时窗口应保存原始值，并在成功、失败时都恢复和核验。
 
+`full` 和 `pin-recovery` 在构建前检查公开 Realm 配置接口是否可用；过期配置、
+重定向、超时或无效响应直接失败。该检查仅确认可用性，App/Core 继续执行原有
+固定公钥验签和配置验证。配置过期应由服务 owner 按 User Service 的续签工具和
+受管生命周期处理，不能跳过到期检查或重新生成已有节点的密钥和配置投影。
+
 主目标使用 SSH alias `ali`。Hosted Gateway 用例继续固定访问隔离实例
 `mcp-adapt.anpclaw.com`，其 OTP operator 使用 `singapore-dev`；两者不能互换。
 SSH alias 必须有已核实的严格 host key、正确用户及身份文件。
