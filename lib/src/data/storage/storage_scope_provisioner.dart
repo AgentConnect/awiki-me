@@ -200,12 +200,17 @@ class StorageScopeProcessLock {
     final file = File(path);
     await file.parent.create(recursive: true);
     final handle = await file.open(mode: FileMode.append);
+    var locked = false;
     try {
       await handle.lock(FileLock.exclusive);
+      locked = true;
       return await action();
     } finally {
-      await handle.unlock();
-      await handle.close();
+      try {
+        if (locked) await handle.unlock();
+      } finally {
+        await handle.close();
+      }
     }
   }
 }
