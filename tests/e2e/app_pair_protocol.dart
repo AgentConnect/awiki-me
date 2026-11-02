@@ -200,6 +200,21 @@ String safeAppPairFailureCode(String? code) {
       : 'redacted';
 }
 
+String safeCliProcessFailureDiagnostic(Object error) {
+  if (error is TimeoutException) {
+    final duration = error.duration;
+    return 'reason=timeout${duration == null ? '' : ', timeoutMs=${duration.inMilliseconds}'}';
+  }
+  if (error is ProcessException) {
+    return 'reason=process_start, osCode=${error.errorCode}';
+  }
+  if (error is FileSystemException) {
+    return 'reason=process_io${error.osError == null ? '' : ', osCode=${error.osError!.errorCode}'}';
+  }
+  if (error is FormatException) return 'reason=invalid_process_encoding';
+  return 'reason=subprocess_failure';
+}
+
 String safeCliFailureDiagnostic({
   required int exitCode,
   required Object? stdout,

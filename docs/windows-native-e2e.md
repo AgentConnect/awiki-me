@@ -59,6 +59,8 @@ NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `Syste
 构建快照保留 E2E 引用的共享 unit fakes，并遵守 Git 忽略规则。绝对可执行文件
 直接检查文件，不交给 Windows `where` 解析；Windows 系统工具使用系统编码，
 CLI 等结构化输出继续严格验证 UTF-8，解码失败写入报告并执行清理。
+CLI 子进程的启动、超时、编码和管道失败记录固定类别、超时长度及系统错误码，
+便于区分 Windows 环境故障和服务端拒绝。
 重启、崩溃续办与身份删除续办的独立阶段产物，保留同一逻辑设备的测试 secret
 service，以重开原始加密状态；窗口身份遵循各阶段的 bundle ID。
 Hosted Join/Resume 沿用其原本相同的 bundle ID。

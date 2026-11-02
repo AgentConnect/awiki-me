@@ -3160,8 +3160,12 @@ class _JoinCli {
           rethrow;
         }
       }
-    } on Object {
-      fail('The independent CLI process did not complete safely.');
+    } on Object catch (error) {
+      fail(
+        'The independent CLI process did not complete safely '
+        '(action=${safeAction ?? 'unspecified'}, '
+        '${safeCliProcessFailureDiagnostic(error)}).',
+      );
     }
     if (result.exitCode != 0) {
       fail(

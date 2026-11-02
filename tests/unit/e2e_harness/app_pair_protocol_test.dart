@@ -2,6 +2,9 @@
 // [OUTPUT]: Authenticated Join/functional phase exchange and secret-free SAS results.
 // [POS]: Contract test for the dual-App E2E coordinator.
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/app_pair_protocol.dart';
@@ -568,6 +571,28 @@ void main() {
       expect(safeAppPairFailureCode(unsafe), 'redacted');
     }
   });
+
+  test(
+    'CLI process failures identify the boundary without exception contents',
+    () {
+      const secret = 'private-factor-and-path';
+      final cases = <Object, String>{
+        TimeoutException(secret, const Duration(seconds: 30)):
+            'reason=timeout, timeoutMs=30000',
+        const ProcessException(secret, [secret], secret, 2):
+            'reason=process_start, osCode=2',
+        const FileSystemException(secret, secret, OSError(secret, 32)):
+            'reason=process_io, osCode=32',
+        const FormatException(secret): 'reason=invalid_process_encoding',
+        StateError(secret): 'reason=subprocess_failure',
+      };
+      for (final entry in cases.entries) {
+        final diagnostic = safeCliProcessFailureDiagnostic(entry.key);
+        expect(diagnostic, entry.value);
+        expect(diagnostic, isNot(contains(secret)));
+      }
+    },
+  );
 
   test('CLI failure diagnostics expose only allowlisted stable codes', () {
     const secret = 'secret-bearing-service-message';
