@@ -219,6 +219,7 @@ String safeAvatarFixtureFailureCategory(String line) {
   ).firstMatch(line);
   const allowed = <String>{
     'JsonRpcError',
+    'DeviceManifestError',
     'HTTPStatusError',
     'ConnectError',
     'ReadTimeout',

@@ -33,7 +33,8 @@ $keys=@('PATH','PUB_HOSTED_URL','CARGO_NET_GIT_FETCH_WITH_CLI','AWIKI_SYSTEM_TES
   'AWIKI_E2E_WINDOWS_PTY_BRIDGE','AWIKI_E2E_NODE_BIN','AWIKI_E2E_PYTHON_BIN','CARGO_BUILD_JOBS',
   'AWIKI_E2E_CLI_BINARY','AWIKI_E2E_CLI_SOURCE_REF','AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E',
   'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE','AWIKI_ACCOUNT_STATE_V1_E2E',
-  'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON','AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED')
+  'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON','AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED',
+  'UV_PROJECT_ENVIRONMENT')
 $keys+=@('AWIKI_REGISTRATION_FIXTURE','AWIKI_REGISTRATION_DISCOVERY_FIXTURE',
   'AWIKI_HOSTED_FIXTURE_PATH','AWIKI_HOSTED_PHONE_FIXTURE_PATH','PYTHONPATH',
   'AWIKI_E2E_AGENT_AVATAR_FIXTURE_COMMAND')
@@ -54,6 +55,7 @@ try{
     }
   }
   foreach($folder in @((Join-Path $WorkspaceRoot '.tools/flutter/bin'),
+      (Join-Path $WorkspaceRoot '.tools/uv'),
       (Join-Path $WorkspaceRoot '.tools/node-v24.19.0-win-x64'))){
     if(Test-Path -LiteralPath $folder){$env:PATH=$folder+';'+$env:PATH}
   }
@@ -84,6 +86,15 @@ try{
   if(($Case -eq 'full' -or $Case -eq 'agent-avatars') -and
       -not (Test-Path -LiteralPath (Join-Path $WorkspaceRoot 'awiki-system-test/.venv/Scripts/python.exe'))){
     throw 'Prepare the native Windows awiki-system-test venv for the owning Agent avatar fixture.'
+  }
+  if($Case -in @('full','agent-avatars')){
+    $uv=(Get-Command uv.exe -CommandType Application -ErrorAction Stop).Source
+    $systemTestRoot=Join-Path $WorkspaceRoot 'awiki-system-test'
+    $env:UV_PROJECT_ENVIRONMENT=Join-Path $systemTestRoot '.venv'
+    & $uv sync --project $systemTestRoot --locked --check *> $null
+    if($LASTEXITCODE -ne 0){
+      throw 'Synchronize the native awiki-system-test environment with uv sync --locked; stale SDK or relocated editable installs cannot attest this run.'
+    }
   }
   if(-not $env:CARGO_BUILD_JOBS){$env:CARGO_BUILD_JOBS='2'}
   if($Case -in @('full','multi-device-remote-join')){

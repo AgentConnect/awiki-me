@@ -13,6 +13,9 @@ ConPTY 和离线 ACP 子进程均在 Windows 本机执行；User、Message、Rea
 Flutter/Dart/Node 可复用工作区 `.tools/`。Rust 工具链以 Core 仓库为准。
 全量中的 Agent 头像 fixture 使用 sibling `awiki-system-test` 的原生 Windows
 `.venv/Scripts/python.exe` 及其锁定依赖；其私有 ledger 同样使用 NTFS ACL。
+在该仓库执行 `uv sync --locked`；launcher 对 full/Agent 头像使用只读的
+`uv sync --locked --check`，同时拒绝旧 SDK 和移动工作区后遗留的 editable 安装。
+`uv.exe` 可复用工作区 `.tools/uv/`；检查不会自动改写环境或锁文件。
 全量和 `multi-device-remote-join` 还需要 sibling `dsh-awiki` 的锁定 Node 依赖及
 `pnpm.cmd`。先按其 dependency workflow 准备依赖；默认使用 registry，不能把
 残留的 sibling SDK 链接当作正式依赖。Windows 入口会核对来源、加载本机原生
