@@ -92,32 +92,7 @@ Future<Directory> _materializeWindowsE2eWorkspace(
   String bundleId,
   String name,
 ) async {
-  final inventory = await Process.run('git', [
-    'ls-files',
-    '--cached',
-    '--others',
-    '--exclude-standard',
-    '-z',
-    '--',
-    'lib',
-    'assets',
-    'windows',
-    'integration_test',
-    'tests/e2e',
-    'test_driver',
-    'pubspec.yaml',
-    'pubspec.lock',
-    'l10n.yaml',
-    'analysis_options.yaml',
-  ], workingDirectory: source.path);
-  if (inventory.exitCode != 0) {
-    throw StateError('Windows source inventory failed.');
-  }
-  final paths = inventory.stdout
-      .toString()
-      .split('\u0000')
-      .where((path) => path.isNotEmpty)
-      .toSet();
+  final paths = await windowsE2eSourceInventory(source);
   for (final relative in paths) {
     if (relative.startsWith('/') || relative.split('/').contains('..')) {
       throw StateError('Windows source inventory contains an unsafe path.');
@@ -132,6 +107,46 @@ Future<Directory> _materializeWindowsE2eWorkspace(
     await target.parent.create(recursive: true);
     await File(path).copy(target.path);
   }
+  return _configureWindowsE2eWorkspace(source, output, bundleId, name);
+}
+
+Future<List<String>> windowsE2eSourceInventory(Directory source) async {
+  final inventory = await Process.run('git', [
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '-z',
+    '--',
+    'lib',
+    'assets',
+    'windows',
+    'integration_test',
+    'tests/e2e',
+    'tests/unit',
+    'test_driver',
+    'pubspec.yaml',
+    'pubspec.lock',
+    'l10n.yaml',
+    'analysis_options.yaml',
+  ], workingDirectory: source.path);
+  if (inventory.exitCode != 0) {
+    throw StateError('Windows source inventory failed.');
+  }
+  return inventory.stdout
+      .toString()
+      .split('\u0000')
+      .where((path) => path.isNotEmpty)
+      .toSet()
+      .toList();
+}
+
+Future<Directory> _configureWindowsE2eWorkspace(
+  Directory source,
+  Directory output,
+  String bundleId,
+  String name,
+) async {
   final pubspec =
       loadYaml(File('${source.path}/pubspec.yaml').readAsStringSync()) as Map;
   final overridesFile = File('${source.path}/pubspec_overrides.yaml');

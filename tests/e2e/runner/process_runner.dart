@@ -27,11 +27,17 @@ class DesktopCommandRunner {
   int _diagnosticSequence = 0;
 
   Future<void> requireExecutable(String executable) async {
+    final native = desktopToolExecutable(executable);
+    if (Platform.isWindows && File(native).isAbsolute) {
+      await requireFile(native);
+      logLine('$executable: ${dryRun ? 'dry-run' : 'found'}');
+      return;
+    }
     final command = Platform.isWindows ? 'where' : 'which';
     final result = await captureResult(command, <String>[
       executable,
     ], allowFailure: true);
-    if (result.output.trim().isEmpty && !dryRun) {
+    if ((result.exitCode != 0 || result.output.trim().isEmpty) && !dryRun) {
       throw E2eFailure('Required executable was not found: $executable');
     }
     logLine(
@@ -105,8 +111,18 @@ class DesktopCommandRunner {
       includeParentEnvironment: includeParentEnvironment,
       runInShell: false,
     );
-    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
-    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final encoding =
+        Platform.isWindows &&
+            const {
+              'where',
+              'where.exe',
+              'taskkill',
+              'taskkill.exe',
+            }.contains(_basename(executable).toLowerCase())
+        ? systemEncoding
+        : utf8;
+    final stdoutFuture = _captureCommandText(process.stdout, encoding);
+    final stderrFuture = _captureCommandText(process.stderr, encoding);
     if (stdinText != null) {
       process.stdin.write(stdinText);
     }
@@ -123,8 +139,8 @@ class DesktopCommandRunner {
       } on Object {
         // The tree has already received a hard-kill fallback below.
       }
-      final out = await stdoutFuture;
-      final err = await stderrFuture;
+      final out = (await stdoutFuture).text;
+      final err = (await stderrFuture).text;
       await _writeFailureDiagnostics(
         executable: executable,
         args: args,
@@ -140,8 +156,25 @@ class DesktopCommandRunner {
         terminated: terminated,
       );
     }
-    final out = await stdoutFuture;
-    final err = await stderrFuture;
+    final outCapture = await stdoutFuture;
+    final errCapture = await stderrFuture;
+    final out = outCapture.text;
+    final err = errCapture.text;
+    final captureError = outCapture.error ?? errCapture.error;
+    if (captureError != null) {
+      await _writeFailureDiagnostics(
+        executable: executable,
+        args: args,
+        exitCode: processExitCode,
+        timedOut: false,
+        startedAt: startedAt,
+        stdoutText: out,
+        stderrText: err,
+      );
+      throw E2eFailure(
+        'Command output could not be captured ($captureError); no structured result was accepted.',
+      );
+    }
     final output = out.isNotEmpty ? out : err;
     if (processExitCode != 0 && !allowFailure) {
       await _writeFailureDiagnostics(
@@ -260,6 +293,22 @@ class DesktopCommandRunner {
       ...args,
     ].map(_quoteIfNeeded).join(' ');
     logLine(r'$ ' + redactor.redact(rendered));
+  }
+}
+
+// Install the error handler immediately. A decoder failure can arrive before
+// the child exits; leaving its rejected future unhandled would kill the runner
+// before it can write the owning report or perform cleanup.
+Future<({String text, String? error})> _captureCommandText(
+  Stream<List<int>> stream,
+  Encoding encoding,
+) async {
+  try {
+    return (text: await stream.transform(encoding.decoder).join(), error: null);
+  } on FormatException {
+    return (text: '<output_encoding_error>', error: 'output_encoding_error');
+  } on Object {
+    return (text: '<output_stream_error>', error: 'output_stream_error');
   }
 }
 

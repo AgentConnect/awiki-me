@@ -7,6 +7,43 @@ import '../../../tool/windows_e2e_workspace.dart';
 
 void main() {
   test(
+    'snapshot inventory retains shared unit fakes and excludes private fixtures',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki-source-inventory-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final git = await Process.run('git', [
+        'init',
+        '--quiet',
+      ], workingDirectory: root.path);
+      expect(git.exitCode, 0);
+      for (final path in [
+        'tests/unit/test_support.dart',
+        'tests/unit/support/fakes.dart',
+        'tests/e2e/flutter/support/fake_app_bootstrap.dart',
+      ]) {
+        final file = File('${root.path}/$path');
+        await file.parent.create(recursive: true);
+        await file.writeAsString('// synthetic shared support');
+      }
+      await File('${root.path}/.gitignore').writeAsString('*.local.yaml\n');
+      await File(
+        '${root.path}/tests/e2e/private.local.yaml',
+      ).writeAsString('must-not-copy');
+      final paths = await windowsE2eSourceInventory(root);
+      expect(
+        paths,
+        containsAll([
+          'tests/unit/test_support.dart',
+          'tests/unit/support/fakes.dart',
+          'tests/e2e/flutter/support/fake_app_bootstrap.dart',
+        ]),
+      );
+      expect(paths, isNot(contains('tests/e2e/private.local.yaml')));
+    },
+  );
+  test(
     'source refresh retains native cache and removes stale copied source',
     () async {
       final root = await Directory.systemTemp.createTemp('awiki-native-cache-');

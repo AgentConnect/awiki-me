@@ -52,6 +52,9 @@ HOME/USERPROFILE，不调用真实模型 API 或个人安装的 Agent CLI。
 NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `SystemRoot`，
 并将 USERPROFILE、临时文件和 AppData 指向测试 HOME。交互 CLI 使用本仓库
 固定版本 ConPTY 桥接；终止时仅清理本轮拥有的进程树。
+构建快照保留 E2E 引用的共享 unit fakes，并遵守 Git 忽略规则。绝对可执行文件
+直接检查文件，不交给 Windows `where` 解析；Windows 系统工具使用系统编码，
+CLI 等结构化输出继续严格验证 UTF-8，解码失败写入报告并执行清理。
 
 ## 服务端与专用 fixture
 

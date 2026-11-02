@@ -9,6 +9,57 @@ import '../../e2e/runner.dart';
 import '../../e2e/performance_contract.dart';
 
 void main() {
+  test('malformed child output fails safely before the process exits', () async {
+    final runner = DesktopCommandRunner(
+      root: Directory.current,
+      dryRun: false,
+      redactor: DesktopSecretRedactor([]),
+      logLine: (_) {},
+    );
+    await expectLater(
+      runner.captureResult(
+        Platform.isWindows ? 'powershell.exe' : '/bin/sh',
+        Platform.isWindows
+            ? [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                r'$o=[Console]::OpenStandardOutput(); $o.WriteByte(255); $o.Flush(); '
+                    r'$e=[Console]::OpenStandardError(); $e.WriteByte(255); $e.Flush(); Start-Sleep -Milliseconds 100',
+              ]
+            : ['-c', r"printf '\377'; printf '\377' >&2; sleep 0.1"],
+        timeout: const Duration(seconds: 10),
+      ),
+      throwsA(
+        isA<E2eFailure>().having(
+          (error) => error.toString(),
+          'encoding failure',
+          contains('output_encoding_error'),
+        ),
+      ),
+    );
+  });
+  test(
+    'Windows executable preflight checks absolute paths without where',
+    () async {
+      final runner = DesktopCommandRunner(
+        root: Directory.current,
+        dryRun: false,
+        redactor: DesktopSecretRedactor([]),
+        logLine: (_) {},
+      );
+      await runner.requireExecutable(Platform.resolvedExecutable);
+      await expectLater(
+        runner.requireExecutable(r'Z:\awiki-definitely-missing\tool.exe'),
+        throwsA(isA<E2eFailure>()),
+      );
+      await expectLater(
+        runner.requireExecutable('awiki-definitely-missing-tool-20261102'),
+        throwsA(isA<E2eFailure>()),
+      );
+    },
+    skip: !Platform.isWindows,
+  );
   test(
     'non-interactive commands receive stdin EOF without an input payload',
     () async {
