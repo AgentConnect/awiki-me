@@ -5,6 +5,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../e2e/flutter/support/desktop_tap_target.dart';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/attachment_preview_service.dart';
@@ -853,7 +855,12 @@ void main() {
     await tester.tap(find.byKey(const Key('message-action:multiSelect')));
     await tester.pumpAndSettle();
     expect(find.text('已选择 1 条消息'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('chat-message-select:second')));
+    await tester.tap(
+      desktopCliPeerTapTarget(
+        find.byKey(const Key('chat-message-select:second')),
+        description: 'select second message',
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('已选择 2 条消息'), findsOneWidget);
     await tester.tap(find.byKey(const Key('chat-delete-selected-messages')));

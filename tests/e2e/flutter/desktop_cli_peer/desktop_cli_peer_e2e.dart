@@ -94,6 +94,7 @@ import '../../case_attestation.dart';
 import '../../performance_contract.dart';
 import '../support/protected_otp_config.dart';
 import '../support/desktop_lifecycle.dart';
+import '../support/desktop_tap_target.dart';
 import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';

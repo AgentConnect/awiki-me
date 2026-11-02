@@ -1863,24 +1863,7 @@ class _DesktopAppRobot {
       );
     }
     await tester.ensureVisible(finder);
-    final widget = elements.single.widget;
-    final pressableDescendant = find.descendant(
-      of: finder,
-      matching: find.byType(AppPressable),
-    );
-    final pressableCount = pressableDescendant.evaluate().length;
-    final requiresPressableDescendant =
-        widget is AppPrimaryButton ||
-        widget is AppSecondaryButton ||
-        widget is AppIconButton ||
-        widget is AppPressableTile;
-    if (requiresPressableDescendant && pressableCount != 1) {
-      fail(
-        'Expected exactly one interactive target for $description, found '
-        '$pressableCount.',
-      );
-    }
-    final tapTarget = pressableCount == 1 ? pressableDescendant : finder;
+    final tapTarget = desktopCliPeerTapTarget(finder, description: description);
     // Navigation can build the destination before its transition accepts hits.
     // Wait for the actual visible target instead of dropping the first tap.
     await pumpUntilFinder(
