@@ -4518,14 +4518,27 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   final stableProfile = await local.loadProfileSnapshot(binding: binding);
   final localIdentities = await bootstrap.appSessionService!
       .listLocalIdentities();
+  final bootstrapReadyCount = appBootstrapEpochBarrierMetrics
+      .snapshot()['ready'];
   if (accountBinding == null ||
       epoch?.currentDid != newDid ||
       epoch?.bindingGeneration != accountBinding.identityGeneration ||
       staleRegistry != null ||
       stableProfile?.domainVersion != '1' ||
       localIdentities.any((identity) => identity.did == oldDid) ||
-      appBootstrapEpochBarrierMetrics.snapshot()['ready'] != 1) {
-    fail('Crash-cut bootstrap barrier did not converge exactly once.');
+      bootstrapReadyCount != 1) {
+    fail(
+      'Crash-cut bootstrap barrier did not converge exactly once '
+      '(accountBinding=${accountBinding != null}, '
+      'epochDid=${epoch?.currentDid == newDid}, '
+      'generation=${epoch?.bindingGeneration == accountBinding?.identityGeneration}, '
+      'registryCleared=${staleRegistry == null}, '
+      'registryCurrentDid=${staleRegistry?.epoch.currentDid == newDid}, '
+      'registryCurrentGeneration=${staleRegistry?.epoch.bindingGeneration == newGeneration}, '
+      'profilePreserved=${stableProfile?.domainVersion == '1'}, '
+      'oldIdentityAbsent=${!localIdentities.any((identity) => identity.did == oldDid)}, '
+      'readyCount=$bootstrapReadyCount).',
+    );
   }
   if (_invocationExpects(_crashCutCaseId)) {
     await E2eCaseAttestationWriter.markPassed(
