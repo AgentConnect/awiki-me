@@ -529,38 +529,53 @@ class DesktopE2eRunner {
     reportDir = Directory('${root.path}/.e2e/$runScope/$runId/reports')
       ..createSync(recursive: true);
     commands.diagnosticDirectory = reportDir;
-    cliWorkspaceDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
-    cliHomeDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
+    final runtimeRoot = desktopRuntimeStateRoot(
+      projectRoot: root,
+      suiteScope: runScope,
+      runId: runId,
+      operatingSystem: platform.name,
+    );
+    if (platform == DesktopE2ePlatform.windows &&
+        !options.dryRun &&
+        !commands.dryRun) {
+      runtimeRoot.createSync(recursive: true);
+      protectE2ePathSync(runtimeRoot.path, directory: true);
+    }
+    Directory runtimeDirectory(String name, {String? windowsName}) => Directory(
+      '${runtimeRoot.path}/${platform == DesktopE2ePlatform.windows ? windowsName ?? name : name}',
+    );
+    cliWorkspaceDir = runtimeDirectory('cli-peer');
+    cliHomeDir = runtimeDirectory('cli-home');
     multiDeviceCliAdminWorkspaceDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/cli-admin',
+      '${runtimeRoot.path}/cli-admin',
     );
     multiDeviceCliAdminHomeDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/cli-admin-home',
+      '${runtimeRoot.path}/cli-admin-home',
     );
-    dshStateRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/dsh-device',
-    );
-    dshAppStateRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/dsh-app',
-    );
+    dshStateRootDir = Directory('${runtimeRoot.path}/dsh-device');
+    dshAppStateRootDir = runtimeDirectory('dsh-app', windowsName: 'ds');
     rootTransferCliMemberWorkspaceDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member',
+      '${runtimeRoot.path}/root-transfer-cli-member',
     );
     rootTransferCliMemberHomeDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member-home',
+      '${runtimeRoot.path}/root-transfer-cli-member-home',
     );
-    appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
-    multiDeviceAppJoiningStateRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-joining-device',
+    appStateRootDir = runtimeDirectory('app', windowsName: 'a');
+    multiDeviceAppJoiningStateRootDir = runtimeDirectory(
+      'app-joining-device',
+      windowsName: 'j',
     );
-    rootTransferAppAdminStateRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/root-transfer-app-admin',
+    rootTransferAppAdminStateRootDir = runtimeDirectory(
+      'root-transfer-app-admin',
+      windowsName: 'ra',
     );
-    appPairAdminStateRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-pair/admin-state',
+    appPairAdminStateRootDir = runtimeDirectory(
+      'app-pair/admin-state',
+      windowsName: 'pa',
     );
-    appPairJoinerStateRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-pair/joiner-state',
+    appPairJoinerStateRootDir = runtimeDirectory(
+      'app-pair/joiner-state',
+      windowsName: 'pj',
     );
     appPairDaemonStateRootDir = shortAppPairDaemonStateRoot(
       runId,

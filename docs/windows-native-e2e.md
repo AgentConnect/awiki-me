@@ -63,6 +63,10 @@ CLI 等结构化输出继续严格验证 UTF-8，解码失败写入报告并执�
 service，以重开原始加密状态；窗口身份遵循各阶段的 bundle ID。
 Hosted Join/Resume 沿用其原本相同的 bundle ID。
 并发 Admin/Joiner 使用不同服务，所有测试服务均与普通客户端命名空间分离。
+Windows 运行状态使用 `.e2e/ws/<scope-run-hash>/` 及短角色目录，报告仍保留原有
+suite/run 路径。工作区过深时仅选择当前用户的短 TEMP 根；两个位置都无法给
+SQLite 备份名留足空间时提前报错。实际状态根继续设置私有 NTFS ACL，并写入
+原有私有资源记录；不会移动或删除旧运行的状态和备份。
 Windows 构建复用 `local_auth_windows` 自身固定 URL/SHA-256 的 NuGet 可执行文件，
 缓存位于工作区 `.tools/nuget/<sha256>/`；每次使用均校验摘要，避免每个隔离产物
 重复下载相同工具。包版本、TLS 与哈希验证保持原有约束。
