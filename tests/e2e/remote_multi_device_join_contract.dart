@@ -82,11 +82,15 @@ String remoteMultiDeviceCliSasDiagnostic(List<int> transcript) {
     final state = RegExp(
       r'"remote_state"\s*:\s*"(pending|challenge_sent|response_verified|consumed|expired|cancelled|rejected)"',
     ).firstMatch(clean)?.group(1);
+    final phase = RegExp(
+      r'"phase"\s*:\s*"(pending|challenge_prepared|response_prepared|response_verified|approval_prepared|authorized|cancelled|expired)"',
+    ).firstMatch(clean)?.group(1);
     return 'pollPrompt=${text.contains(_cliPollSasPrefix)}, '
         'approvalPrompt=${text.contains(_cliApprovalSasPrefix)}, '
         'ansi=${transcript.contains(27)}, '
         'pollSasAfterAnsi=${remoteMultiDeviceCliPollSas(cleanBytes) != null}, '
-        'remoteState=${state ?? 'unclassified'}';
+        'remoteState=${state ?? 'unclassified'}, '
+        'localPhase=${phase ?? 'unclassified'}';
   } finally {
     cleanBytes.fillRange(0, cleanBytes.length, 0);
   }

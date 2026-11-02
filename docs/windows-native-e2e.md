@@ -66,6 +66,8 @@ NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `Syste
 CLI 等结构化输出继续严格验证 UTF-8，解码失败写入报告并执行清理。
 CLI 子进程的启动、超时、编码和管道失败记录固定类别、超时长度及系统错误码，
 便于区分 Windows 环境故障和服务端拒绝。
+未完成的 CLI Join/Root Transfer 保留受保护的包装 key 以便检查原状态；Windows
+同样使用 NTFS ACL，保留失败不会降级权限，也不会为旧状态创建替代 key。
 重启、崩溃续办与身份删除续办的独立阶段产物，保留同一逻辑设备的测试 secret
 service，以重开原始加密状态；窗口身份遵循各阶段的 bundle ID。
 Hosted Join/Resume 沿用其原本相同的 bundle ID。
