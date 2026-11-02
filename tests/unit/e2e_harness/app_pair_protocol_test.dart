@@ -573,6 +573,51 @@ void main() {
   });
 
   test(
+    'avatar fixture errors preserve only trusted helper exception classes',
+    () {
+      expect(
+        safeAvatarFixtureFailureCategory('avatar fixture failed: JsonRpcError'),
+        'JsonRpcError',
+      );
+      expect(
+        safeAvatarFixtureFailureCategory('avatar fixture failed: ValueError'),
+        'ValueError',
+      );
+      expect(
+        safeAvatarFixtureFailureCategory(
+          'avatar fixture failed: FileNotFoundError',
+        ),
+        'FileNotFoundError',
+      );
+      for (final unsafe in [
+        'Bearer private-factor',
+        'avatar fixture failed: private-factor',
+        'avatar fixture failed: ValueError private-factor',
+        'ValueError: private-factor',
+      ]) {
+        expect(safeAvatarFixtureFailureCategory(unsafe), 'unclassified');
+      }
+    },
+  );
+
+  test(
+    'avatar helper diagnostic ignores locale bytes around its ASCII marker',
+    () async {
+      final bytes = <int>[
+        0xff,
+        0xfe,
+        10,
+        ...'avatar fixture failed: FileNotFoundError\n'.codeUnits,
+        ...'private traceback contents\n'.codeUnits,
+      ];
+      expect(
+        await readAvatarFixtureFailureCategory(Stream.value(bytes)),
+        'FileNotFoundError',
+      );
+    },
+  );
+
+  test(
     'CLI process failures identify the boundary without exception contents',
     () {
       const secret = 'private-factor-and-path';

@@ -266,7 +266,7 @@ Future<Map<String, dynamic>> _runAgentAvatarFixture(
   if (command.isEmpty) throw StateError('Avatar fixture helper is missing.');
   final process = await Process.start(command.first, command.skip(1).toList());
   final output = process.stdout.transform(utf8.decoder).join();
-  final errors = process.stderr.drain<void>();
+  final errors = readAvatarFixtureFailureCategory(process.stderr);
   process.stdin.write(jsonEncode(request));
   await process.stdin.close();
   final code = await process.exitCode.timeout(
@@ -276,11 +276,11 @@ Future<Map<String, dynamic>> _runAgentAvatarFixture(
       throw StateError('Avatar fixture helper timed out.');
     },
   );
-  await errors;
+  final helperFailure = await errors;
   final value = await output;
   if (code != 0 || value.length > 16384) {
     throw StateError(
-      'Avatar fixture helper failed (exit $code); inspect its protected local evidence.',
+      'Avatar fixture helper failed (exit $code, type=$helperFailure).',
     );
   }
   return jsonDecode(value) as Map<String, dynamic>;

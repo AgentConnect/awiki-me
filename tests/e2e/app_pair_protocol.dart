@@ -200,6 +200,51 @@ String safeAppPairFailureCode(String? code) {
       : 'redacted';
 }
 
+Future<String> readAvatarFixtureFailureCategory(
+  Stream<List<int>> errors,
+) => errors
+    // The helper's error marker is ASCII; traceback bytes may use the OS locale.
+    .transform(latin1.decoder)
+    .transform(const LineSplitter())
+    .fold<String>(
+      'unclassified',
+      (category, line) => category == 'unclassified'
+          ? safeAvatarFixtureFailureCategory(line)
+          : category,
+    );
+
+String safeAvatarFixtureFailureCategory(String line) {
+  final match = RegExp(
+    r'^avatar fixture failed: ([A-Za-z][A-Za-z0-9_]{0,63})$',
+  ).firstMatch(line);
+  const allowed = <String>{
+    'JsonRpcError',
+    'HTTPStatusError',
+    'ConnectError',
+    'ReadTimeout',
+    'ConnectTimeout',
+    'WriteTimeout',
+    'PoolTimeout',
+    'RemoteProtocolError',
+    'ValueError',
+    'RuntimeError',
+    'TypeError',
+    'AttributeError',
+    'KeyError',
+    'PermissionError',
+    'FileNotFoundError',
+    'ModuleNotFoundError',
+    'ImportError',
+    'OSError',
+    'NotImplementedError',
+    'AssertionError',
+    'UnicodeDecodeError',
+    'TimeoutError',
+  };
+  final category = match?.group(1);
+  return allowed.contains(category) ? category! : 'unclassified';
+}
+
 String safeCliProcessFailureDiagnostic(Object error) {
   if (error is TimeoutException) {
     final duration = error.duration;
