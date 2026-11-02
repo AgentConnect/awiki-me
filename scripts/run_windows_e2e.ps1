@@ -98,7 +98,9 @@ try{
     }
   }
   if(-not $env:CARGO_BUILD_JOBS){$env:CARGO_BUILD_JOBS='2'}
-  if($Case -in @('full','multi-device-remote-join')){
+  $needsDsh=$Case -eq 'full' -or ($Case -eq 'multi-device-remote-join' -and
+    ($CaseId.Count -eq 0 -or $CaseId -contains 'DEVICE-JOIN-E2E-006'))
+  if($needsDsh){
     $dshRoot=Join-Path $WorkspaceRoot 'dsh-awiki'
     $pnpm=(Get-Command pnpm.cmd -CommandType Application -ErrorAction Stop).Source
     if(-not (Test-Path -LiteralPath (Join-Path $dshRoot 'scripts/device-join-e2e.mjs'))){

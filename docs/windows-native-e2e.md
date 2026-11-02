@@ -16,7 +16,7 @@ Flutter/Dart/Node 可复用工作区 `.tools/`。Rust 工具链以 Core 仓库�
 在该仓库执行 `uv sync --locked`；launcher 对 full/Agent 头像使用只读的
 `uv sync --locked --check`，同时拒绝旧 SDK 和移动工作区后遗留的 editable 安装。
 `uv.exe` 可复用工作区 `.tools/uv/`；检查不会自动改写环境或锁文件。
-全量和 `multi-device-remote-join` 还需要 sibling `dsh-awiki` 的锁定 Node 依赖及
+全量及包含 DSH 加入用例的 `multi-device-remote-join` 还需要 sibling `dsh-awiki` 的锁定 Node 依赖及
 `pnpm.cmd`。先按其 dependency workflow 准备依赖；默认使用 registry，不能把
 残留的 sibling SDK 链接当作正式依赖。Windows 入口会核对来源、加载本机原生
 provider，并构建当前 DSH Host 后再执行产品用例；准备失败直接报错。
