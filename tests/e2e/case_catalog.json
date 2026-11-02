@@ -5439,10 +5439,10 @@
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_and_group_read_state_preserved_after_restart",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:direct_id_history_ownership_and_bidirectional_send_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:handle_backed_transport_group_id_history_and_send_preserved",
-          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:pre_recovery_group_png_sent_and_peer_received_exact_bytes",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_sent_group_png_download_and_preview_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:historical_received_group_png_download_and_preview_preserved",
+          "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:group_profile_role_status_count_and_members_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:agent_inventory_conversation_history_and_reply_preserved",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:conversation_message_and_agent_counts_remained_exact",
           "HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001:all_key_messages_converged_exactly_once"

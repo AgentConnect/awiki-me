@@ -27,6 +27,27 @@ void main() {
     );
   });
 
+  test('Recovery continuity contract follows native PNG and metadata checks', () {
+    const caseId = 'HANDLE-RECOVERY-SETTINGS-CONTINUITY-E2E-001';
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_ui_test.dart',
+    ).readAsStringSync();
+    final attestation = RegExp(
+      r'markPassed\(\s*_settingsContinuityCaseId,[\s\S]*?phases:\s*const\s*<String>\s*\[([\s\S]*?)\]',
+    ).firstMatch(source);
+    expect(attestation, isNotNull);
+    final phases = RegExp("'([a-z0-9_]+)'")
+        .allMatches(attestation!.group(1)!)
+        .map((match) => match.group(1)!)
+        .toList();
+    expect(phases, hasLength(14));
+    final catalog = AppTestCatalog.load(Directory.current);
+    expect(
+      catalog.caseById[caseId]!.assertionContract!.assertionIds,
+      phases.map((phase) => '$caseId:$phase').toList(),
+    );
+  });
+
   test('Recovery continuation retains existing and new exact UI attestations', () {
     final catalog = AppTestCatalog.load(Directory.current);
     final contract = catalog
