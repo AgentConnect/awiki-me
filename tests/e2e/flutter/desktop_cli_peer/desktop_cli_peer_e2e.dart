@@ -1,6 +1,7 @@
 library desktop_cli_peer_e2e;
 
 import '../../desktop_subprocess_environment.dart';
+import '../../app_pair_protocol.dart' show readAvatarFixtureFailureCategory;
 
 import 'dart:async';
 import 'dart:convert';
