@@ -304,11 +304,26 @@ void applyWindowsE2eIdentity(
   void replace(String relative, String before, String after) {
     final file = File('${root.path}/$relative');
     final text = file.readAsStringSync();
-    if (!text.contains(before)) {
+    final newline = text.contains('\r\n') ? '\r\n' : '\n';
+    final needle = before.replaceAll('\r\n', '\n').replaceAll('\n', newline);
+    final replacement = after
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\n', newline);
+    if (!text.contains(needle)) {
       throw StateError('Windows E2E identity contract changed in $relative.');
     }
-    file.writeAsStringSync(text.replaceAll(before, after));
+    file.writeAsStringSync(text.replaceAll(needle, replacement));
   }
+
+  // An interrupted first configure can cache the Program Files default before
+  // Flutter initializes its install prefix. Always reset it in E2E snapshots.
+  replace(
+    'windows/CMakeLists.txt',
+    r'''if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
+endif()''',
+    r'''set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "E2E bundle only" FORCE)''',
+  );
 
   const header = 'windows/runner/app_constants.h';
   replace(header, 'AI_AWIKI_AWIKIME_FLUTTER_WINDOW', 'AWIKI_E2E_$token');

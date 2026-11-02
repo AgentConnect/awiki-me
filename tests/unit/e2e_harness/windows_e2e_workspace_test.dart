@@ -189,6 +189,7 @@ void main() {
       );
       addTearDown(() => root.delete(recursive: true));
       const inputs = [
+        'windows/CMakeLists.txt',
         'windows/runner/app_constants.h',
         'windows/runner/Runner.rc',
         'windows/runner/desktop_shell.cpp',
@@ -219,6 +220,19 @@ void main() {
         ).readAsStringSync();
         expect(header, contains('ai.awiki.e2e.$role.single-instance'));
         expect(header, isNot(contains('L"AWiki Me"')));
+        final cmake = File(
+          '${source.path}/windows/CMakeLists.txt',
+        ).readAsStringSync();
+        expect(
+          cmake,
+          isNot(contains('if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)')),
+        );
+        expect(
+          cmake,
+          contains(
+            r'set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "E2E bundle only" FORCE)',
+          ),
+        );
         headers.add(header);
         final native = File(
           '${source.path}/windows/runner/desktop_shell.cpp',
