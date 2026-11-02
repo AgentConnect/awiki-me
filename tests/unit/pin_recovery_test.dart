@@ -155,6 +155,15 @@ class FakePinCore implements PinRecoveryCorePort {
   Future<PinRecoveryProgress> cancel(String operationId) async => current;
 }
 
+class _DelayedPhoneCore extends FakePinCore {
+  final challenge = Completer<PinPhoneChallenge>();
+  @override
+  Future<PinPhoneChallenge> requestPhoneCode(
+    String phone, {
+    String? resumeOperationId,
+  }) => challenge.future;
+}
+
 void main() {
   test(
     'PIN format and matching confirmation fail before native submission',
@@ -341,6 +350,72 @@ void main() {
     await tester.tap(find.byKey(const Key('pin-recovery-verify')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('phone caret changes preserve its OTP challenge and draft', (
+    tester,
+  ) async {
+    final core = FakePinCore();
+    await mount(tester, core, const PinRecoveryPage());
+    final phone = find.byKey(const Key('pin-recovery-phone'));
+    await tester.enterText(phone, 'verified-phone');
+    await tester.tap(find.byKey(const Key('pin-recovery-send-code')));
+    await tester.pumpAndSettle();
+    final otp = find.byKey(const Key('pin-recovery-otp'));
+    await tester.enterText(otp, '123456');
+    tester.widget<CupertinoTextField>(phone).controller!.selection =
+        const TextSelection.collapsed(offset: 0);
+    await tester.pumpAndSettle();
+    expect(otp, findsOneWidget);
+    expect(tester.widget<CupertinoTextField>(otp).controller!.text, '123456');
+    expect(find.byKey(const Key('pin-recovery-verify')), findsOneWidget);
+  });
+
+  testWidgets('phone caret changes preserve an in-flight challenge response', (
+    tester,
+  ) async {
+    final core = _DelayedPhoneCore();
+    await mount(tester, core, const PinRecoveryPage());
+    final phone = find.byKey(const Key('pin-recovery-phone'));
+    await tester.enterText(phone, 'verified-phone');
+    await tester.tap(find.byKey(const Key('pin-recovery-send-code')));
+    await tester.pump();
+    tester.widget<CupertinoTextField>(phone).controller!.selection =
+        const TextSelection.collapsed(offset: 0);
+    core.challenge.complete(
+      const PinPhoneChallenge(
+        handle: 'challenge',
+        maskedPhone: '***',
+        resendAfterSeconds: 0,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pin-recovery-otp')), findsOneWidget);
+  });
+
+  testWidgets(
+    'late phone challenge stays invalid after the phone text changes',
+    (tester) async {
+      final core = _DelayedPhoneCore();
+      await mount(tester, core, const PinRecoveryPage());
+      final phone = find.byKey(const Key('pin-recovery-phone'));
+      await tester.enterText(phone, 'first-phone');
+      await tester.tap(find.byKey(const Key('pin-recovery-send-code')));
+      await tester.pump();
+      tester.widget<CupertinoTextField>(phone).controller!.text =
+          'second-phone';
+      core.challenge.complete(
+        const PinPhoneChallenge(
+          handle: 'challenge',
+          maskedPhone: '***',
+          resendAfterSeconds: 0,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pin-recovery-otp')), findsNothing);
+      expect(find.byKey(const Key('pin-recovery-verify')), findsNothing);
+      expect(core.begins, 0);
+    },
+  );
 
   testWidgets(
     'verified phone keeps multiple recovery targets explicit and selects the requested target',

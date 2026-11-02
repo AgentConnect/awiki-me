@@ -42,6 +42,7 @@ class _PinRecoveryPageState extends ConsumerState<PinRecoveryPage> {
   final _device = TextEditingController(text: 'AWiki Me');
   PinPhoneChallenge? _challenge;
   int _phoneGeneration = 0;
+  String _lastPhoneText = '';
   String? _discovery;
   String? _selectedTargetId;
   late final StorageScopeId _scopeId;
@@ -118,6 +119,11 @@ class _PinRecoveryPageState extends ConsumerState<PinRecoveryPage> {
   }
 
   void _phoneChanged() {
+    final text = _phone.text;
+    if (text == _lastPhoneText) {
+      return;
+    }
+    _lastPhoneText = text;
     _phoneGeneration++;
     _resendTimer?.cancel();
     if (!mounted) return;
