@@ -130,11 +130,11 @@
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:visible_current_data_deletion",
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:same_process_provider_tree_reentered",
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:historical_applied_not_login",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_device_advanced_remote_epoch_after_local_deletion",
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:older_retired_binding_selected_fresh_owner_without_history_adoption",
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_operation_and_confirmation_distinct",
           "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:second_recovery_entered_messages",
-          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved",
-          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_device_advanced_remote_epoch_after_local_deletion",
-          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:older_retired_binding_selected_fresh_owner_without_history_adoption"
+          "HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001:independent_handle_preserved"
         ],
         "exactOracleAssertions": [
           [

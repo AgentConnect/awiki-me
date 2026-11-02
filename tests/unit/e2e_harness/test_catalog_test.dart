@@ -6,6 +6,27 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/test_catalog.dart';
 
 void main() {
+  test('Recovery repeat contract follows the native attestation phase order', () {
+    const caseId = 'HANDLE-RECOVERY-STATE-MACHINE-REPEAT-E2E-001';
+    final source = File(
+      'tests/e2e/flutter/app/handle_recovery_state_machine_test.part.dart',
+    ).readAsStringSync();
+    final attestation = RegExp(
+      r'markPassed\(\s*_stateMachineRepeatCaseId,[\s\S]*?phases:\s*const\s*\[([\s\S]*?)\]',
+    ).firstMatch(source);
+    expect(attestation, isNotNull);
+    final phases = RegExp("'([a-z0-9_]+)'")
+        .allMatches(attestation!.group(1)!)
+        .map((match) => match.group(1)!)
+        .toList();
+    expect(phases, hasLength(8));
+    final catalog = AppTestCatalog.load(Directory.current);
+    expect(
+      catalog.caseById[caseId]!.assertionContract!.assertionIds,
+      phases.map((phase) => '$caseId:$phase').toList(),
+    );
+  });
+
   test('Recovery continuation retains existing and new exact UI attestations', () {
     final catalog = AppTestCatalog.load(Directory.current);
     final contract = catalog
