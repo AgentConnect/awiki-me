@@ -14,6 +14,7 @@ import '../tests/e2e/desktop_paths.dart';
 import 'ensure_linux_im_core.dart';
 import 'ensure_windows_im_core.dart';
 import 'windows_e2e_workspace.dart';
+import 'windows_nuget_cache.dart';
 
 enum IsolatedE2eAppPlatform {
   macos,
@@ -501,6 +502,7 @@ class IsolatedE2eAppBuilder {
     }
 
     var buildProject = request.projectRoot;
+    final windowsBuildEnvironment = <String, String>{};
     if (request.platform == IsolatedE2eAppPlatform.windows) {
       if (hostPlatform.processArchitecture != 'x86_64') {
         throw const IsolatedE2eAppBuildException(
@@ -513,12 +515,16 @@ class IsolatedE2eAppBuilder {
         bundleId: request.bundleId,
         name: request.name,
       );
+      final nuget = await ensureWindowsNuget(request.projectRoot);
+      windowsBuildEnvironment['PATH'] =
+          '${nuget.parent.path};${Platform.environment['PATH'] ?? ''}';
       final packages = await Process.run(
         desktopToolExecutable(request.flutterBin),
         const ['pub', 'get', '--enforce-lockfile'],
         workingDirectory: buildProject.path,
         environment: {
           ...Platform.environment,
+          ...windowsBuildEnvironment,
           'APPDATA': plan.flutterConfigDirectory.path,
           'PUB_HOSTED_URL':
               Platform.environment['PUB_HOSTED_URL'] ??
@@ -546,6 +552,7 @@ class IsolatedE2eAppBuilder {
         workingDirectory: buildProject.path,
         environment: <String, String>{
           ...Platform.environment,
+          ...windowsBuildEnvironment,
           'LANG': request.platform == IsolatedE2eAppPlatform.macos
               ? 'en_US.UTF-8'
               : 'C.UTF-8',
@@ -1217,6 +1224,7 @@ Future<String> trackedBuildInputsSha256(
     if (platform == IsolatedE2eAppPlatform.windows) ...[
       'tool/isolated_e2e_app_builder.dart',
       'tool/windows_e2e_workspace.dart',
+      'tool/windows_nuget_cache.dart',
       'tool/ensure_windows_im_core.dart',
       'tests/e2e/desktop_tool_executable.dart',
     ],

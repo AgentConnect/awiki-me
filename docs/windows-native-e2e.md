@@ -55,6 +55,12 @@ NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `Syste
 构建快照保留 E2E 引用的共享 unit fakes，并遵守 Git 忽略规则。绝对可执行文件
 直接检查文件，不交给 Windows `where` 解析；Windows 系统工具使用系统编码，
 CLI 等结构化输出继续严格验证 UTF-8，解码失败写入报告并执行清理。
+重启、崩溃续办、身份删除续办与 Hosted Join/Resume 的独立阶段产物，保留同一
+逻辑设备的测试 secret service，以重开原始加密状态；窗口、进程身份仍各自独立。
+并发 Admin/Joiner 使用不同服务，所有测试服务均与普通客户端命名空间分离。
+Windows 构建复用 `local_auth_windows` 自身固定 URL/SHA-256 的 NuGet 可执行文件，
+缓存位于工作区 `.tools/nuget/<sha256>/`；每次使用均校验摘要，避免每个隔离产物
+重复下载相同工具。包版本、TLS 与哈希验证保持原有约束。
 
 ## 服务端与专用 fixture
 

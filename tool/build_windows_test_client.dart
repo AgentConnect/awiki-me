@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 
 import 'windows_e2e_workspace.dart';
+import 'windows_nuget_cache.dart';
 import '../tests/e2e/desktop_tool_executable.dart';
 
 /// Builds the normal lib/main.dart UI against an explicit test tenant, with
@@ -69,8 +70,10 @@ Future<void> main(List<String> arguments) async {
     File('${config.path}/.flutter_settings').writeAsStringSync(
       jsonEncode({'build-dir': 'build', 'enable-windows-desktop': true}),
     );
+    final nuget = await ensureWindowsNuget(root);
     final environment = <String, String>{
       ...Platform.environment,
+      'PATH': '${nuget.parent.path};${Platform.environment['PATH'] ?? ''}',
       'APPDATA': config.path,
       'PUB_HOSTED_URL':
           Platform.environment['PUB_HOSTED_URL'] ??

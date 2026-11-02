@@ -263,6 +263,25 @@ void verifyWindowsSnapshotDependencies(
 /// Windows identities are compile-time native constants. Override only the
 /// generated build snapshot so parallel roles cannot activate the normal App,
 /// share a mutex, read its path-provider roots, or use its dev secret namespace.
+String windowsE2eSecretService(String bundleId) {
+  const lifecycleFamilies = [
+    'ai.awiki.awikime.dev.e2e.recovery',
+    'ai.awiki.awikime.dev.e2e.identity.deletion',
+    'ai.awiki.awikime.dev.e2e.restart',
+  ];
+  final identity = lifecycleFamilies.firstWhere(
+    (family) => bundleId == family || bundleId.startsWith('$family.'),
+    orElse: () => bundleId,
+  );
+  final token = sha256
+      .convert(utf8.encode(identity))
+      .toString()
+      .substring(0, 16);
+  return 'ai.awiki.awikime.dev.e2e.$token.scope-secrets';
+}
+
+// A restarted logical device keeps its secret service across separately built
+// phase binaries. Its native process/window identities are still per bundle.
 void applyWindowsE2eIdentity(
   Directory root, {
   required String bundleId,
@@ -278,7 +297,7 @@ void applyWindowsE2eIdentity(
   final token = hash.substring(0, 16);
   final product = 'AWikiMeE2E$token';
   final appId = 'AWiki.AWikiMe.E2E.$token';
-  final service = 'ai.awiki.awikime.dev.e2e.$token.scope-secrets';
+  final service = windowsE2eSecretService(bundleId);
   final guid =
       '${hash.substring(0, 8)}-${hash.substring(8, 12)}-'
       '${hash.substring(12, 16)}-${hash.substring(16, 20)}-${hash.substring(20, 32)}';

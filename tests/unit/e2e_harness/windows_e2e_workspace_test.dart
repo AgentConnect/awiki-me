@@ -7,6 +7,49 @@ import '../../../tool/windows_e2e_workspace.dart';
 
 void main() {
   test(
+    'restart and recovery phases keep one logical device secret namespace',
+    () {
+      final specs =
+          jsonDecode(
+                File('tests/e2e/app_artifact_specs.json').readAsStringSync(),
+              )
+              as Map;
+      final bundles = {
+        for (final artifact in specs['artifacts'] as List)
+          artifact['name'] as String: artifact['bundleId'] as String,
+      };
+      for (final names in [
+        ['restart-a', 'restart-b', 'restart-c'],
+        [
+          'recovery-main',
+          'recovery-crash-a',
+          'recovery-crash-b',
+          'recovery-fresh-restart',
+          'recovery-registration-resume-a',
+          'recovery-registration-resume-b',
+        ],
+        ['identity-deletion-a', 'identity-deletion-b'],
+        ['hosted-gateway-join', 'hosted-gateway-resume'],
+      ]) {
+        if (names.first != 'hosted-gateway-join') {
+          expect(
+            names.map((name) => bundles[name]).toSet().length,
+            names.length,
+          );
+        }
+        expect(
+          names.map((name) => windowsE2eSecretService(bundles[name]!)).toSet(),
+          hasLength(1),
+        );
+      }
+      final admin = windowsE2eSecretService(bundles['admin']!);
+      final joiner = windowsE2eSecretService(bundles['joiner']!);
+      expect(admin, isNot(joiner));
+      expect(admin, isNot('ai.awiki.awikime.dev.scope-secrets'));
+      expect(admin, isNot(windowsE2eSecretService(bundles['restart-a']!)));
+    },
+  );
+  test(
     'snapshot inventory retains shared unit fakes and excludes private fixtures',
     () async {
       final root = await Directory.systemTemp.createTemp(
@@ -186,6 +229,14 @@ void main() {
           '${source.path}/lib/src/data/storage/platform_scope_secret_repository.dart',
         ).readAsStringSync();
         expect(dart, contains('ai.awiki.awikime.dev.e2e.'));
+        final service = windowsE2eSecretService('ai.awiki.e2e.$role');
+        expect(dart, contains(service));
+        expect(
+          File(
+            '${source.path}/windows/runner/scope_secret_store.cpp',
+          ).readAsStringSync(),
+          contains(service),
+        );
         expect(dart, isNot(contains('ai.awiki.awikime.dev.scope-secrets')));
       }
       expect(headers[0], isNot(headers[1]));
