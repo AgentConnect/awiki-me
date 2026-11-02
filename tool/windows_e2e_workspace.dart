@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
+import 'windows_sqlite_cache.dart';
 
 /// A build snapshot, never a second Git checkout. Ignored fixture/config files
 /// are excluded by Git's own inventory and the developer source is read-only.
@@ -222,6 +223,23 @@ Future<Directory> _configureWindowsE2eWorkspace(
   }
   await lockFile.writeAsString('${jsonEncode(lock)}\n');
   applyWindowsE2eIdentity(output, bundleId: bundleId, name: name);
+  final sqlite = await ensureWindowsSqliteSource(source);
+  final sqlitePath = sqlite.path.replaceAll('\\', '/');
+  if (RegExp(r'[";\r\n]').hasMatch(sqlitePath)) {
+    throw StateError('Unsafe Windows SQLite cache path.');
+  }
+  final cmake = File('${output.path}/windows/CMakeLists.txt');
+  final code = await cmake.readAsString();
+  const pluginInclude = 'include(flutter/generated_plugins.cmake)';
+  if (!code.contains(pluginInclude)) {
+    throw StateError('Windows plugin CMake contract changed.');
+  }
+  await cmake.writeAsString(
+    code.replaceFirst(
+      pluginInclude,
+      'set(FETCHCONTENT_SOURCE_DIR_SQLITE3 "$sqlitePath" CACHE PATH "Verified SQLite source cache" FORCE)\n$pluginInclude',
+    ),
+  );
   return output;
 }
 

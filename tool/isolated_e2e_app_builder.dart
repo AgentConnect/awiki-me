@@ -1225,6 +1225,7 @@ Future<String> trackedBuildInputsSha256(
       'tool/isolated_e2e_app_builder.dart',
       'tool/windows_e2e_workspace.dart',
       'tool/windows_nuget_cache.dart',
+      'tool/windows_sqlite_cache.dart',
       'tool/ensure_windows_im_core.dart',
       'tests/e2e/desktop_tool_executable.dart',
     ],
