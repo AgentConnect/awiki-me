@@ -62,6 +62,8 @@ Hosted Join/Resume 沿用其原本相同的 bundle ID。
 Windows 构建复用 `local_auth_windows` 自身固定 URL/SHA-256 的 NuGet 可执行文件，
 缓存位于工作区 `.tools/nuget/<sha256>/`；每次使用均校验摘要，避免每个隔离产物
 重复下载相同工具。包版本、TLS 与哈希验证保持原有约束。
+本版本固定的 WIL/CppWinRT Microsoft 包也以记录的 SHA-256 保存在本机 feed；
+生成快照的 `NuGet.Config` 仅使用该 feed，机器和用户的 NuGet 配置不变。
 SQLite 源码使用锁定插件中固定的下载 URL，缓存包和编译所需源码的摘要并逐次
 核对；生成快照通过 CMake 的 SQLite source override 复用这些相同字节，减少
 隔离产物重复下载。该插件本身未提供上游 archive hash，缓存记录不冒充上游签名。

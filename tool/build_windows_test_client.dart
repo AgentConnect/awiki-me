@@ -70,7 +70,7 @@ Future<void> main(List<String> arguments) async {
     File('${config.path}/.flutter_settings').writeAsStringSync(
       jsonEncode({'build-dir': 'build', 'enable-windows-desktop': true}),
     );
-    final nuget = await ensureWindowsNuget(root);
+    final nuget = await prepareWindowsNugetEnvironment(root, source);
     final environment = <String, String>{
       ...Platform.environment,
       'PATH': '${nuget.parent.path};${Platform.environment['PATH'] ?? ''}',

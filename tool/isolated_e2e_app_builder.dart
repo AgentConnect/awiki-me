@@ -515,7 +515,10 @@ class IsolatedE2eAppBuilder {
         bundleId: request.bundleId,
         name: request.name,
       );
-      final nuget = await ensureWindowsNuget(request.projectRoot);
+      final nuget = await prepareWindowsNugetEnvironment(
+        request.projectRoot,
+        buildProject,
+      );
       windowsBuildEnvironment['PATH'] =
           '${nuget.parent.path};${Platform.environment['PATH'] ?? ''}';
       final packages = await Process.run(
