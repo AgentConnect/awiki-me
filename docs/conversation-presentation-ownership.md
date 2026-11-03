@@ -69,6 +69,7 @@ App list/detail/read/send/realtime 主链路必须通过 `ConversationIdentity.c
 
 - 文本/Markdown/附件气泡（含内边距）共用消息菜单；桌面右键和悬停气泡旁的三个点共用复制、全选、引用、多选、删除。移动端保留原生文字选择菜单并提供相同消息操作。执行中的 ACP 预览不具有已提交消息身份，不提供引用或删除。
 - 引用草稿按会话保存在 `ChatComposerDraft`，可以取消；发送后的摘要在气泡内展示。文本和附件复用既有 Core conversation payload/attachment 接口，`annotations.awiki_reply_to_message_id` 关联原消息；`awiki_reply_sender_name`、`awiki_reply_excerpt` 是发送时的展示快照，摘要最多 500 个 Unicode code point。引用与 P9 mention 共存，发送及失败重试保留原引用、幂等 ID 和用户选择的消息加密模式。
+- Windows 附件缓存的目录枚举使用内部扩展路径，以支持较长的消息 ID 和 Storage Scope 路径；对外返回的预览路径、缓存键、消息 ID、附件 ID 和其他平台行为保持原有形式。缓存替换后仍只展示最新已提交文件，临时与备份文件不进入 lookup。
 - 删除是本机聊天记录的持久隐藏，不是撤回，也不是 Core SQLite 或附件缓存的物理擦除。`ProductLocalStore` 的 `deleted-messages:v1:<canonical conversationId>` UI preference 仅保存消息 ID/别名集合；按当前 Storage Scope、owner DID、conversationId 隔离，不写服务端、不发同步事件、不影响对方或兄弟设备。批量写成功后才移除显示，失败保留选中项和消息以便重试。
 - `chatThreadProvider` 继续提供完整 Core UI window；`visibleChatThreadProvider` 在最后展示边界应用删除标记，聊天搜索也消费该可见投影。同步、分页、已读与 Agent 因果关联继续使用未过滤窗口。重开、重新拉历史、repair/reset 不会解除删除标记；overlay 加载完成前不闪现已删消息，失败时提供重试。最近会话预览和预览搜索不再展示已删的末条消息。 组合 E2E 随后从联系人重开同一会话时，也按本机删除标记核对可见预览，不能把 Core 保留的原始末条内容要求重新展示。
 - 多选模式逐条勾选、显示数量、确认后批量删除，可取消或按 Esc 退出；切换会话/账号清空选择。引用草稿跟随会话恢复，账号 generation 切换清除。删除确认和异步完成必须通过同一 session/conversation fence。

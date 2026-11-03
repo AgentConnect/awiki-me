@@ -153,14 +153,26 @@ class FileAttachmentCacheService implements AttachmentCacheService {
     if (!await directory.exists()) {
       return null;
     }
-    await for (final entity in directory.list(followLinks: false)) {
+    await for (final entity in _directoryForListing(
+      directory,
+    ).list(followLinks: false)) {
       if (entity is File &&
           !_isTransientFile(entity) &&
           await entity.exists()) {
-        return entity.path;
+        return p.join(directory.path, p.basename(entity.path));
       }
     }
     return null;
+  }
+
+  // Windows 的目录枚举需要扩展路径；对外缓存路径仍保留宿主原始形式。
+  static Directory _directoryForListing(Directory directory) {
+    if (!Platform.isWindows) return directory;
+    final path = p.normalize(directory.absolute.path);
+    if (path.startsWith(r'\\?\')) return Directory(path);
+    return Directory(
+      path.startsWith(r'\\') ? r'\\?\UNC\' + path.substring(2) : r'\\?\' + path,
+    );
   }
 
   String? _commitStagedFile({
@@ -175,7 +187,7 @@ class FileAttachmentCacheService implements AttachmentCacheService {
     }
 
     final destination = File(p.join(directory.path, _safeFilename(filename)));
-    final committedFiles = directory
+    final committedFiles = _directoryForListing(directory)
         .listSync(followLinks: false)
         .whereType<File>()
         .where((file) => !_isTransientFile(file))

@@ -7,6 +7,61 @@ import 'package:path/path.dart' as p;
 
 void main() {
   test(
+    'long cache paths commit, replace and lookup without leaking extended prefixes',
+    () async {
+      final sandbox = await Directory.systemTemp.createTemp(
+        'awiki-cache-long-',
+      );
+      final root = Directory(p.join(sandbox.path, 'r' * 120));
+      addTearDown(() async {
+        final cleanup = Platform.isWindows
+            ? Directory(r'\\?\' + sandbox.absolute.path)
+            : sandbox;
+        if (await cleanup.exists()) await cleanup.delete(recursive: true);
+      });
+      final service = FileAttachmentCacheService(
+        rootDirectory: () async => root,
+      );
+      final messageId = 'm' * 107;
+      final attachmentId = 'a' * 20;
+      final staged = await service.prepareDownloadedFile(
+        messageId: messageId,
+        attachmentId: attachmentId,
+      );
+      expect(p.dirname(staged).length, greaterThan(260));
+      await File(staged).writeAsBytes([1, 2, 3]);
+      final first = await service.commitDownloadedFileIfCurrent(
+        messageId: messageId,
+        attachmentId: attachmentId,
+        filename: 'first.png',
+        mimeType: 'image/png',
+        stagedPath: staged,
+        isCurrent: () => true,
+      );
+      expect(first, isNotNull);
+      expect(first, isNot(startsWith(r'\\?\')));
+      expect(
+        await service.lookup(messageId: messageId, attachmentId: attachmentId),
+        first,
+      );
+      final second = await service.cacheDownloadedBytes(
+        messageId: messageId,
+        attachmentId: attachmentId,
+        filename: 'second.png',
+        mimeType: 'image/png',
+        bytes: Uint8List.fromList([4, 5, 6]),
+      );
+      expect(second, isNot(startsWith(r'\\?\')));
+      expect(await File(first!).exists(), isFalse);
+      expect(await File(second).readAsBytes(), [4, 5, 6]);
+      expect(
+        await service.lookup(messageId: messageId, attachmentId: attachmentId),
+        second,
+      );
+    },
+  );
+
+  test(
     'cacheLocalSource copies file into app-owned attachment cache',
     () async {
       final root = await Directory.systemTemp.createTemp('awiki-attachments-');
