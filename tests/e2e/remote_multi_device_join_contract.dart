@@ -89,6 +89,9 @@ String remoteMultiDeviceCliSasDiagnostic(List<int> transcript) {
         'approvalPrompt=${text.contains(_cliApprovalSasPrefix)}, '
         'ansi=${transcript.contains(27)}, '
         'pollSasAfterAnsi=${remoteMultiDeviceCliPollSas(cleanBytes) != null}, '
+        'approvalSasAfterAnsi=${remoteMultiDeviceCliApprovalSas(cleanBytes) != null}, '
+        'sasInputPrompt=${remoteMultiDeviceCliRequestsSasInput(cleanBytes)}, '
+        'confirmationPrompt=${remoteMultiDeviceCliRequestsApproval(cleanBytes) || remoteMultiDeviceCliRequestsApproval(cleanBytes, managementAllowed: false)}, '
         'remoteState=${state ?? 'unclassified'}, '
         'localPhase=${phase ?? 'unclassified'}';
   } finally {

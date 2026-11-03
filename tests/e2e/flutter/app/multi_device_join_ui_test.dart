@@ -2621,6 +2621,7 @@ class _JoinCli {
     var exitCode = -1;
     var observedBytes = 0;
     String? processFailure;
+    var terminalObservation = 'unobserved';
     try {
       process = await _processHost.startForeground(config.cliBin, <String>[
         '--format',
@@ -2697,6 +2698,7 @@ class _JoinCli {
         }
       }
       observedBytes = transcript.length;
+      terminalObservation = remoteMultiDeviceCliSasDiagnostic(transcript);
       transcript.fillRange(0, transcript.length, 0);
       transcript.clear();
     }
@@ -2710,7 +2712,7 @@ class _JoinCli {
         '(exit=$exitCode, bytes=$observedBytes, invalidOutput=$invalidOutput, '
         'sasMatched=$sasMatched, sasSubmitted=$sasSubmitted, '
         'approvalSubmitted=$approvalSubmitted, '
-        '${processFailure ?? 'no_process_exception'}).',
+        '${processFailure ?? 'no_process_exception'}, $terminalObservation).',
       );
     }
   }
