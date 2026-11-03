@@ -96,6 +96,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
+import '../../bounded_cli_process.dart';
 import '../../group_inventory_retry.dart';
 import '../../remote_device_environment.dart';
 import '../../step4_group_diagnostics.dart';
@@ -3017,8 +3018,9 @@ class _JoinCli {
   }
 
   Future<void> waitForGroupReady(String groupDid) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 45));
-    while (DateTime.now().isBefore(deadline)) {
+    final clock = Stopwatch()..start();
+    const total = Duration(seconds: 45);
+    while (clock.elapsed < total) {
       final inbox = _data(
         await _run(const <String>[
           '--format',
@@ -3029,7 +3031,7 @@ class _JoinCli {
           'direct',
           '--limit',
           '20',
-        ]),
+        ], safeAction: 'msg.inbox', timeout: remainingCliOperationBudget(total, clock.elapsed)),
         action: null,
       );
       if (inbox['messages'] is! List) {
@@ -3044,7 +3046,7 @@ class _JoinCli {
           'status',
           '--group',
           groupDid,
-        ]),
+        ], safeAction: 'group.secure.status', timeout: remainingCliOperationBudget(total, clock.elapsed)),
         action: null,
       )['status'];
       if (statusRaw is! Map) {
@@ -3063,7 +3065,10 @@ class _JoinCli {
           local['has_active_membership'] == true) {
         return;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 750));
+      final remaining = total - clock.elapsed;
+      if (remaining <= Duration.zero) break;
+      await Future<void>.delayed(remaining < const Duration(milliseconds: 750)
+          ? remaining : const Duration(milliseconds: 750));
     }
     fail('CLI did not consume its group Welcome through public sync.');
   }
@@ -3155,45 +3160,17 @@ class _JoinCli {
     String? accountVerificationToken,
     String? safeAction,
     String? stdinText,
+    Duration? timeout,
   }) async {
     final ProcessResult result;
     try {
-      final environment = _environment(
-        accountVerificationToken: accountVerificationToken,
+      result = await runBoundedCliProcess(
+        executable: config.cliBin,
+        arguments: args,
+        environment: _environment(accountVerificationToken: accountVerificationToken),
+        timeout: timeout ?? _remoteTimeout,
+        stdinText: stdinText,
       );
-      if (stdinText == null) {
-        result = await Process.run(
-          config.cliBin,
-          args,
-          environment: environment,
-          includeParentEnvironment: false,
-          runInShell: false,
-        ).timeout(_remoteTimeout);
-      } else {
-        final process = await Process.start(
-          config.cliBin,
-          args,
-          environment: environment,
-          includeParentEnvironment: false,
-          runInShell: false,
-        );
-        final stdoutFuture = process.stdout.transform(utf8.decoder).join();
-        final stderrFuture = process.stderr.transform(utf8.decoder).join();
-        try {
-          process.stdin.write(stdinText);
-          await process.stdin.close();
-          final exitCode = await process.exitCode.timeout(_remoteTimeout);
-          result = ProcessResult(
-            process.pid,
-            exitCode,
-            await stdoutFuture,
-            await stderrFuture,
-          );
-        } on Object {
-          process.kill();
-          rethrow;
-        }
-      }
     } on Object catch (error) {
       fail(
         'The independent CLI process did not complete safely '
