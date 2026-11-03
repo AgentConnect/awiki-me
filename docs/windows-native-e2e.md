@@ -58,6 +58,11 @@ HOME/USERPROFILE，不调用真实模型 API 或个人安装的 Agent CLI。
 Remote Join 可附加 `-CaseId DEVICE-JOIN-E2E-002` 定向复验；选择范围和依赖仍由
 owning runner 校验，其他 suite 不因此获得跳过成员的入口。
 
+提供原生 Python 3.13+ 时，既有 Windows 清理重试仍失败后会复用 Core 的
+`scripts/testing/windows_file_lock_probe.py` 记录文件共享诊断。日志只含类别、数量及
+是否截断，不读取内容或打印路径；辅助进程不继承业务/模型凭据，超时终止本次 helper。
+原清理失败继续失败，不扩大删除范围、不延长重试，也不重写保留的历史日志。
+
 NTFS ACL 代替 POSIX `chmod`。CLI 子进程保留 Windows DNS 所需的 `SystemRoot`，
 并将 USERPROFILE、临时文件和 AppData 指向测试 HOME。交互 CLI 使用本仓库
 固定版本 ConPTY 桥接；终止时仅清理本轮拥有的进程树。

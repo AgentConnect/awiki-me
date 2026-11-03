@@ -32,6 +32,7 @@ $keys=@('PATH','PUB_HOSTED_URL','CARGO_NET_GIT_FETCH_WITH_CLI','AWIKI_SYSTEM_TES
   'AWIKI_SYSTEM_TEST_TARGET','AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED',
   'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED','AWIKI_PIN_RECOVERY_E2E_FIXTURE',
   'AWIKI_E2E_WINDOWS_PTY_BRIDGE','AWIKI_E2E_NODE_BIN','AWIKI_E2E_PYTHON_BIN','CARGO_BUILD_JOBS',
+  'AWIKI_E2E_WINDOWS_FILE_LOCK_PROBE',
   'AWIKI_E2E_CLI_BINARY','AWIKI_E2E_CLI_SOURCE_REF','AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E',
   'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE','AWIKI_ACCOUNT_STATE_V1_E2E',
   'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON','AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED',
@@ -96,6 +97,11 @@ try{
     if($LASTEXITCODE -ne 0){
       throw 'Synchronize the native awiki-system-test environment with uv sync --locked; stale SDK or relocated editable installs cannot attest this run.'
     }
+  }
+  [Environment]::SetEnvironmentVariable('AWIKI_E2E_WINDOWS_FILE_LOCK_PROBE',$null,'Process')
+  $sharingProbe=Join-Path $WorkspaceRoot 'awiki-cli-rs2/scripts/testing/windows_file_lock_probe.py'
+  if(Test-Path -LiteralPath $sharingProbe -PathType Leaf){
+    $env:AWIKI_E2E_WINDOWS_FILE_LOCK_PROBE=$sharingProbe
   }
   if(-not $env:CARGO_BUILD_JOBS){$env:CARGO_BUILD_JOBS='2'}
   $needsDsh=$Case -eq 'full' -or ($Case -eq 'multi-device-remote-join' -and
