@@ -23,8 +23,33 @@ class DesktopSecretRedactor {
     _secrets.sort((a, b) => b.length.compareTo(a.length));
   }
 
+  static final _paddedLocalAuth = RegExp(
+    r'((?:https?|wss?)://(?:127\.0\.0\.1|localhost|\[::1\]):[0-9]{1,5}/)([A-Za-z0-9_-]{8,}={1,2})(?![A-Za-z0-9_=-])',
+    caseSensitive: false,
+  );
+  static final _localWebSocketAuth = RegExp(
+    r'((?:https?|wss?)://(?:127\.0\.0\.1|localhost|\[::1\]):[0-9]{1,5}/)([A-Za-z0-9_-]{8,}={0,2})(?=/ws(?:[/\s?#]|$))',
+    caseSensitive: false,
+  );
+  static final _vmBannerAuth = RegExp(
+    r'(Dart VM service is listening on (?:https?|wss?)://(?:127\.0\.0\.1|localhost|\[::1\]):[0-9]{1,5}/)([A-Za-z0-9_-]{8,}={0,2})(?![A-Za-z0-9_=-])',
+    caseSensitive: false,
+  );
+
   String redact(String input) {
+    // Dynamic VM authentication paths are unknown to the fixture secret list.
+    // Remove them before a known value can split an otherwise matching URL.
     var output = input;
+    for (final pattern in [
+      _paddedLocalAuth,
+      _localWebSocketAuth,
+      _vmBannerAuth,
+    ]) {
+      output = output.replaceAllMapped(
+        pattern,
+        (match) => '${match.group(1)}<redacted-local-auth>',
+      );
+    }
     for (final secret in _secrets) {
       output = output.replaceAll(secret, '<redacted>');
     }

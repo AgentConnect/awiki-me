@@ -122,6 +122,10 @@ full 保留全部 114 个 case ID；Windows 必须声明全部可移植成员 su
 直接拒绝。`did-method-web` 按用户已有决定记录为 `user_excluded`；签名 macOS
 Keychain 专属 `NATIVE-E2E-002` 为平台不适用，不能描述为 Windows 凭据验收。
 
+驱动日志会隐藏本机 Dart VM 服务 HTTP/WS 地址的临时认证段，保留必要的回环端口
+信息；该认证段不是 fixture 配置中预先知道的秘密，不能依赖固定手机号/PIN 列表脱敏。
+历史失败日志保持私有证据，不为新规则重写；HTML 只导出汇总，不复制原始驱动输出。
+
 报告使用 `.e2e/<scope>/<run-id>/reports/`，原始日志、状态、私有配置与构建产物
 保留在忽略目录。正式交付按 Verification Policy 导出脱敏 HTML 到
 `html-docs/test-reports/`，提供 awiki.info HTTPS 链接。编译、unit、prepare-only
