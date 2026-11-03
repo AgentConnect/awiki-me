@@ -12,6 +12,7 @@ import '../../protected_files.dart';
 import '../../desktop_subprocess_environment.dart';
 import '../../delete_isolated_directory.dart';
 import '../../ready_observation.dart';
+import '../../closed_onboarding_diagnostics.dart';
 
 import '../support/enter_existing_account.dart';
 import '../support/read_rendered_sas.dart';
@@ -300,15 +301,20 @@ void main() {
             : find.byKey(const Key('onboarding-phone-submit-action')),
         failure: 'The unified login/register action was unavailable.',
       );
-      await _pumpUntil(
-        tester,
-        () => find
-            .byKey(const Key('existing-handle-join-action'))
-            .evaluate()
-            .isNotEmpty,
-        timeout: const Duration(seconds: 45),
-        failure: 'The existing Handle did not expose the Join choice.',
-      );
+      try {
+        await _pumpUntil(
+          tester,
+          () => find
+              .byKey(const Key('existing-handle-join-action'))
+              .evaluate()
+              .isNotEmpty,
+          timeout: const Duration(seconds: 45),
+          failure: 'The existing Handle did not expose the Join choice.',
+        );
+      } catch (_) {
+        _recordExistingHandleChoiceDiagnostic(tester);
+        rethrow;
+      }
       await _tapOne(
         tester,
         find.byKey(const Key('existing-handle-join-action')),
@@ -3817,6 +3823,48 @@ void _requireIndependentEmptyPaths(List<String> paths) {
 
 Future<void> _deleteDirectory(String path) async {
   await deleteIsolatedDirectory(Directory(path));
+}
+
+void _recordExistingHandleChoiceDiagnostic(WidgetTester tester) {
+  try {
+    final page = find.byType(OnboardingPage);
+    final observation = <String, Object?>{
+      'onboardingPagePresent': page.evaluate().isNotEmpty,
+      'deviceJoinPagePresent': find
+          .byType(DeviceJoinPage)
+          .evaluate()
+          .isNotEmpty,
+      'devicesPagePresent': find.byType(DevicesPage).evaluate().isNotEmpty,
+    };
+    if (page.evaluate().isNotEmpty) {
+      final context = tester.element(page.first);
+      final container = ProviderScope.containerOf(context, listen: false);
+      final state = container.read(onboardingProvider);
+      final feedback = container.read(uiFeedbackProvider);
+      observation.addAll({
+        'outcome': state.phoneRegistrationOutcome.name,
+        'failureCode': closedOnboardingFailureCode(
+          state.phoneRegistrationFailureCode,
+        ),
+        'busy': state.isBusy,
+        'otpConsumed': state.isPhoneOtpConsumed,
+        'continuationPresent': state.existingHandleContinuationId != null,
+        'joinMode': state.existingHandleJoinMode?.name ?? 'none',
+        'serverInfo': state.serverInfoStatus.name,
+        'supportsRecovery': state.serverInfo?.supportsPhoneHandleRecovery,
+        'feedbackPresent': feedback != null,
+        'feedbackDanger': feedback?.danger ?? false,
+        'feedbackId': closedOnboardingFeedbackId(feedback?.message.id),
+        'localStateUnavailableDialog': find
+            .text(context.l10n.handleRecoveryErrorLocalStateUnavailable)
+            .evaluate()
+            .isNotEmpty,
+      });
+    }
+    debugPrint('[join-existing-choice] ${jsonEncode(observation)}');
+  } catch (_) {
+    debugPrint('[join-existing-choice] diagnostic_unavailable');
+  }
 }
 
 Future<void> _pumpUntil(

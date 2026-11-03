@@ -17,6 +17,7 @@ import '../../delete_isolated_directory.dart';
 import '../../desktop_subprocess_environment.dart';
 import '../../desktop_tool_executable.dart';
 import '../../protected_files.dart';
+import '../../closed_onboarding_diagnostics.dart';
 import '../../handle_recovery_epoch_observation.dart';
 
 import '../support/enter_existing_account.dart';
@@ -2430,7 +2431,11 @@ Future<void> _markRecoveryFixtureRead({
       'effectiveIdMatch=${effective?.lastReadMessageId == messageId}, '
       'effectiveSeqPresent=${effective?.lastReadThreadSeq != null}, '
       'effectiveSeqMatch=${effective?.lastReadThreadSeq == threadSequence}, '
-      'warnings=${result.warnings.length}, encrypted=${message.isEncrypted}).',
+      'warnings=${result.warnings.length}, '
+      'warningCategories=${recoveryReadWarningCategories(result.warnings)}, '
+      'httpStatuses=${recoveryReadHttpStatuses(result.warnings)}, '
+      'serviceCodes=${recoveryReadServiceCodes(result.warnings)}, '
+      'encrypted=${message.isEncrypted}).',
     );
   }
   requireHandleRecoveryReadWatermark(

@@ -157,3 +157,7 @@ dart run tool/run_windows_unit.dart --sqlite-dll=<built-app-bundle>/sqlite3.dll 
 ```
 
 只传递当前需要的测试文件或筛选条件；普通不依赖 SQLite 的测试继续使用原有 Flutter 入口。
+
+### Onboarding 与恢复夹具的闭合失败诊断
+
+Join 选项超时时，测试只记录 Onboarding outcome、固定错误类别、busy／OTP consumed／continuation 是否存在，以及固定页面与本地数据错误提示的出现状态；不输出输入、消息正文、continuation ID 或反馈 detail。Recovery 读确认夹具失败只输出固定 warning 类别、已知 `READ_STATE_*` 枚举和 HTTP 状态，区分合法的前驱在途状态与远端／本地 ACK 错误。未知文本归为 `unrecognized`。这些诊断保留原断言、原超时和失败结果，不将 pending 当作远端确认。
