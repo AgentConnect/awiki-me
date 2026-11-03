@@ -111,6 +111,8 @@ assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.
 
+用户于 2026-11-03 明确不测试 501 条消息分页恢复（`multi-device-app-pair-paging-recovery`），按 `user_excluded` 记录，不能计为通过；其他恢复和分页用例不因此排除。
+
 用户于 2026-09-24 确认 `did-method-web` 持续默认跳过；机器配置为
 `tests/e2e/user_test_exclusions.json`。`full` 保留其 case ID 并标记
 `user_excluded`，不准备或运行该 suite；直接定向选择在设置环境和执行前拒绝。

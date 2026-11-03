@@ -305,6 +305,22 @@ void main() {
         'user_excluded',
       );
       expect(commands.suites, isNot(contains('did-method-web')));
+      expect(
+        (result['children'] as List).singleWhere(
+          (r) => r['suite'] == 'multi-device-app-pair-paging-recovery',
+        )['status'],
+        'user_excluded',
+      );
+      expect(
+        (result['caseResults'] as List).singleWhere(
+          (r) => r['caseId'] == 'DEVICE-MESSAGE-PAGED-RECOVERY-E2E-001',
+        )['status'],
+        'user_excluded',
+      );
+      expect(
+        commands.suites,
+        isNot(contains('multi-device-app-pair-paging-recovery')),
+      );
     },
   );
 

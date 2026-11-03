@@ -6,15 +6,22 @@ import '../../e2e/runner.dart';
 import '../../e2e/user_test_exclusions.dart';
 
 void main() {
-  test('checked-in DID Web exclusion rejects direct execution', () {
+  test('checked-in user exclusions reject direct execution', () {
     final root = Directory.current;
     final policy = DesktopE2eUserExclusions.load(root);
     policy.validateAgainst(DesktopE2eSuiteManifest.load(root));
 
-    expect(policy.appSuites, {'did-method-web'});
+    expect(policy.appSuites, {
+      'did-method-web',
+      'multi-device-app-pair-paging-recovery',
+    });
     expect(policy.reason, startsWith('user_excluded:'));
     expect(
       () => policy.requireAllowed('did-method-web'),
+      throwsA(isA<E2eFailure>()),
+    );
+    expect(
+      () => policy.requireAllowed('multi-device-app-pair-paging-recovery'),
       throwsA(isA<E2eFailure>()),
     );
     policy.requireAllowed('multi-device-app-pair');
