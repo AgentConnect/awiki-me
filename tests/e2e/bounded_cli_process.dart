@@ -19,8 +19,13 @@ Future<ProcessResult> runBoundedCliProcess({
 }) async {
   final clock = Stopwatch()..start();
   remainingCliOperationBudget(timeout, clock.elapsed);
-  final process = await Process.start(executable, arguments,
-    environment: environment, includeParentEnvironment: false, runInShell: false);
+  final process = await Process.start(
+    executable,
+    arguments,
+    environment: environment,
+    includeParentEnvironment: false,
+    runInShell: false,
+  );
   final out = process.stdout.transform(utf8.decoder).join();
   final err = process.stderr.transform(utf8.decoder).join();
   Duration remaining() => remainingCliOperationBudget(timeout, clock.elapsed);
@@ -28,8 +33,12 @@ Future<ProcessResult> runBoundedCliProcess({
     if (stdinText != null) process.stdin.write(stdinText);
     await process.stdin.close().timeout(remaining());
     final exitCode = await process.exitCode.timeout(remaining());
-    return ProcessResult(process.pid, exitCode,
-      await out.timeout(remaining()), await err.timeout(remaining()));
+    return ProcessResult(
+      process.pid,
+      exitCode,
+      await out.timeout(remaining()),
+      await err.timeout(remaining()),
+    );
   } on Object {
     // The cleanup bound is separate from permission to do more product work.
     process.kill();

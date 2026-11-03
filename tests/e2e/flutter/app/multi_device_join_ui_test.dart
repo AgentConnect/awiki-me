@@ -3022,31 +3022,39 @@ class _JoinCli {
     const total = Duration(seconds: 45);
     while (clock.elapsed < total) {
       final inbox = _data(
-        await _run(const <String>[
-          '--format',
-          'json',
-          'msg',
-          'inbox',
-          '--scope',
-          'direct',
-          '--limit',
-          '20',
-        ], safeAction: 'msg.inbox', timeout: remainingCliOperationBudget(total, clock.elapsed)),
+        await _run(
+          const <String>[
+            '--format',
+            'json',
+            'msg',
+            'inbox',
+            '--scope',
+            'direct',
+            '--limit',
+            '20',
+          ],
+          safeAction: 'msg.inbox',
+          timeout: remainingCliOperationBudget(total, clock.elapsed),
+        ),
         action: null,
       );
       if (inbox['messages'] is! List) {
         fail('CLI did not expose its group Inbox projection.');
       }
       final statusRaw = _data(
-        await _run(<String>[
-          '--format',
-          'json',
-          'group',
-          'secure',
-          'status',
-          '--group',
-          groupDid,
-        ], safeAction: 'group.secure.status', timeout: remainingCliOperationBudget(total, clock.elapsed)),
+        await _run(
+          <String>[
+            '--format',
+            'json',
+            'group',
+            'secure',
+            'status',
+            '--group',
+            groupDid,
+          ],
+          safeAction: 'group.secure.status',
+          timeout: remainingCliOperationBudget(total, clock.elapsed),
+        ),
         action: null,
       )['status'];
       if (statusRaw is! Map) {
@@ -3067,8 +3075,11 @@ class _JoinCli {
       }
       final remaining = total - clock.elapsed;
       if (remaining <= Duration.zero) break;
-      await Future<void>.delayed(remaining < const Duration(milliseconds: 750)
-          ? remaining : const Duration(milliseconds: 750));
+      await Future<void>.delayed(
+        remaining < const Duration(milliseconds: 750)
+            ? remaining
+            : const Duration(milliseconds: 750),
+      );
     }
     fail('CLI did not consume its group Welcome through public sync.');
   }
@@ -3167,7 +3178,9 @@ class _JoinCli {
       result = await runBoundedCliProcess(
         executable: config.cliBin,
         arguments: args,
-        environment: _environment(accountVerificationToken: accountVerificationToken),
+        environment: _environment(
+          accountVerificationToken: accountVerificationToken,
+        ),
         timeout: timeout ?? _remoteTimeout,
         stdinText: stdinText,
       );
