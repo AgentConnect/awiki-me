@@ -1,9 +1,10 @@
 {
   "schemaVersion": 1,
   "decisionDate": "2026-11-03",
-  "reason": "user_excluded: 用户于 2026-09-24 决定持续跳过 DID Web App E2E，并于 2026-11-03 明确不测试 501 条消息分页恢复；仅在用户明确恢复对应范围后移除此排除。",
+  "reason": "user_excluded: 用户于 2026-09-24 决定跳过 DID Web；2026-11-03 不测试 501 条消息分页恢复，并明确排除固定 mcp-adapt.anpclaw.com 已永久退役（HTTP 410）的两条 Hosted 用例。保留历史结果及退役原因；仅在用户明确恢复对应范围后移除此排除。",
   "appSuites": [
     "did-method-web",
-    "multi-device-app-pair-paging-recovery"
+    "multi-device-app-pair-paging-recovery",
+    "hosted-gateway-join"
   ]
 }

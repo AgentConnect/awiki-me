@@ -14,6 +14,7 @@ void main() {
     expect(policy.appSuites, {
       'did-method-web',
       'multi-device-app-pair-paging-recovery',
+      'hosted-gateway-join',
     });
     expect(policy.reason, startsWith('user_excluded:'));
     expect(
@@ -22,6 +23,10 @@ void main() {
     );
     expect(
       () => policy.requireAllowed('multi-device-app-pair-paging-recovery'),
+      throwsA(isA<E2eFailure>()),
+    );
+    expect(
+      () => policy.requireAllowed('hosted-gateway-join'),
       throwsA(isA<E2eFailure>()),
     );
     policy.requireAllowed('multi-device-app-pair');

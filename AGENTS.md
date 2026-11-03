@@ -111,6 +111,8 @@ assertion that genuinely depends on macOS operating-system behavior, such as
 codesigning, Keychain, or LocalAuthentication, and never claim that Linux
 simulates or attests those macOS-specific behaviors.
 
+用户于 2026-11-03 明确排除固定隔离环境 `mcp-adapt.anpclaw.com` 已永久退役、统一返回 HTTP 410 的两条 Hosted 用例（`hosted-gateway-join`）。保留历史失败记录与退役原因，按 `user_excluded` 记录，不能计为通过或恢复退役服务。
+
 用户于 2026-11-03 明确不测试 501 条消息分页恢复（`multi-device-app-pair-paging-recovery`），按 `user_excluded` 记录，不能计为通过；其他恢复和分页用例不因此排除。
 
 用户于 2026-09-24 确认 `did-method-web` 持续默认跳过；机器配置为
