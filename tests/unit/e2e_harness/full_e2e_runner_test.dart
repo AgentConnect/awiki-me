@@ -371,10 +371,15 @@ void main() {
     'full fixture namespace remains authorized for App-pair cleanup',
     () async {
       final commands = await runFixtureEnvironment('cleanup-prefix');
+      final exclusions = DesktopE2eUserExclusions.load(source);
       for (final suite in <String>[
         'multi-device-app-pair-functional',
         'multi-device-app-pair-paging-recovery',
       ]) {
+        if (exclusions.excludes(suite)) {
+          expect(commands.suites, isNot(contains(suite)));
+          continue;
+        }
         final environment =
             commands.environments[commands.suites.indexOf(suite)];
         final prefix = environment['AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX']!;
