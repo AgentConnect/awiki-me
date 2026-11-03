@@ -916,7 +916,8 @@
       "tier": "remote_product_ui",
       "supportedPlatforms": [
         "macos",
-        "linux"
+        "linux",
+        "windows"
       ],
       "requiredTools": [
         "flutter",

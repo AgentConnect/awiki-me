@@ -5,6 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/runner.dart';
 
 void main() {
+  test('focused attachment has a Windows runnable entrypoint', () {
+    final suite = DesktopE2eSuiteManifest.load(
+      Directory.current,
+    ).definitionFor(DesktopE2eCase.attachment);
+    expect(suite.supportedPlatforms, contains('windows'));
+    expect(
+      DesktopE2eCase.attachment.testFile,
+      'integration_test/desktop_cli_peer_attachment_test.dart',
+    );
+  });
+
   for (final (aggregateSupportsWindows, allowOneSuite) in [
     (false, false),
     (true, false),
