@@ -435,6 +435,26 @@ class IsolatedE2eAppBuilder {
       );
     }
 
+    // 构建子进程可能被外层超时终止，逐阶段落盘便于区分构建与业务失败。
+    // 只写固定阶段、PID 和耗时，不记录命令、路径、配置或子进程输出。
+    final preparationWatch = Stopwatch()..start();
+    request.workRoot.createSync(recursive: true);
+    final preparationProgress = File(
+      '${request.workRoot.path}/preparation-progress.json',
+    );
+    void recordPreparationStage(String stage) {
+      preparationProgress.writeAsStringSync(
+        jsonEncode(<String, Object>{
+          'schemaVersion': 1,
+          'stage': stage,
+          'pid': pid,
+          'elapsedMs': preparationWatch.elapsedMilliseconds,
+        }),
+        flush: true,
+      );
+    }
+
+    recordPreparationStage('build_identity');
     final identity =
         precomputedIdentity ??
         await isolatedBuildIdentity(
@@ -442,7 +462,9 @@ class IsolatedE2eAppBuilder {
           hostPlatform: hostPlatform,
         );
     final fingerprint = identity.compileKey;
+    recordPreparationStage('stale_cache_recovery');
     await recoverStaleIsolatedArtifactTemps(request.projectRoot);
+    recordPreparationStage('cache_validation');
     final cached = await _restoreIsolatedArtifactCache(
       request: request,
       plan: plan,
@@ -470,9 +492,11 @@ class IsolatedE2eAppBuilder {
         const JsonEncoder.withIndent('  ').convert(artifact.toJson()),
         flush: true,
       );
+      recordPreparationStage('complete_cached');
       return artifact;
     }
 
+    recordPreparationStage('disk_budget');
     final cachePruneReport = await requireE2eBuildDiskBudget(
       request.projectRoot,
       pinnedCompileKeys: <String>{...request.pinnedCompileKeys, fingerprint},
@@ -509,18 +533,21 @@ class IsolatedE2eAppBuilder {
           'Windows E2E requires the native x64 Flutter and IM Core toolchain.',
         );
       }
+      recordPreparationStage('windows_snapshot');
       buildProject = await prepareWindowsE2eWorkspace(
         projectRoot: request.projectRoot,
         destination: request.windowsSourceProject,
         bundleId: request.bundleId,
         name: request.name,
       );
+      recordPreparationStage('windows_nuget');
       final nuget = await prepareWindowsNugetEnvironment(
         request.projectRoot,
         buildProject,
       );
       windowsBuildEnvironment['PATH'] =
           '${nuget.parent.path};${Platform.environment['PATH'] ?? ''}';
+      recordPreparationStage('windows_pub_get');
       final packages = await Process.run(
         desktopToolExecutable(request.flutterBin),
         const ['pub', 'get', '--enforce-lockfile'],
@@ -548,6 +575,7 @@ class IsolatedE2eAppBuilder {
       platform: request.platform,
     );
     late final ProcessResult build;
+    recordPreparationStage('flutter_build');
     try {
       build = await Process.run(
         desktopToolExecutable(request.flutterBin),
@@ -586,6 +614,7 @@ class IsolatedE2eAppBuilder {
     if (plan.artifactApp.existsSync()) {
       plan.artifactApp.deleteSync(recursive: true);
     }
+    recordPreparationStage('artifact_copy');
     await copyIsolatedAppBundle(
       source: plan.sourceApp,
       destination: plan.artifactApp,
@@ -659,7 +688,9 @@ class IsolatedE2eAppBuilder {
         );
       }
     }
+    recordPreparationStage('artifact_validation');
     final artifactSha256 = await directorySha256(plan.artifactApp);
+    recordPreparationStage('cache_store');
     final cachedApp = await _storeIsolatedArtifactCache(
       request: request,
       plan: plan,
@@ -670,6 +701,7 @@ class IsolatedE2eAppBuilder {
     if (plan.artifactApp.existsSync()) {
       plan.artifactApp.deleteSync(recursive: true);
     }
+    recordPreparationStage('scratch_cleanup');
     if (!request.preserveScratch) _deleteBuildScratch(plan);
     final artifact = _isolatedArtifact(
       request: request,
@@ -687,6 +719,7 @@ class IsolatedE2eAppBuilder {
       const JsonEncoder.withIndent('  ').convert(artifact.toJson()),
       flush: true,
     );
+    recordPreparationStage('complete_built');
     return artifact;
   }
 }
