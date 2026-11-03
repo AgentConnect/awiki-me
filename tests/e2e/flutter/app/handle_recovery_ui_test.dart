@@ -1833,6 +1833,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
     ),
     appStateRoot: config.peerAppStateRoot,
   );
+  Object? fixtureFailure;
   try {
     await _waitForRegistrationRetryBoundary(registrationRetryAt);
     final peerHandle = _uniqueHandle('${config.handlePrefix}peer');
@@ -2162,6 +2163,7 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
       gatewayScript: gatewayScript,
     );
     late final AgentSummary runtimeAgent;
+    Object? daemonFixtureFailure;
     try {
       await _waitForContinuityDaemonReady(
         tester: tester,
@@ -2348,11 +2350,33 @@ Future<_HandleRecoveryBusinessFixture> _seedHandleRecoveryBusinessFixture({
         groupMemberCount: groupMembers.items.length,
         agentMessageCount: agentHistory.length,
       );
+    } on Object catch (error) {
+      daemonFixtureFailure = error;
+      rethrow;
     } finally {
-      await daemon.stop();
+      try {
+        await daemon.stop();
+      } on Object catch (cleanupError) {
+        if (daemonFixtureFailure == null) rethrow;
+        stderr.writeln(
+          '[recovery-fixture-cleanup] component=daemon '
+          'reason=${cleanupError is TimeoutException ? 'timeout' : 'failure'}',
+        );
+      }
     }
+  } on Object catch (error) {
+    fixtureFailure = error;
+    rethrow;
   } finally {
-    await peerBootstrap.dispose();
+    try {
+      await peerBootstrap.dispose();
+    } on Object catch (cleanupError) {
+      if (fixtureFailure == null) rethrow;
+      stderr.writeln(
+        '[recovery-fixture-cleanup] component=peer_core '
+        'reason=${cleanupError is TimeoutException ? 'timeout' : 'failure'}',
+      );
+    }
   }
 }
 
@@ -2920,7 +2944,9 @@ Future<_ContinuityDaemonInstall> _installContinuityDaemon({
     environment: _continuityDaemonEnvironment(config),
   ).timeout(const Duration(minutes: 2));
   if (result.exitCode != 0) {
-    fail('The continuity daemon install command failed safely.');
+    fail(
+      'The continuity daemon install command failed safely (exit=${result.exitCode}).',
+    );
   }
   final decoded = jsonDecode(result.stdout.toString());
   final daemonDid = decoded is Map
