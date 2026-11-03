@@ -17,9 +17,8 @@ void main() {
     for (final name in <String>['tests', 'scripts']) {
       Link('${root.path}/$name').createSync('${source.path}/$name');
     }
-    config = File(
-      '${root.path}/config.yaml',
-    )..writeAsStringSync('platform: ${Platform.isMacOS ? 'macos' : 'linux'}\n');
+    config = File('${root.path}/config.yaml')
+      ..writeAsStringSync('platform: ${DesktopE2ePlatform.fromHost().name}\n');
   });
   tearDown(() => root.deleteSync(recursive: true));
 
@@ -266,7 +265,7 @@ void main() {
       final excludedCaseIds = <String>{
         for (final suite in excluded) ...catalog.suiteCaseIds[suite]!,
       };
-      final platform = Platform.isMacOS ? 'macos' : 'linux';
+      final platform = DesktopE2ePlatform.fromHost().name;
       final applicableCaseIds = <String>{
         for (final suite in DesktopE2eSuiteManifest.load(source).fullSuites())
           if (suite.supportedPlatforms.contains(platform)) ...suite.caseIds,
@@ -507,7 +506,7 @@ class _LeafCommands extends DesktopCommandRunner {
         'runId': id,
         'status': 'passed',
         'mode': 'real',
-        'platform': Platform.isMacOS ? 'macos' : 'linux',
+        'platform': DesktopE2ePlatform.fromHost().name,
         'dryRun': false,
         'prepareOnly': false,
         'caseIds': definition.caseIds,
