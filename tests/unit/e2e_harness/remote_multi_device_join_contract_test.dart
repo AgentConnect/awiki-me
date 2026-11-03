@@ -99,6 +99,62 @@ void main() {
   });
 
   group('remote foreground CLI Join SAS prompts', () {
+    test('ConPTY title controls cannot split or forge a SAS prompt', () {
+      const label = 'Compare this one-time SAS with the new device: ';
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('${label}\u001b]0;synthetic.exe\u0007482917\r\n'),
+        ),
+        '482917',
+      );
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('${label}\u001b]2;synthetic.exe\u001b\\482917\r\n'),
+        ),
+        '482917',
+      );
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('\u001b]0;${label}482917\r\n\u0007'),
+        ),
+        isNull,
+      );
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('${label}\u001b]0;incomplete482917\r\n'),
+        ),
+        isNull,
+      );
+    });
+    test('ConPTY cursor advance preserves the visible prompt space', () {
+      final bytes = utf8.encode(
+        'Compare this one-time SAS with the new device:\u001b[1C482917\r\n'
+        'Type the same 6-digit SAS to continue:\u001b[C'
+        'Type APPROVE to join and configure identity management on this device:\u001b[1C',
+      );
+      expect(remoteMultiDeviceCliApprovalSas(bytes), '482917');
+      expect(remoteMultiDeviceCliRequestsSasInput(bytes), isTrue);
+      expect(remoteMultiDeviceCliRequestsApproval(bytes), isTrue);
+      final diagnostic = remoteMultiDeviceCliSasDiagnostic(bytes);
+      expect(diagnostic, contains('approvalSasAfterAnsi=true'));
+      expect(diagnostic, isNot(contains('482917')));
+    });
+    test('invalid or incomplete cursor movement cannot authorize input', () {
+      for (final control in [
+        '\u001b[999999C',
+        '\u001b[0C',
+        '\u001b[?C',
+        '\u001b[',
+      ]) {
+        final bytes = utf8.encode(
+          'Compare this one-time SAS with the new device: ${control}482917\r\n'
+          'Type the same 6-digit SAS to continue: ',
+        );
+        expect(remoteMultiDeviceCliApprovalSas(bytes), isNull);
+        expect(remoteMultiDeviceCliRequestsSasInput(bytes), isFalse);
+      }
+    });
+
     test(
       'terminal diagnostics distinguish prompt framing without exposing SAS',
       () {

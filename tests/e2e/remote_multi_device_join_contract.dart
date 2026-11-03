@@ -76,8 +76,9 @@ String? remoteMultiDeviceCliApprovalSas(List<int> transcript) =>
 /// Closed observations only; never include a SAS, JSON body or terminal text.
 String remoteMultiDeviceCliSasDiagnostic(List<int> transcript) {
   final text = String.fromCharCodes(transcript);
-  final clean = text.replaceAll(RegExp(r'\x1b\[[0-?]*[ -/]*[@-~]'), '');
-  final cleanBytes = clean.codeUnits.toList();
+  final cleanBytes = _cliConsolePromptBytes(transcript);
+  if (cleanBytes == null) return 'terminalControlInvalid=true';
+  final clean = String.fromCharCodes(cleanBytes);
   try {
     final state = RegExp(
       r'"remote_state"\s*:\s*"(pending|challenge_sent|response_verified|consumed|expired|cancelled|rejected)"',
@@ -100,6 +101,18 @@ String remoteMultiDeviceCliSasDiagnostic(List<int> transcript) {
 }
 
 String? _cliSasAfterPrefix(List<int> transcript, String promptPrefix) {
+  if (!transcript.contains(0x1b))
+    return _cliPlainSasAfterPrefix(transcript, promptPrefix);
+  final normalized = _cliConsolePromptBytes(transcript);
+  if (normalized == null) return null;
+  try {
+    return _cliPlainSasAfterPrefix(normalized, promptPrefix);
+  } finally {
+    normalized.fillRange(0, normalized.length, 0);
+  }
+}
+
+String? _cliPlainSasAfterPrefix(List<int> transcript, String promptPrefix) {
   final prefix = promptPrefix.codeUnits;
   final offset = _indexOfBytes(transcript, prefix);
   if (offset < 0) {
@@ -122,20 +135,99 @@ String? _cliSasAfterPrefix(List<int> transcript, String promptPrefix) {
 }
 
 bool remoteMultiDeviceCliRequestsSasInput(List<int> transcript) =>
-    _indexOfBytes(transcript, _cliApprovalSasInputPrompt.codeUnits) >= 0;
+    _cliContainsConsolePrompt(transcript, _cliApprovalSasInputPrompt);
 
 bool remoteMultiDeviceCliRequestsApproval(
   List<int> transcript, {
   bool managementAllowed = true,
-}) =>
-    _indexOfBytes(
-      transcript,
-      (managementAllowed
-              ? _cliApprovalConfirmationPrompt
-              : _cliMessageOnlyConfirmationPrompt)
-          .codeUnits,
-    ) >=
-    0;
+}) => _cliContainsConsolePrompt(
+  transcript,
+  managementAllowed
+      ? _cliApprovalConfirmationPrompt
+      : _cliMessageOnlyConfirmationPrompt,
+);
+
+bool _cliContainsConsolePrompt(List<int> transcript, String prompt) {
+  if (!transcript.contains(0x1b))
+    return _indexOfBytes(transcript, prompt.codeUnits) >= 0;
+  final normalized = _cliConsolePromptBytes(transcript);
+  if (normalized == null) return false;
+  try {
+    return _indexOfBytes(normalized, prompt.codeUnits) >= 0;
+  } finally {
+    normalized.fillRange(0, normalized.length, 0);
+  }
+}
+
+// ConPTY 可将提示行空格编码为 CSI n C；仅删除控制序列会把可见空格丢掉。
+// 只投影有界提示文本，缓冲使用后擦除，不持久化终端内容或 SAS。
+List<int>? _cliConsolePromptBytes(List<int> transcript) {
+  const maximum = 1024 * 1024;
+  if (transcript.length > maximum) return null;
+  final result = <int>[];
+  for (var index = 0; index < transcript.length; index++) {
+    if (transcript[index] == 0x1b &&
+        index + 1 < transcript.length &&
+        transcript[index + 1] == 0x5d) {
+      // Windows 可在两次写入之间插入 OSC 标题；标题不能成为可见提示的一部分。
+      var end = index + 2;
+      while (end < transcript.length &&
+          transcript[end] != 0x07 &&
+          !(transcript[end] == 0x1b &&
+              end + 1 < transcript.length &&
+              transcript[end + 1] == 0x5c)) {
+        end++;
+      }
+      if (end == transcript.length) {
+        result.fillRange(0, result.length, 0);
+        return null;
+      }
+      index = transcript[end] == 0x07 ? end : end + 1;
+      continue;
+    }
+    if (transcript[index] == 0x1b &&
+        index + 1 < transcript.length &&
+        transcript[index + 1] == 0x5b) {
+      var end = index + 2;
+      while (end < transcript.length &&
+          (transcript[end] < 0x40 || transcript[end] > 0x7e)) {
+        if (transcript[end] < 0x20 || transcript[end] > 0x3f) {
+          result.fillRange(0, result.length, 0);
+          return null;
+        }
+        end++;
+      }
+      if (end == transcript.length) {
+        result.fillRange(0, result.length, 0);
+        return null;
+      }
+      if (transcript[end] == 0x43) {
+        var columns = end == index + 2 ? 1 : 0;
+        for (var digit = index + 2; digit < end; digit++) {
+          final value = transcript[digit] - 0x30;
+          if (value < 0 || value > 9 || columns > 160) {
+            result.fillRange(0, result.length, 0);
+            return null;
+          }
+          columns = columns * 10 + value;
+        }
+        if (columns < 1 || columns > 160 || result.length + columns > maximum) {
+          result.fillRange(0, result.length, 0);
+          return null;
+        }
+        result.addAll(List<int>.filled(columns, 0x20));
+      }
+      index = end;
+      continue;
+    }
+    if (result.length == maximum) {
+      result.fillRange(0, result.length, 0);
+      return null;
+    }
+    result.add(transcript[index]);
+  }
+  return result;
+}
 
 int _indexOfBytes(List<int> haystack, List<int> needle) {
   if (needle.isEmpty || haystack.length < needle.length) {
