@@ -350,6 +350,9 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     Future<T> Function(core.AwikiImClient client) action,
   ) async {
     while (true) {
+      // Disposal drains already-admitted owners. A late nested call must not
+      // wait for that same disposal transition and keep its owner alive.
+      _ensureNotDisposed();
       final transition = _clientTransition;
       if (transition == null) {
         break;

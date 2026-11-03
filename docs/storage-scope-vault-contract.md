@@ -590,6 +590,8 @@ Production不读取或迁移：
 
 登录后独立检查设备群能力。当前 ready admin 可自动追加兼容能力；其他设备需管理设备确认其客户端已升级。群与设备页面提供局部状态和刷新，不阻塞账号会话，不重复触发登录错误。租户或身份切换后，迟到查询不得发起升级，旧操作结果不得覆盖当前页面。原群与历史数据保持不变，不能兼容的旧群通过保留历史、另建新群处理。
 
+Runtime 开始 dispose 后立即拒绝新的 client 操作，包括在途操作发起的嵌套调用；既有已准入操作仍按原流程等待结束，随后关闭 client 与 Core。等待 client transition 的循环每次都检查 disposed，避免关闭流程与迟到调用互相等待。
+
 已 dispose 的 `AwikiImCoreRuntime` 不可再次 open；在途 open 完成时关闭其新实例，不重新发布到旧租户。Recovery 会话激活复用现有 `AppSessionTransition` 的临时 caller-validity 检查，在每个既有 transition 检查点拒绝失效页面。完成后解除该临时检查，正常会话不依赖 Recovery 页存活；失败清理仍按 exact transition，不清除新页面的会话。
 
 同一身份的设备变更可能同时触发 Registry 刷新与显式操作后的绑定刷新。正在执行的绑定刷新

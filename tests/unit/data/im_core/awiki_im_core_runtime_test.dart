@@ -492,6 +492,51 @@ void main() {
     },
   );
 
+  for (final nested in [false, true]) {
+    test(
+      'runtime disposal drains admitted work and rejects late calls: $nested',
+      () async {
+        final opened = _DrainCore();
+        final runtime = await _startupRuntime(opened);
+        await runtime.selectIdentity(
+          const core.IdentitySelector.id('test-owner'),
+        );
+        final entered = Completer<void>();
+        final resume = Completer<void>();
+        Object? ownerFailure;
+        final owner = runtime
+            .withCurrentClient<void>((_) async {
+              entered.complete();
+              await resume.future;
+              if (nested) await runtime.withCurrentClient<void>((_) async {});
+            })
+            .then<void>(
+              (_) {},
+              onError: (Object error) {
+                ownerFailure = error;
+              },
+            );
+        await entered.future;
+        final disposing = runtime.dispose();
+        await Future<void>.delayed(Duration.zero);
+        expect(opened.disposes, 0);
+        expect(opened.selected.disposes, 0);
+        resume.complete();
+        await Future.wait([
+          owner,
+          disposing,
+        ]).timeout(const Duration(milliseconds: 400));
+        expect(ownerFailure, nested ? isA<StateError>() : isNull);
+        expect(opened.disposes, 1);
+        expect(opened.selected.disposes, 1);
+        await expectLater(
+          runtime.withCurrentClient<void>((_) async {}),
+          throwsStateError,
+        );
+      },
+    );
+  }
+
   test(
     'cold start keeps recovery available for a conflicting registry',
     () async {
@@ -741,4 +786,23 @@ class _LateOpenCore implements core.AwikiImCore {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnsupportedError('unexpected runtime call');
+}
+
+class _DrainCore extends _LateOpenCore {
+  final selected = _DrainClient();
+  @override
+  Future<core.AwikiImClient> client(core.IdentitySelector selector) async =>
+      selected;
+}
+
+class _DrainClient implements core.AwikiImClient {
+  int disposes = 0;
+  @override
+  Future<void> dispose() async {
+    disposes++;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('unexpected drain client call');
 }
