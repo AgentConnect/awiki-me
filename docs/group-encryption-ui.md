@@ -22,6 +22,11 @@
 环境不具备群加密能力时显示“暂不可用”。重试只调用 IM Core 的公共群安全修复入口，
 随后重新读取 Core 状态；App 不执行 Add、Welcome、Commit、Remove，也不自行推进 epoch。
 
+修复若返回 Core 明确可重试的 `group.local_cursor_stale`，App 仍重新读取同一群的实际状态，
+因为并发接收可能在本次修复推进后使其本地快照失效。App 不再次提交修复、不推断已经成功，
+只根据新的 Core Ready／可安全发送投影显示已就绪，否则保留准备中或需要重试状态。
+权限拒绝、无效游标及其他错误继续失败；返回其他群的状态仍拒绝。
+
 邀请时若 Core 返回 `group.e2ee.state_not_ready`，成员仍未加入，弹窗保留并提示
 “尚未加入：群聊正在更新成员的加密身份，请保持群主客户端在线，完成后重试”。
 该状态单独映射为 `groupEncryptionMaintenance`，不归因于被邀请人尚未准备加密或 Agent

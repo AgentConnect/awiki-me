@@ -45,7 +45,16 @@ class AwikiImCoreGroupEncryptionAdapter implements GroupEncryptionCorePort {
   @override
   Future<GroupEncryptionStatus> retry(String groupDid) async {
     final normalizedGroupDid = _normalizedGroupDid(groupDid);
-    await _repair(normalizedGroupDid);
+    try {
+      await _repair(normalizedGroupDid);
+    } on core.AwikiImCoreException catch (error) {
+      if (error.code != 'service_error' ||
+          error.serviceCode != 'group.local_cursor_stale') {
+        rethrow;
+      }
+      // Concurrent receive may invalidate the repair's local snapshot after
+      // progress was committed. Only a fresh Core status can decide readiness.
+    }
     return _forExpectedGroup(
       normalizedGroupDid,
       mapCoreGroupEncryptionStatus(await _status(normalizedGroupDid)),
