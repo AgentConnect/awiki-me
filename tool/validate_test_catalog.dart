@@ -4,6 +4,10 @@ import 'dart:io';
 import '../tests/e2e/runner.dart' as e2e_runner;
 import '../tests/e2e/test_catalog.dart';
 
+// Git 的 Windows 检出可能使用 CRLF；内容差异仍必须拒绝。
+bool catalogDocumentsMatch(String actual, String expected) =>
+    actual.replaceAll('\r\n', '\n') == expected.replaceAll('\r\n', '\n');
+
 Future<void> main(List<String> args) async {
   try {
     var write = false;
@@ -36,7 +40,7 @@ Future<void> main(List<String> args) async {
     if (write) {
       document.writeAsStringSync(rendered);
     } else if (!document.existsSync() ||
-        document.readAsStringSync() != rendered) {
+        !catalogDocumentsMatch(document.readAsStringSync(), rendered)) {
       throw const FormatException(
         'generated catalog doc is stale; run with --write and commit the result',
       );
