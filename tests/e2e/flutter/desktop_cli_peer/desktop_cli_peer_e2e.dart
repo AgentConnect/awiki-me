@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:path/path.dart' as p;
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 
 import 'package:awiki_me/l10n/app_localizations.dart';

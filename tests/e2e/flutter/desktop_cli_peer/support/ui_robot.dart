@@ -1702,7 +1702,8 @@ class _DesktopAppRobot {
     final sourceDirectory = await Directory.systemTemp.createTemp(
       'awiki-e2e-drop-',
     );
-    final source = File('${sourceDirectory.path}/$filename');
+    // XFile.name 在 Windows 按原生分隔符解析，不能混入手工拼接的正斜杠。
+    final source = File(p.join(sourceDirectory.path, filename));
     await source.writeAsBytes(bytes, flush: true);
     try {
       if (Platform.isMacOS) {

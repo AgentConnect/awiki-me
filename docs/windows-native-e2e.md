@@ -130,3 +130,6 @@ Keychain 专属 `NATIVE-E2E-002` 为平台不适用，不能描述为 Windows �
 保留在忽略目录。正式交付按 Verification Policy 导出脱敏 HTML 到
 `html-docs/test-reports/`，提供 awiki.info HTTPS 链接。编译、unit、prepare-only
 和定向通过都不能表述为 Windows 全量通过；以实际 full 报告和 case attestation 为准。
+
+
+桌面拖放夹具通过 `path.join` 构造宿主原生文件路径，不能把 Windows 临时目录与手工 `/` 拼接后传给 `desktop_drop`。当前 `cross_file` 的 IO `name` 按宿主分隔符解析；混用分隔符会把临时目录名误计入待发送文件名。回归仍要求草稿与发送后的原文件名精确一致，不通过放宽断言或修改产品文件名清洗规则规避。
