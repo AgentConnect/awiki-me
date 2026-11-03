@@ -2398,7 +2398,16 @@ Future<void> _markRecoveryFixtureRead({
       result.pendingRemoteAck ||
       effective?.lastReadMessageId != messageId ||
       effective?.lastReadThreadSeq != threadSequence) {
-    fail('A Local Data read fixture was not acknowledged exactly.');
+    fail(
+      'A Local Data read fixture was not acknowledged exactly '
+      '(remoteAck=${result.remoteAcknowledged}, partial=${result.partial}, '
+      'fallback=${result.fallbackUsed}, pending=${result.pendingRemoteAck}, '
+      'effectivePresent=${effective != null}, '
+      'effectiveIdMatch=${effective?.lastReadMessageId == messageId}, '
+      'effectiveSeqPresent=${effective?.lastReadThreadSeq != null}, '
+      'effectiveSeqMatch=${effective?.lastReadThreadSeq == threadSequence}, '
+      'warnings=${result.warnings.length}, encrypted=${message.isEncrypted}).',
+    );
   }
   requireHandleRecoveryReadWatermark(
     previousThreadSequence: threadSequence,
@@ -6817,6 +6826,13 @@ Future<({String otp, DateTime retryAt})> _requestAndResolveRegistrationOtp({
       didDomain: config.didDomain,
     );
     return (otp: otp, retryAt: receipt.retryAt);
+  } on core.AwikiImCoreException catch (error) {
+    fail(
+      'The fixed registration OTP request failed safely '
+      '(core=${_safeDiagnosticToken(error.code)}, '
+      'http=${error.statusCode?.toString() ?? 'none'}, '
+      'servicePresent=${error.serviceCode != null}).',
+    );
   } on AwikiOnboardingUtilityError catch (error) {
     final data = error.data;
     final serviceCode = data is Map
