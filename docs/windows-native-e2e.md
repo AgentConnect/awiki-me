@@ -144,3 +144,14 @@ ConPTY 前台确认的传输字节可在标签和 SAS 之间插入 OSC 窗口标
 
 
 Recovery 崩溃重开后的设备注册表验收，检查同一 Core 恢复操作的精确授权重置回执、新 DID／代次及稳定账号绑定。进入 App 后允许普通同步重新填充新代次的设备快照，不要求列表永久为空；旧代次、混合账号、缺失或其他操作的回执均失败。验收继续保留旧身份清除、资料保留及单次 bootstrap ready 检查，不通过关闭同步来制造空列表。
+
+
+### Windows SQLite 单元测试
+
+桌面 App 自带的 `sqlite3.dll` 不会自动进入 `flutter_tester` 的 DLL 搜索路径。SQLite 持久化单元测试使用下列入口，从已构建的 Windows x64 App bundle 选择该 DLL，校验 PE 和 SHA-256 后只暂存 SQLite，并记录依赖与 `pubspec.lock` 摘要。不把旧 bundle 的其他 DLL（尤其是 Core）加入搜索路径，不修改系统环境变量。入口直接运行 Flutter 的 Dart snapshot，测试筛选正则中的 `|` 不经过 `.bat` 解释。
+
+```powershell
+dart run tool/run_windows_unit.dart --sqlite-dll=<built-app-bundle>/sqlite3.dll -- tests/unit/data/local/awiki_product_local_store_sqlite_test.dart --name epoch
+```
+
+只传递当前需要的测试文件或筛选条件；普通不依赖 SQLite 的测试继续使用原有 Flutter 入口。
