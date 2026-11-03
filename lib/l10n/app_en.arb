@@ -1796,7 +1796,7 @@
   "deviceJoinStepVerifyWaiting": "Waiting for “Start verification”",
   "deviceJoinStepVerifySas": "Confirm both 6-digit codes match",
   "deviceJoinStepJoin": "Join the account",
-  "deviceJoinStepJoinSub": "Joins as a regular device; a managing device can grant management later",
+  "deviceJoinStepJoinSub": "Join to use messaging; management access follows the approved purpose",
   "serverFeaturesTitle": "Server features",
   "serverFeaturesSupported": "Available",
   "serverFeaturesUnsupported": "Not supported by this server",

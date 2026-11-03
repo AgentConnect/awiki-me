@@ -4059,7 +4059,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinStepJoin => '加入账户';
 
   @override
-  String get deviceJoinStepJoinSub => '作为普通设备加入，之后可由管理设备授予管理权限';
+  String get deviceJoinStepJoinSub => '加入后可使用消息功能；管理权限按本次批准用途配置';
 
   @override
   String get serverFeaturesTitle => '服务器功能';

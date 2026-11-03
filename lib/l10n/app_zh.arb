@@ -1796,7 +1796,7 @@
   "deviceJoinStepVerifyWaiting": "等待对方点击「开始验证」",
   "deviceJoinStepVerifySas": "确认两端 6 位验证码一致",
   "deviceJoinStepJoin": "加入账户",
-  "deviceJoinStepJoinSub": "作为普通设备加入，之后可由管理设备授予管理权限",
+  "deviceJoinStepJoinSub": "加入后可使用消息功能；管理权限按本次批准用途配置",
   "serverFeaturesTitle": "服务器功能",
   "serverFeaturesSupported": "可用",
   "serverFeaturesUnsupported": "此服务器暂不支持",

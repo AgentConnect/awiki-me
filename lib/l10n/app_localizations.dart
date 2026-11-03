@@ -7621,7 +7621,7 @@ abstract class AppLocalizations {
   /// No description provided for @deviceJoinStepJoinSub.
   ///
   /// In zh, this message translates to:
-  /// **'作为普通设备加入，之后可由管理设备授予管理权限'**
+  /// **'加入后可使用消息功能；管理权限按本次批准用途配置'**
   String get deviceJoinStepJoinSub;
 
   /// No description provided for @serverFeaturesTitle.

@@ -4370,7 +4370,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceJoinStepJoinSub =>
-      'Joins as a regular device; a managing device can grant management later';
+      'Join to use messaging; management access follows the approved purpose';
 
   @override
   String get serverFeaturesTitle => 'Server features';
