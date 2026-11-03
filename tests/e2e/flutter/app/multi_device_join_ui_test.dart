@@ -35,6 +35,7 @@ import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/e2e_semantics.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/application/account_state_sync_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -81,6 +82,8 @@ import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart'
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/registration_entry_provider.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
@@ -294,6 +297,12 @@ void main() {
       final macSubmit = find.byKey(
         const Key('onboarding-mac-phone-submit-action'),
       );
+      _recordExistingHandleChoiceDiagnostic(
+        tester,
+        phase: 'before_submit',
+        expectedDomain: config.didDomain,
+        expectedHandle: handle,
+      );
       await _tapOne(
         tester,
         macSubmit.evaluate().isNotEmpty
@@ -312,7 +321,12 @@ void main() {
           failure: 'The existing Handle did not expose the Join choice.',
         );
       } catch (_) {
-        _recordExistingHandleChoiceDiagnostic(tester);
+        _recordExistingHandleChoiceDiagnostic(
+          tester,
+          phase: 'choice_timeout',
+          expectedDomain: config.didDomain,
+          expectedHandle: handle,
+        );
         rethrow;
       }
       await _tapOne(
@@ -3825,22 +3839,47 @@ Future<void> _deleteDirectory(String path) async {
   await deleteIsolatedDirectory(Directory(path));
 }
 
-void _recordExistingHandleChoiceDiagnostic(WidgetTester tester) {
+void _recordExistingHandleChoiceDiagnostic(
+  WidgetTester tester, {
+  required String phase,
+  required String expectedDomain,
+  required String expectedHandle,
+}) {
   try {
     final page = find.byType(OnboardingPage);
     final observation = <String, Object?>{
+      'phase': phase == 'before_submit' ? 'before_submit' : 'choice_timeout',
       'onboardingPagePresent': page.evaluate().isNotEmpty,
       'deviceJoinPagePresent': find
           .byType(DeviceJoinPage)
           .evaluate()
           .isNotEmpty,
       'devicesPagePresent': find.byType(DevicesPage).evaluate().isNotEmpty,
+      'recoveryPagePresent': find
+          .byType(HandleRecoveryPage)
+          .evaluate()
+          .isNotEmpty,
+      'submissionLoading': find
+          .byKey(const Key('onboarding-submit-loading'))
+          .evaluate()
+          .isNotEmpty,
     };
     if (page.evaluate().isNotEmpty) {
       final context = tester.element(page.first);
       final container = ProviderScope.containerOf(context, listen: false);
       final state = container.read(onboardingProvider);
+      final registration = container.read(registrationEntryProvider);
       final feedback = container.read(uiFeedbackProvider);
+      final submit = find.byKey(
+        const Key('onboarding-mac-phone-submit-action'),
+      );
+      final pressables = find.descendant(
+        of: submit,
+        matching: find.byType(AppPressable),
+      );
+      final pressable = pressables.evaluate().length == 1
+          ? tester.widget<AppPressable>(pressables)
+          : null;
       observation.addAll({
         'outcome': state.phoneRegistrationOutcome.name,
         'failureCode': closedOnboardingFailureCode(
@@ -3848,6 +3887,24 @@ void _recordExistingHandleChoiceDiagnostic(WidgetTester tester) {
         ),
         'busy': state.isBusy,
         'otpConsumed': state.isPhoneOtpConsumed,
+        'canSubmitOtp': state.canSubmitPhoneOtp,
+        'otpPhonePresent': state.otpTargetPhone != null,
+        'otpHandlePresent': state.otpTargetFullHandle != null,
+        'otpHandleMatchesExpected':
+            state.otpTargetFullHandle == '$expectedHandle.$expectedDomain',
+        'activeTenantMatchesExpected':
+            container.read(activeAppTenantProvider).didHost == expectedDomain,
+        'submitControlPresent': pressable != null,
+        'submitControlEnabled':
+            pressable?.enabled == true && pressable?.onTap != null,
+        'registrationStep': registration.step.name,
+        'registrationBusy': registration.busy,
+        'registrationCheckPresent': registration.check != null,
+        'registrationExisting': registration.check?.isExisting,
+        'registrationNeedsInvite': registration.check?.inviteRequired,
+        'registrationError': closedOnboardingFailureCode(registration.error),
+        'registrationInvitePresent': registration.inviteCode.isNotEmpty,
+        'existingAccountPath': registration.existingAccountPath,
         'continuationPresent': state.existingHandleContinuationId != null,
         'joinMode': state.existingHandleJoinMode?.name ?? 'none',
         'serverInfo': state.serverInfoStatus.name,

@@ -59,6 +59,13 @@ String closedOnboardingFailureCode(String? value) {
     'handle_recovery.local_state_conflict',
     'handle_recovery.transition_missing',
     'handle_recovery.join_terminal_wait',
+    'invite_required',
+    'invite_length_six',
+    'invite_length_max_64',
+    'check_failed',
+    'handle_unavailable',
+    'network_unavailable',
+    'request_timeout_retry',
   };
   return allowed.contains(value) ? value : 'unrecognized';
 }
@@ -76,6 +83,8 @@ String closedOnboardingFeedbackId(String? value) {
     'authRequired',
     'networkUnavailable',
     'requestFailed',
+    'otpSent',
+    'otpRateLimited',
   };
   return allowed.contains(value) ? value : 'unrecognized';
 }
