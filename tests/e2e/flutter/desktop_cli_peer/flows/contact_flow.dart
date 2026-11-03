@@ -280,10 +280,22 @@ Future<void> _verifyContactDirectCanonicalRegression({
   expect(conversationId, expectedConversationId);
   expect(conversation.peerPersonaId, expectedPeerPersonaId);
   expect(find.byKey(Key('conversation-row:$conversationId')), findsOneWidget);
+  // Core preserves canonical history; this device's recents must still hide
+  // the latest snapshot when the preceding deletion regression hid it locally.
+  await robot.container
+      .read(localMessageDeletionsProvider(conversationId).notifier)
+      .ready;
+  final localDeletedIds = robot.container
+      .read(localMessageDeletionsProvider(conversationId))
+      .requireValue;
+  final latestSnapshot = conversation.lastMessageSnapshot;
+  final hidesDeletedLatest =
+      latestSnapshot != null &&
+      isMessageLocallyDeleted(latestSnapshot, localDeletedIds);
   await robot.expectConversationRowPresentation(
     conversationId: conversationId,
     expectedTitle: expectedPeerName,
-    expectedPreview: conversation.lastMessagePreview,
+    expectedPreview: hidesDeletedLatest ? '' : conversation.lastMessagePreview,
     unreadCount: conversation.unreadCount,
   );
   await robot.expectSelectedConversationHeader(expectedPeerName);
