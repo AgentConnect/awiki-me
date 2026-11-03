@@ -2745,7 +2745,7 @@ class _JoinCli {
         'poll',
         '--session',
         sessionId,
-      ]);
+      ], safeAction: 'cli_join_authorized_poll');
       final data = _data(payload, action: 'device_join_poll');
       final progress = _JoinProgress.fromData(data);
       _requireJoinIdentity(progress, sessionId, expectedDeviceId);

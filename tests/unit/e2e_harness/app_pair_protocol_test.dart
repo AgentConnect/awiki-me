@@ -8,8 +8,27 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/app_pair_protocol.dart';
+import '../../e2e/bounded_cli_process.dart';
 
 void main() {
+  test('CLI timeout diagnostics use only closed stages and bounded metadata', () {
+    final error = CliProcessTimeout(
+      timeout: const Duration(seconds: 30),
+      stage: CliProcessStage.standardOutput,
+      elapsedMs: 30001,
+      exitDone: true,
+      stdoutDone: false,
+      stderrDone: true,
+      stdoutHasData: true,
+      cleanupFailed: false,
+    );
+    expect(
+      safeCliProcessFailureDiagnostic(error),
+      'reason=timeout, timeoutMs=30000, stage=standardOutput, elapsedMs=30001, '
+      'exitDone=true, stdoutDone=false, stderrDone=true, stdoutHasData=true, '
+      'stderrHasData=false, cleanupFailed=false',
+    );
+  });
   test(
     'PIN/V4 checkpoints coordinate only public scopes and retain exact cleanup actors',
     () async {

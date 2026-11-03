@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'bounded_cli_process.dart';
 
 const Set<String> appPairRoles = <String>{'admin', 'joiner'};
 const Set<String> _forbiddenCheckpointKeys = <String>{
@@ -247,6 +248,13 @@ String safeAvatarFixtureFailureCategory(String line) {
 }
 
 String safeCliProcessFailureDiagnostic(Object error) {
+  if (error is CliProcessTimeout) {
+    return 'reason=timeout, timeoutMs=${error.duration?.inMilliseconds}, '
+        'stage=${error.stage.name}, elapsedMs=${error.elapsedMs}, '
+        'exitDone=${error.exitDone}, stdoutDone=${error.stdoutDone}, '
+        'stderrDone=${error.stderrDone}, stdoutHasData=${error.stdoutHasData}, '
+        'stderrHasData=${error.stderrHasData}, cleanupFailed=${error.cleanupFailed}';
+  }
   if (error is TimeoutException) {
     final duration = error.duration;
     return 'reason=timeout${duration == null ? '' : ', timeoutMs=${duration.inMilliseconds}'}';

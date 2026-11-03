@@ -9,12 +9,48 @@ String dartExecutable() {
   final flutter = Platform.environment['FLUTTER_ROOT'];
   final path =
       '$flutter/bin/cache/dart-sdk/bin/dart${Platform.isWindows ? '.exe' : ''}';
-  if (!File(path).existsSync())
+  if (!File(path).existsSync()) {
     throw StateError('A real Dart SDK executable is required.');
+  }
   return path;
 }
 
 void main() {
+  test(
+    'timeout keeps the original stage when owned cleanup also fails',
+    () async {
+      final process = _CleanupFailureProcess();
+      await expectLater(
+        runBoundedCliProcess(
+          executable: 'sensitive-executable-must-not-be-recorded',
+          arguments: ['sensitive-argument-must-not-be-recorded'],
+          environment: const {},
+          timeout: const Duration(milliseconds: 30),
+          processStarter: () async => process,
+        ),
+        throwsA(
+          isA<CliProcessTimeout>()
+              .having(
+                (error) => error.stage,
+                'original stage',
+                CliProcessStage.exit,
+              )
+              .having((error) => error.exitDone, 'exit before cleanup', false)
+              .having(
+                (error) => error.cleanupFailed,
+                'secondary cleanup failure',
+                true,
+              )
+              .having(
+                (error) => error.toString(),
+                'private command metadata',
+                isNot(contains('sensitive-')),
+              ),
+        ),
+      );
+      expect(process.killCalled, isTrue);
+    },
+  );
   test('group readiness keeps one 45-second budget across commands', () {
     const total = Duration(seconds: 45);
     expect(remainingCliOperationBudget(total, Duration.zero), total);
@@ -56,7 +92,23 @@ void main() {
         environment: Platform.environment,
         timeout: const Duration(seconds: 2),
       );
-      final expectation = expectLater(future, throwsA(isA<TimeoutException>()));
+      final expectation = expectLater(
+        future,
+        throwsA(
+          isA<CliProcessTimeout>()
+              .having(
+                (error) => error.stage,
+                'waiting stage',
+                CliProcessStage.exit,
+              )
+              .having(
+                (error) => error.exitDone,
+                'exit observed before cleanup',
+                false,
+              )
+              .having((error) => error.cleanupFailed, 'owned cleanup', false),
+        ),
+      );
       final clock = Stopwatch()..start();
       while (!await ready.exists() &&
           clock.elapsed < const Duration(seconds: 1)) {
@@ -75,9 +127,40 @@ void main() {
       }
     } finally {
       if (!root.absolute.path.startsWith(Directory.systemTemp.absolute.path) ||
-          !root.path.contains('awiki-cli-budget-'))
+          !root.path.contains('awiki-cli-budget-')) {
         throw StateError('Unexpected test root');
+      }
       await root.delete(recursive: true);
     }
   });
+}
+
+class _CleanupFailureProcess implements Process {
+  final _exit = Completer<int>();
+  bool killCalled = false;
+  @override
+  final IOSink stdin = IOSink(_DiscardInput());
+  @override
+  Stream<List<int>> get stdout => const Stream.empty();
+  @override
+  Stream<List<int>> get stderr => const Stream.empty();
+  @override
+  Future<int> get exitCode => _exit.future;
+  @override
+  int get pid => 1;
+  @override
+  bool kill([ProcessSignal signal = ProcessSignal.sigterm]) {
+    killCalled = true;
+    if (!_exit.isCompleted) {
+      _exit.completeError(StateError('synthetic cleanup failure'));
+    }
+    return false;
+  }
+}
+
+class _DiscardInput implements StreamConsumer<List<int>> {
+  @override
+  Future<void> addStream(Stream<List<int>> stream) => stream.drain<void>();
+  @override
+  Future<void> close() async {}
 }
