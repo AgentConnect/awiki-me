@@ -17,6 +17,7 @@ import '../../delete_isolated_directory.dart';
 import '../../desktop_subprocess_environment.dart';
 import '../../desktop_tool_executable.dart';
 import '../../protected_files.dart';
+import '../../handle_recovery_epoch_observation.dart';
 
 import '../support/enter_existing_account.dart';
 import '../support/confirm_local_credential_deletion.dart';
@@ -4512,8 +4513,25 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
   final local = bootstrap.productLocalStore!;
   final session = await bootstrap.appSessionService!.currentSession();
   final accountBinding = session?.accountBinding;
+  final expectedReset = ProductDeviceRegistryEpochResetAuthorization(
+    reference: ProductDeviceRegistryEpochResetReference(
+      accountUserId: reset.accountUserId,
+      ownerIdentityId: reset.ownerIdentityId,
+      previousDid: reset.previousDid,
+      currentDid: reset.currentDid,
+      bindingGeneration: reset.bindingGeneration,
+    ),
+    handle: reset.handle,
+    sourceKind: reset.sourceKind == HandleRecoveryTransitionSourceKind.initiator
+        ? ProductIdentityTransitionSourceKind.initiator
+        : ProductIdentityTransitionSourceKind.joinedDevice,
+    sourceId: reset.sourceId,
+  );
+  final appliedReset = await local.loadDeviceRegistryEpochResetReceipt(
+    authorization: expectedReset,
+  );
   final epoch = await local.loadDeviceRegistryEpoch(binding: binding);
-  final staleRegistry = await local.loadDeviceRegistrySnapshot(
+  final registryAfterActivation = await local.loadDeviceRegistrySnapshot(
     binding: binding,
   );
   final stableProfile = await local.loadProfileSnapshot(binding: binding);
@@ -4521,10 +4539,20 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       .listLocalIdentities();
   final bootstrapReadyCount = appBootstrapEpochBarrierMetrics
       .snapshot()['ready'];
+  final registryResetObserved = handleRecoveryRegistryResetObserved(
+    expected: expectedReset,
+    epoch: epoch,
+    receipt: appliedReset,
+    snapshot: registryAfterActivation,
+  );
   if (accountBinding == null ||
+      accountBinding.ownerIdentityId != binding.ownerIdentityId ||
+      accountBinding.accountId != binding.accountId ||
+      accountBinding.currentDid != newDid ||
+      accountBinding.identityGeneration != newGeneration ||
       epoch?.currentDid != newDid ||
       epoch?.bindingGeneration != accountBinding.identityGeneration ||
-      staleRegistry != null ||
+      !registryResetObserved ||
       stableProfile?.domainVersion != '1' ||
       localIdentities.any((identity) => identity.did == oldDid) ||
       bootstrapReadyCount != 1) {
@@ -4533,9 +4561,10 @@ Future<void> _runRecoveryCrashCutPhaseB(WidgetTester tester) async {
       '(accountBinding=${accountBinding != null}, '
       'epochDid=${epoch?.currentDid == newDid}, '
       'generation=${epoch?.bindingGeneration == accountBinding?.identityGeneration}, '
-      'registryCleared=${staleRegistry == null}, '
-      'registryCurrentDid=${staleRegistry?.epoch.currentDid == newDid}, '
-      'registryCurrentGeneration=${staleRegistry?.epoch.bindingGeneration == newGeneration}, '
+      'registryResetObserved=$registryResetObserved, '
+      'resetReceiptMatched=${appliedReset?.authorization.matches(expectedReset) == true}, '
+      'registryCurrentDid=${registryAfterActivation?.epoch.currentDid == newDid}, '
+      'registryCurrentGeneration=${registryAfterActivation?.epoch.bindingGeneration == newGeneration}, '
       'profilePreserved=${stableProfile?.domainVersion == '1'}, '
       'oldIdentityAbsent=${!localIdentities.any((identity) => identity.did == oldDid)}, '
       'readyCount=$bootstrapReadyCount).',
