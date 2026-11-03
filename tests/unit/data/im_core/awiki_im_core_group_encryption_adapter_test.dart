@@ -60,6 +60,50 @@ void main() {
     expect(result.readiness, GroupEncryptionReadiness.ready);
   });
 
+  for (final state in <core.GroupSecureState>[
+    core.GroupSecureState.ready,
+    core.GroupSecureState.waitingForMembershipUpdate,
+  ]) {
+    test('stale repair reloads actual Core readiness ${state.name}', () async {
+      final calls = <String>[];
+      final adapter = AwikiImCoreGroupEncryptionAdapter.withCalls(
+        repair: (_) async {
+          calls.add('repair');
+          throw const core.AwikiImCoreException(
+            code: 'service_error',
+            serviceCode: 'group.local_cursor_stale',
+            message: 'synthetic local version fence',
+          );
+        },
+        status: (_) async {
+          calls.add('status');
+          return _status(state: state,
+            canSendSecure: state == core.GroupSecureState.ready);
+        },
+      );
+      final result = await adapter.retry(groupDid);
+      expect(calls, <String>['repair', 'status']);
+      expect(result.canSendSecure, state == core.GroupSecureState.ready);
+      expect(result.readiness, state == core.GroupSecureState.ready
+          ? GroupEncryptionReadiness.ready : GroupEncryptionReadiness.preparing);
+    });
+  }
+  for (final error in <core.AwikiImCoreException>[
+    const core.AwikiImCoreException(code: 'permission_denied', message: 'synthetic'),
+    const core.AwikiImCoreException(code: 'service_error',
+      serviceCode: 'group.local_cursor_invalid', message: 'synthetic'),
+  ]) {
+    test('repair rejection ${error.code}/${error.serviceCode} stays terminal', () async {
+      var reads = 0;
+      final adapter = AwikiImCoreGroupEncryptionAdapter.withCalls(
+        repair: (_) async => throw error,
+        status: (_) async { reads++; return _status(state: core.GroupSecureState.ready, canSendSecure: true); },
+      );
+      await expectLater(adapter.retry(groupDid), throwsA(same(error)));
+      expect(reads, 0);
+    });
+  }
+
   test('empty Group DID fails before calling Core', () async {
     var called = false;
     final adapter = AwikiImCoreGroupEncryptionAdapter.withCalls(
