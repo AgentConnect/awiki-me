@@ -30,6 +30,8 @@ Future<void> _recordWindowsSharingDiagnostic(Directory directory) async {
   Process? child;
   StreamSubscription<String>? outputSubscription;
   var exited = false;
+  // 测试专用输出必须由 Flutter driver 捕获。
+  // ignore: avoid_print
   void unavailable() => print('windows_fixture_sharing unavailable');
   try {
     final python = Platform.environment['AWIKI_E2E_PYTHON_BIN'];
@@ -103,6 +105,7 @@ Future<void> _recordWindowsSharingDiagnostic(Directory directory) async {
         ? errors.values.fold<int>(0, (sum, value) => sum + bounded(value))
         : 0;
     // Only fixed field names and bounded numbers cross into Flutter logs.
+    // ignore: avoid_print
     print(
       'windows_fixture_sharing ${jsonEncode({'scanned': bounded(decoded['scannedCount']), 'coreSqlite': bounded(locks['core_sqlite']), 'coreJournal': bounded(locks['core_sqlite_journal']), 'productSqlite': bounded(locks['product_sqlite']), 'lockFiles': bounded(locks['lock_file']), 'directories': bounded(locks['directory']), 'otherFiles': bounded(locks['other_file']), 'systemErrors': systemErrors > 512 ? 512 : systemErrors, 'truncated': decoded['truncated'] == true})}',
     );
