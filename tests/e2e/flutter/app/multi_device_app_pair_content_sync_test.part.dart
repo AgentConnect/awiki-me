@@ -309,16 +309,14 @@ Future<void> _runAppPairAdminContentSync({
       'groupMessageId': incomingGroupId,
     },
   );
-  await config.coordinator.waitFor(
-    'joiner',
-    'content_direct_read_committed',
-  );
+  await config.coordinator.waitFor('joiner', 'content_direct_read_committed');
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
     conversationId: directId,
     matches: (value) => value == 0,
     failure: 'The sibling Direct read did not converge to the existing App.',
+    requireCoreCommit: true,
   );
   await _waitForAppPairUnreadCount(
     tester: tester,
@@ -336,6 +334,7 @@ Future<void> _runAppPairAdminContentSync({
     conversationId: groupId,
     matches: (value) => value == 0,
     failure: 'The sibling Group read did not converge to the existing App.',
+    requireCoreCommit: true,
   );
   await _waitForAppPairUnreadCount(
     tester: tester,
@@ -572,6 +571,7 @@ Future<void> _runAppPairJoinerContentSync({
     conversationId: directId,
     matches: (value) => value == 0,
     failure: 'Opening Direct did not commit its read state.',
+    requireCoreCommit: true,
   );
   await _waitForAppPairUnreadCount(
     tester: tester,
@@ -580,7 +580,9 @@ Future<void> _runAppPairJoinerContentSync({
     matches: (value) => value == 1,
     failure: 'Opening Direct incorrectly cleared Group unread state.',
   );
-  debugPrint('[content-read-commit] ${await _appPairUnreadDiagnostic(container, directId)}');
+  debugPrint(
+    '[content-read-commit] ${await _appPairUnreadDiagnostic(container, directId)}',
+  );
   await config.coordinator.publish('joiner', 'content_direct_read_committed');
   await config.coordinator.waitFor('admin', 'content_direct_read_converged');
 
@@ -595,6 +597,7 @@ Future<void> _runAppPairJoinerContentSync({
     conversationId: groupId,
     matches: (value) => value == 0,
     failure: 'Opening Group did not commit its read state.',
+    requireCoreCommit: true,
   );
   await _waitForAppPairUnreadCount(
     tester: tester,

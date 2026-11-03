@@ -4801,6 +4801,7 @@ Future<void> _waitForAppPairUnreadCount({
   required String conversationId,
   required bool Function(int count) matches,
   required String failure,
+  bool requireCoreCommit = false,
 }) async {
   try {
     await _pumpUntil(
@@ -4820,6 +4821,25 @@ Future<void> _waitForAppPairUnreadCount({
       timeout: const Duration(seconds: 90),
       failure: failure,
     );
+    if (requireCoreCommit) {
+      // UI waterline 可先于持久提交清零；只通过 Core 公开投影确认提交。
+      final deadline = DateTime.now().add(const Duration(seconds: 90));
+      while (true) {
+        final owner = container.read(sessionProvider).session?.did;
+        if (owner == null) fail('The read-commit check lost its active owner.');
+        final rows = await container
+            .read(conversationServiceProvider)
+            .listConversationSummariesFast(ownerDid: owner);
+        final exact = rows
+            .where((row) => row.conversationId == conversationId)
+            .toList();
+        if (exact.length > 1)
+          fail('The Core projected a duplicate read conversation.');
+        if (exact.length == 1 && matches(exact.single.unreadCount)) break;
+        if (!DateTime.now().isBefore(deadline)) fail(failure);
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+    }
   } on TestFailure {
     final diagnostic = await _appPairUnreadDiagnostic(
       container,
@@ -4842,6 +4862,7 @@ Future<String> _appPairUnreadDiagnostic(
       .toList();
   final result = <String, Object?>{
     'uiUnread': ui.map((row) => row.unreadCount).toList(),
+    'appLifecycle': container.read(appLifecycleProvider).name,
     'status': state.status.name,
     'realtime': realtime?.name,
     'syncing': state.isSyncing,
