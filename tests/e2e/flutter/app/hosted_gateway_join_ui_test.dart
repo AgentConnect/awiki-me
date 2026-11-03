@@ -62,6 +62,7 @@ void main() {
       }
       AppBootstrap? bootstrap;
       HostedGatewayFixture? fixture;
+      ProviderContainer? joinDiagnosticContainer;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       addTearDown(() async {
         fixture?.close();
@@ -120,6 +121,7 @@ void main() {
         await tester.ensureVisible(start);
         await tester.tap(start);
         final container = ProviderScope.containerOf(tester.element(page));
+        joinDiagnosticContainer = container;
         await until(
           tester,
           () => container.read(devicesProvider).activeJoin != null,
@@ -224,8 +226,16 @@ void main() {
         );
       } on Object catch (error, stack) {
         await E2eCaseAttestationWriter.markFailed(caseId, phase: phase);
+        var diagnostic = 'unavailable';
+        try {
+          final active = joinDiagnosticContainer;
+          if (active != null)
+            diagnostic = hostedJoinUiDiagnostic(active.read(devicesProvider));
+        } on Object {
+          /* 保留原始失败，不输出 provider 异常文本。 */
+        }
         fail(
-          'Hosted App Join failed at $phase (${hostedFailureCode(error)} ${hostedFailureLocation(stack)}); private device state retained.',
+          'Hosted App Join failed at $phase (${hostedFailureCode(error)} ${hostedFailureLocation(stack)} ui=$diagnostic); private device state retained.',
         );
       }
     },

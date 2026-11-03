@@ -49,6 +49,7 @@ void registerHostedGatewayApprovalCase() {
       }
       AppBootstrap? bootstrap;
       HostedGatewayFixture? gateway;
+      ProviderContainer? onboardingDiagnosticContainer;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       addTearDown(() async {
         gateway?.close();
@@ -89,6 +90,7 @@ void registerHostedGatewayApprovalCase() {
         final onboarding = ProviderScope.containerOf(
           tester.element(find.byType(OnboardingPage)),
         );
+        onboardingDiagnosticContainer = onboarding;
         await until(
           tester,
           () => onboarding.read(onboardingProvider).serverInfo != null,
@@ -248,8 +250,18 @@ void registerHostedGatewayApprovalCase() {
         );
       } on Object catch (error, stack) {
         await E2eCaseAttestationWriter.markFailed(_caseId, phase: phase);
+        var diagnostic = 'unavailable';
+        try {
+          final active = onboardingDiagnosticContainer;
+          if (active != null)
+            diagnostic = hostedOnboardingUiDiagnostic(
+              active.read(onboardingProvider),
+            );
+        } on Object {
+          /* 保留原始失败，不输出 provider 异常文本。 */
+        }
         fail(
-          'Hosted App approval failed at $phase (${hostedFailureCode(error)} ${hostedFailureLocation(stack)}); private device state retained.',
+          'Hosted App approval failed at $phase (${hostedFailureCode(error)} ${hostedFailureLocation(stack)} ui=$diagnostic); private device state retained.',
         );
       }
     },

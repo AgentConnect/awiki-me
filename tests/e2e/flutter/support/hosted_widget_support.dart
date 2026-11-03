@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 
 Future<void> until(WidgetTester tester, bool Function() predicate) async {
   for (var attempt = 0; attempt < 300; attempt++) {
@@ -81,3 +85,23 @@ String hostedFailureLocation(StackTrace stack) {
   ).allMatches(stack.toString());
   return matches.take(3).map((match) => '${match[1]}:${match[2]}').join(',');
 }
+
+// 只投影闭合枚举和布尔值；不序列化 OTP、身份、文本错误或完整 provider state。
+String hostedJoinUiDiagnostic(DevicesState state) => jsonEncode({
+  'actionPending': state.isActionPending,
+  'loading': state.isLoading,
+  'joinPresent': state.activeJoin != null,
+  'joinPhase': state.activeJoin?.phase.name,
+  'error': state.error?.name,
+  'managementReady': state.localManagementReady,
+});
+
+String hostedOnboardingUiDiagnostic(OnboardingState state) => jsonEncode({
+  'serverStatus': state.serverInfoStatus.name,
+  'busy': state.isBusy,
+  'phoneOutcome': state.phoneRegistrationOutcome.name,
+  'failurePresent': state.phoneRegistrationFailureCode != null,
+  'existingAccountMethods': state.existingAccountMethods,
+  'otpConsumed': state.isPhoneOtpConsumed,
+  'canSubmitOtp': state.canSubmitPhoneOtp,
+});
