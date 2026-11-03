@@ -188,6 +188,18 @@ void main() {
   testWidgets(
     'App new device joins after CLI listener emits a host wake',
     (tester) async {
+      final previousErrorHandler = FlutterError.onError;
+      FlutterError.onError = (details) {
+        if (details.exception is core.AwikiImCoreException) {
+          // 保留原失败，仅补充类型、服务错误枚举与 HTTP 状态，不输出正文或身份。
+          debugPrint(
+            '[join-core-failure] ${_appPairClosedRegistrationError(details.exception)}',
+          );
+        }
+        previousErrorHandler?.call(details);
+      };
+      addTearDown(() => FlutterError.onError = previousErrorHandler);
+
       final config = _RemoteJoinRunConfig.load();
       final account = _DedicatedAccount.fromConfig(config);
       final httpClient = http.Client();
