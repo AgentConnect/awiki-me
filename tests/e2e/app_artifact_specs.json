@@ -259,9 +259,7 @@
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-app-pair",
         "multi-device-app-pair-functional",
@@ -280,9 +278,7 @@
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=joiner"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-app-pair",
         "multi-device-app-pair-functional",
@@ -313,16 +309,13 @@
     {
       "name": "recovery-crash-a",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.crash.a",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true",
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_a"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-remote-recovery",
         "handle-recovery-local-data"
@@ -331,15 +324,13 @@
     {
       "name": "recovery-crash-b",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.crash.b",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-remote-recovery",
         "handle-recovery-local-data"
@@ -348,15 +339,13 @@
     {
       "name": "recovery-fresh-restart",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.fresh.restart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=fresh_restart"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-remote-recovery-fresh"
       ]
@@ -364,15 +353,13 @@
     {
       "name": "recovery-registration-resume-a",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.registration.a",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_a"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-app-pair-recovery-registration-resume"
       ]
@@ -380,15 +367,13 @@
     {
       "name": "recovery-registration-resume-b",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.registration.b",
+      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=registration_resume_b"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "multi-device-app-pair-recovery-registration-resume"
       ]
@@ -396,16 +381,13 @@
     {
       "name": "identity-deletion-a",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.a",
+      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE=true",
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_a"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "identity-deletion-recovery-guard"
       ]
@@ -413,23 +395,21 @@
     {
       "name": "identity-deletion-b",
       "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.b",
+      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.main",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [
-        "AWIKI_HANDLE_RECOVERY_E2E_PHASE=identity_deletion_b"
-      ],
+      "dartDefines": [],
       "consumerSuites": [
         "identity-deletion-recovery-guard"
       ]
     },
     {
       "name": "restart-a",
-      "target": "integration_test/desktop_cli_peer_restart_phase_a_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.restart.a",
+      "target": "integration_test/desktop_cli_peer_restart_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.restart.main",
       "supportedPlatforms": [
         "macos",
         "linux",
@@ -442,8 +422,8 @@
     },
     {
       "name": "restart-b",
-      "target": "integration_test/desktop_cli_peer_restart_phase_b_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.restart.b",
+      "target": "integration_test/desktop_cli_peer_restart_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.restart.main",
       "supportedPlatforms": [
         "macos",
         "linux",
@@ -456,8 +436,8 @@
     },
     {
       "name": "restart-c",
-      "target": "integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.restart.c",
+      "target": "integration_test/desktop_cli_peer_restart_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.restart.main",
       "supportedPlatforms": [
         "macos",
         "linux",

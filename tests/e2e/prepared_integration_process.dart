@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'case_attestation.dart';
+import 'runtime_control/invocation.dart';
+import 'protected_files.dart';
 
 final class PreparedIntegrationProcessException implements Exception {
   const PreparedIntegrationProcessException(this.message);
@@ -22,11 +24,13 @@ final class PreparedIntegrationExecution {
     required this.elapsed,
     required this.processExitCode,
     required this.terminatedAfterCompletion,
+    this.terminatedAfterCheckpoint = false,
   });
 
   final Duration elapsed;
   final int processExitCode;
   final bool terminatedAfterCompletion;
+  final bool terminatedAfterCheckpoint;
 }
 
 Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
@@ -41,7 +45,30 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
   bool macosForeground = false,
   Future<Process> Function(int processId)? startForegroundKeeper,
   void Function(String line)? outputLine,
+  E2eInvocation? expectedInterruption,
 }) async {
+  if (expectedInterruption != null) {
+    if (operatingSystem != 'windows' ||
+        expectedInterruption.interruption.isEmpty ||
+        expectedInterruption.runId != expectedRunId ||
+        expectedInterruption.scenario != expectedScenario ||
+        !_sameStrings(expectedInterruption.caseIds, expectedCaseIds) ||
+        E2eInvocation.load(environment)?.digest !=
+            expectedInterruption.digest) {
+      throw const PreparedIntegrationProcessException(
+        'Expected interruption is not bound to this Windows invocation.',
+      );
+    }
+    final checkpoint = File(
+      '${environment[invocationPathEnvironment]}.checkpoint',
+    );
+    if (FileSystemEntity.typeSync(checkpoint.path, followLinks: false) !=
+        FileSystemEntityType.notFound) {
+      throw const PreparedIntegrationProcessException(
+        'Expected checkpoint already exists.',
+      );
+    }
+  }
   if (!executable.existsSync()) {
     throw const PreparedIntegrationProcessException(
       'Prepared integration executable is missing.',
@@ -113,6 +140,52 @@ Future<PreparedIntegrationExecution> runPreparedIntegrationExecutable({
       unawaited(foregroundKeeper.stderr.drain<void>());
     }
     while (watch.elapsed < timeout) {
+      if (expectedInterruption != null) {
+        final checkpoint = File(
+          '${environment[invocationPathEnvironment]}.checkpoint',
+        );
+        if (checkpoint.existsSync()) {
+          if (!isPrivateE2eFile(checkpoint) ||
+              checkpoint.lengthSync() > 16384) {
+            throw const PreparedIntegrationProcessException(
+              'Checkpoint is not a bounded private file.',
+            );
+          }
+          final event = jsonDecode(checkpoint.readAsStringSync());
+          if (event is! Map ||
+              event.length != 6 ||
+              event['schemaVersion'] != 1 ||
+              event['invocationId'] != expectedInterruption.invocationId ||
+              event['planDigest'] != expectedInterruption.digest ||
+              event['checkpoint'] != expectedInterruption.interruption ||
+              event['pid'] != process.pid ||
+              event['occurrence'] != 1 ||
+              !await _processStillRunning(exitFuture) ||
+              completionFile.existsSync()) {
+            throw const PreparedIntegrationProcessException(
+              'Checkpoint identity or lifecycle is invalid.',
+            );
+          }
+          final killed = await Process.run('taskkill.exe', [
+            '/PID',
+            '${process.pid}',
+            '/T',
+            '/F',
+          ]);
+          if (killed.exitCode != 0) {
+            throw const PreparedIntegrationProcessException(
+              'Owned checkpoint process could not be terminated.',
+            );
+          }
+          final code = await exitFuture.timeout(const Duration(seconds: 5));
+          return PreparedIntegrationExecution(
+            elapsed: watch.elapsed,
+            processExitCode: code,
+            terminatedAfterCompletion: false,
+            terminatedAfterCheckpoint: true,
+          );
+        }
+      }
       if (completionFile.existsSync()) {
         final completion = E2eInvocationCompletion.read(completionFile);
         if (completion.scenario != expectedScenario ||

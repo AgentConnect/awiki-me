@@ -12,6 +12,9 @@
 // [POS]: Remote product UI acceptance; setup creates only the remote fixture,
 //        while the tested onboarding or Settings Recovery is UI-driven.
 
+import '../../runtime_control/invocation.dart';
+import '../../runtime_control/fault_controller.dart';
+import 'package:awiki_me/src/app/e2e_fault_hooks.dart';
 import 'dart:async';
 import '../../delete_isolated_directory.dart';
 import '../../desktop_subprocess_environment.dart';
@@ -144,9 +147,10 @@ const List<String> _freshFocusedCaseIds = <String>[
   _freshGroupInboundCaseId,
   _freshRestartCaseId,
 ];
-const String _e2ePhase = String.fromEnvironment(
+const String _legacyE2ePhase = String.fromEnvironment(
   'AWIKI_HANDLE_RECOVERY_E2E_PHASE',
 );
+String _e2ePhase = _legacyE2ePhase;
 const String _registrationResumePhaseA = 'registration_resume_a';
 const String _registrationResumePhaseB = 'registration_resume_b';
 const String _identityDeletionPhaseA = 'identity_deletion_a';
@@ -174,7 +178,29 @@ Future<void> _recordAppProjectionFixtureFailure({
 );
 
 void main() {
+  final invocation = E2eInvocation.load(
+    Platform.environment,
+    family: 'recovery',
+  );
+  final phase = invocation?.mode.phase;
+  _e2ePhase = phase == null ? _legacyE2ePhase : (phase == 'main' ? '' : phase);
+  if (e2eFaultHooksEnabled &&
+      const ['crash_a', 'identity_deletion_a'].contains(_e2ePhase)) {
+    e2eFaultHooks.install(
+      E2eFaultController(
+        phase: _e2ePhase,
+        invocation: invocation,
+        pauseForTermination: invocation?.interruption.isNotEmpty == true,
+      ).hit,
+      checkpoints: {
+        _e2ePhase == 'crash_a'
+            ? E2eFaultCheckpoint.recoveryBeforeProductReset
+            : E2eFaultCheckpoint.identityAfterProductDelete,
+      },
+    );
+  }
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  tearDownAll(e2eFaultHooks.clear);
   tearDownAll(
     () => E2eInvocationCompletionWriter.markFinished(
       failedTestCount: binding.failureMethodsDetails.length,
@@ -6419,9 +6445,7 @@ Future<void> _waitForCompletedRecovery(
     final state = _recoveryUiContainer(tester).read(handleRecoveryProvider);
     final progress = state.progress;
     if (progress?.isCompleted ?? false) {
-      if (!const bool.fromEnvironment(
-        'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET',
-      )) {
+      if (_e2ePhase != 'crash_a') {
         await _tapOne(
           tester,
           find.byKey(const Key('handle-recovery-enter-messages')),

@@ -15,6 +15,7 @@ import 'ensure_linux_im_core.dart';
 import 'ensure_windows_im_core.dart';
 import 'windows_e2e_workspace.dart';
 import 'windows_nuget_cache.dart';
+import 'streamed_build_process.dart';
 
 enum IsolatedE2eAppPlatform {
   macos,
@@ -79,9 +80,12 @@ class IsolatedE2eAppBuildRequest {
   final bool preserveScratch;
   final String? macosDeploymentTarget;
 
+  String get compiledIdentityName =>
+      'app-${sha256.convert(utf8.encode(bundleId)).toString().substring(0, 12)}';
+
   String get macosOverrideConfiguration =>
       'AWIKI_MACOS_DEV_BUNDLE_ID = $bundleId\n'
-      'AWIKI_APP_DISPLAY_NAME = AWikiMe E2E $name\n'
+      'AWIKI_APP_DISPLAY_NAME = AWikiMe E2E $compiledIdentityName\n'
       '${macosDeploymentTarget == null ? "" : "MACOSX_DEPLOYMENT_TARGET = $macosDeploymentTarget\n"}';
 
   factory IsolatedE2eAppBuildRequest.parse(
@@ -538,7 +542,17 @@ class IsolatedE2eAppBuilder {
         projectRoot: request.projectRoot,
         destination: request.windowsSourceProject,
         bundleId: request.bundleId,
-        name: request.name,
+        name: request.compiledIdentityName,
+        compatibilityKey: sha256
+            .convert(
+              utf8.encode(
+                jsonEncode({
+                  ...identity.compileKeyPayload,
+                  'sourceDigest': null,
+                }),
+              ),
+            )
+            .toString(),
       );
       recordPreparationStage('windows_nuget');
       final nuget = await prepareWindowsNugetEnvironment(
@@ -548,9 +562,10 @@ class IsolatedE2eAppBuilder {
       windowsBuildEnvironment['PATH'] =
           '${nuget.parent.path};${Platform.environment['PATH'] ?? ''}';
       recordPreparationStage('windows_pub_get');
-      final packages = await Process.run(
+      final packages = await runStreamedBuildProcess(
         desktopToolExecutable(request.flutterBin),
         const ['pub', 'get', '--enforce-lockfile'],
+        logFile: File('${request.workRoot.path}/pub-get-output.jsonl'),
         workingDirectory: buildProject.path,
         environment: {
           ...Platform.environment,
@@ -577,9 +592,10 @@ class IsolatedE2eAppBuilder {
     late final ProcessResult build;
     recordPreparationStage('flutter_build');
     try {
-      build = await Process.run(
+      build = await runStreamedBuildProcess(
         desktopToolExecutable(request.flutterBin),
         plan.flutterArguments,
+        logFile: File('${request.workRoot.path}/flutter-build-output.jsonl'),
         workingDirectory: buildProject.path,
         environment: <String, String>{
           ...Platform.environment,
@@ -597,7 +613,6 @@ class IsolatedE2eAppBuilder {
           if (request.platform == IsolatedE2eAppPlatform.macos)
             'XCODE_XCCONFIG_FILE': plan.overrideConfig.path,
         },
-        runInShell: false,
       );
     } finally {
       removeIsolatedLinuxNativeAssetsCompatibility(
@@ -702,7 +717,10 @@ class IsolatedE2eAppBuilder {
       plan.artifactApp.deleteSync(recursive: true);
     }
     recordPreparationStage('scratch_cleanup');
-    if (!request.preserveScratch) _deleteBuildScratch(plan);
+    if (!request.preserveScratch &&
+        request.platform != IsolatedE2eAppPlatform.windows) {
+      _deleteBuildScratch(plan);
+    }
     final artifact = _isolatedArtifact(
       request: request,
       plan: plan,
@@ -1155,8 +1173,8 @@ Map<String, Object?> isolatedCompileKeyPayload({
 }) => <String, Object?>{
   'schemaVersion': 1,
   'cacheContractVersion': request.platform == IsolatedE2eAppPlatform.windows
-      ? 5
-      : 4,
+      ? 6
+      : 5,
   'target': request.target,
   'bundleId': request.bundleId,
   'platform': request.platform.name,

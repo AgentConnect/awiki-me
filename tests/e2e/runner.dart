@@ -1,3 +1,4 @@
+import 'runtime_control/invocation.dart';
 import 'remote_target.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -1042,29 +1043,77 @@ class DesktopE2eRunner {
     );
   }
 
+  Map<String, String> _writeArtifactInvocation(
+    _IsolatedAppArtifact artifact,
+    List<String> caseIds, {
+    String interruption = '',
+  }) {
+    final spec = _appArtifactSpecs.requireSpec(artifact.role);
+    if (!spec.consumerSuites.contains(options.e2eCase.caseName) ||
+        caseIds.any((id) => !suiteDefinition.caseIds.contains(id))) {
+      throw E2eFailure('Artifact invocation is outside the selected suite.');
+    }
+    final nonce = List.generate(
+      16,
+      (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    final invocation = E2eInvocation(
+      artifact: artifact.role,
+      runId: runId,
+      scenario: options.e2eCase.scenario,
+      invocationId: nonce,
+      platform: platform.name,
+      caseIds: caseIds,
+      artifactSha256: artifact.artifactSha256,
+      interruption: interruption,
+      deadlineUnixMs:
+          DateTime.now().toUtc().millisecondsSinceEpoch +
+          suiteDefinition.timeout.inMilliseconds,
+    );
+    final file = File(
+      '${reportDir.parent.path}/invocations/$nonce.json',
+    ).absolute;
+    invocation.write(file);
+    _addRuntimeSecret(file.path);
+    return {
+      invocationPathEnvironment: file.path,
+      invocationDigestEnvironment: invocation.digest,
+    };
+  }
+
   Future<void> _executePreparedIntegration({
     required _IsolatedAppArtifact artifact,
     required List<String> caseIds,
     required Directory stateRoot,
     Map<String, String> environment = const <String, String>{},
+    String interruption = '',
   }) async {
     if (platform == DesktopE2ePlatform.linux) {
       await commands.requireExecutable('setsid');
     }
+    final runtimeEnvironment = _writeArtifactInvocation(
+      artifact,
+      caseIds,
+      interruption: interruption,
+    );
+    final executionEnvironment = <String, String>{
+      ...environment,
+      'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
+      e2eCaseAttestationPathDefine: caseAttestationFile.path,
+      e2eCaseScenarioDefine: options.e2eCase.scenario,
+      e2eCaseRunIdDefine: runId,
+      e2eCaseIdsDefine: caseIds.join(','),
+      ...runtimeEnvironment,
+    };
+    final invocation = E2eInvocation.load(executionEnvironment)!;
     final PreparedIntegrationExecution execution;
     try {
       execution = await runPreparedIntegrationExecutable(
         executable: artifact.executable,
         operatingSystem: platform.name,
         macosForeground: options.macosForeground,
-        environment: <String, String>{
-          'AWIKI_E2E_APP_STATE_ROOT': stateRoot.path,
-          e2eCaseAttestationPathDefine: caseAttestationFile.path,
-          e2eCaseScenarioDefine: options.e2eCase.scenario,
-          e2eCaseRunIdDefine: runId,
-          e2eCaseIdsDefine: caseIds.join(','),
-          ...environment,
-        },
+        environment: executionEnvironment,
+        expectedInterruption: interruption.isEmpty ? null : invocation,
         completionFile: invocationCompletionFile,
         expectedScenario: options.e2eCase.scenario,
         expectedRunId: runId,
@@ -1074,6 +1123,28 @@ class DesktopE2eRunner {
       );
     } on PreparedIntegrationProcessException catch (error) {
       throw E2eFailure(error.message);
+    }
+    if (interruption.isNotEmpty) {
+      if (!execution.terminatedAfterCheckpoint) {
+        throw E2eFailure('Expected checkpoint interruption was not verified.');
+      }
+      final receipt = File(
+        '${runtimeEnvironment[invocationPathEnvironment]}.termination.json',
+      );
+      receipt.writeAsStringSync(
+        jsonEncode({
+          'schemaVersion': 1,
+          'status': 'interrupted_not_passed',
+          'invocationId': invocation.invocationId,
+          'planDigest': invocation.digest,
+          'artifactSha256': artifact.artifactSha256,
+          'checkpoint': interruption,
+          'processExitCode': execution.processExitCode,
+        }),
+        flush: true,
+      );
+      protectE2ePathSync(receipt.path);
+      return;
     }
     if (!execution.terminatedAfterCompletion) {
       throw E2eFailure(

@@ -11,6 +11,7 @@ ANDROID_APP_ID="ai.awiki.awikime"
 ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
 ANDROID_EMAS_CONFIG_TOOL="$SCRIPT_DIR/android_emas_release_config.py"
 cd "$ROOT_DIR"
+dart "$ROOT_DIR/tool/verify_release_test_isolation.dart"
 
 fail() {
   printf '[package-worker] error: %s\n' "$*" >&2

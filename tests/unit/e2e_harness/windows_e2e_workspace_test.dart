@@ -31,12 +31,7 @@ void main() {
         ['identity-deletion-a', 'identity-deletion-b'],
         ['hosted-gateway-join', 'hosted-gateway-resume'],
       ]) {
-        if (names.first != 'hosted-gateway-join') {
-          expect(
-            names.map((name) => bundles[name]).toSet().length,
-            names.length,
-          );
-        }
+        expect(names.map((name) => bundles[name]).toSet(), hasLength(1));
         expect(
           names.map((name) => windowsE2eSecretService(bundles[name]!)).toSet(),
           hasLength(1),

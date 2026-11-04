@@ -20,6 +20,8 @@ $env:AWIKI_RELEASE_REGISTRY = "1"
 Set-StrictMode -Version Latest
 
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+& dart (Join-Path $RootDir 'tool/verify_release_test_isolation.dart')
+if ($LASTEXITCODE -ne 0) { throw 'Release test isolation check failed' }
 $CoreDir = (Resolve-Path $CoreDir).Path
 $AnpDir = (Resolve-Path $AnpDir).Path
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)

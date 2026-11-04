@@ -13,14 +13,124 @@ Future<Directory> prepareWindowsE2eWorkspace({
   required Directory destination,
   required String bundleId,
   required String name,
+  String? compatibilityKey,
+  Future<Directory> Function(Directory, Directory, String, String)? configure,
 }) async {
-  await resetWindowsE2eSnapshot(
-    projectRoot: projectRoot,
-    destination: destination,
-  );
   final source = Directory(p.normalize(projectRoot.absolute.path));
   final output = Directory(p.normalize(destination.absolute.path));
-  return _materializeWindowsE2eWorkspace(source, output, bundleId, name);
+  if (!p.isWithin(p.join(source.absolute.path, '.e2e'), output.absolute.path)) {
+    throw StateError(
+      'Windows snapshots must stay under the project .e2e directory.',
+    );
+  }
+  final marker = File('${output.path}/.source-inventory.json');
+  List<String>? previous;
+  if (compatibilityKey != null &&
+      marker.existsSync() &&
+      FileSystemEntity.typeSync(output.path, followLinks: false) ==
+          FileSystemEntityType.directory &&
+      p.isWithin(
+        p.join(source.resolveSymbolicLinksSync(), '.e2e'),
+        output.resolveSymbolicLinksSync(),
+      )) {
+    if (FileSystemEntity.typeSync(marker.path, followLinks: false) !=
+        FileSystemEntityType.file) {
+      throw StateError('Snapshot inventory cannot be a link.');
+    }
+    final value = jsonDecode(marker.readAsStringSync());
+    if (value is Map &&
+        value['schemaVersion'] == 1 &&
+        value['compatibilityKey'] == compatibilityKey &&
+        value['bundleId'] == bundleId &&
+        value['name'] == name &&
+        value['paths'] is List) {
+      previous = List<String>.from(value['paths'] as List);
+    }
+  }
+  if (previous == null) {
+    await resetWindowsE2eSnapshot(
+      projectRoot: projectRoot,
+      destination: destination,
+    );
+  } else {
+    for (final cache in ['build', '.dart_tool', 'windows']) {
+      final type = FileSystemEntity.typeSync(
+        '${output.path}/$cache',
+        followLinks: false,
+      );
+      if (type != FileSystemEntityType.notFound &&
+          type != FileSystemEntityType.directory) {
+        throw StateError('Snapshot cache must be a regular directory.');
+      }
+    }
+    marker
+        .deleteSync(); // Interrupted refresh cannot be accepted as compatible.
+  }
+  final paths = await windowsE2eSourceInventory(source);
+  final before = <String, ({String digest, DateTime modified})>{};
+  for (final relative in {...?previous, ...paths}) {
+    if (relative.contains('\\') ||
+        p.isAbsolute(relative) ||
+        relative.split('/').contains('..') ||
+        !const [
+          'lib',
+          'assets',
+          'windows',
+          'integration_test',
+          'tests',
+          'test_driver',
+          'pubspec.yaml',
+          'pubspec.lock',
+          'l10n.yaml',
+          'analysis_options.yaml',
+        ].contains(relative.split('/').first)) {
+      throw StateError('Snapshot inventory contains an unsafe path.');
+    }
+    final file = File('${output.path}/$relative');
+    if (FileSystemEntity.typeSync(file.path, followLinks: false) ==
+        FileSystemEntityType.link) {
+      throw StateError('Snapshot source cannot be a link.');
+    }
+    if (file.existsSync()) {
+      if (!p.isWithin(
+        output.resolveSymbolicLinksSync(),
+        file.resolveSymbolicLinksSync(),
+      )) {
+        throw StateError('Snapshot source escapes its root.');
+      }
+      before[relative] = (
+        digest: sha256.convert(file.readAsBytesSync()).toString(),
+        modified: file.lastModifiedSync(),
+      );
+      if (!paths.contains(relative)) file.deleteSync();
+    }
+  }
+  final result = await _materializeWindowsE2eWorkspace(
+    source,
+    output,
+    bundleId,
+    name,
+    configure: configure,
+  );
+  for (final entry in before.entries) {
+    final file = File('${output.path}/${entry.key}');
+    if (file.existsSync() &&
+        sha256.convert(file.readAsBytesSync()).toString() ==
+            entry.value.digest) {
+      file.setLastModifiedSync(entry.value.modified);
+    }
+  }
+  marker.writeAsStringSync(
+    jsonEncode({
+      'schemaVersion': 1,
+      'compatibilityKey': compatibilityKey,
+      'bundleId': bundleId,
+      'name': name,
+      'paths': paths,
+    }),
+    flush: true,
+  );
+  return result;
 }
 
 /// Refreshes generated source while retaining the native build cache for the
@@ -91,8 +201,9 @@ Future<Directory> _materializeWindowsE2eWorkspace(
   Directory source,
   Directory output,
   String bundleId,
-  String name,
-) async {
+  String name, {
+  Future<Directory> Function(Directory, Directory, String, String)? configure,
+}) async {
   final paths = await windowsE2eSourceInventory(source);
   for (final relative in paths) {
     if (relative.startsWith('/') || relative.split('/').contains('..')) {
@@ -105,10 +216,33 @@ Future<Directory> _materializeWindowsE2eWorkspace(
       throw StateError('Windows source inventory must contain regular files.');
     }
     final target = File('${output.path}/$relative');
+    var parent = target.parent;
+    while (!parent.existsSync()) {
+      if (FileSystemEntity.typeSync(parent.path, followLinks: false) ==
+          FileSystemEntityType.link) {
+        throw StateError('Snapshot target traverses a broken link.');
+      }
+      parent = parent.parent;
+    }
+    if (!p.equals(
+          parent.resolveSymbolicLinksSync(),
+          output.resolveSymbolicLinksSync(),
+        ) &&
+        !p.isWithin(
+          output.resolveSymbolicLinksSync(),
+          parent.resolveSymbolicLinksSync(),
+        )) {
+      throw StateError('Snapshot target escapes through a parent link.');
+    }
     await target.parent.create(recursive: true);
     await File(path).copy(target.path);
   }
-  return _configureWindowsE2eWorkspace(source, output, bundleId, name);
+  return (configure ?? _configureWindowsE2eWorkspace)(
+    source,
+    output,
+    bundleId,
+    name,
+  );
 }
 
 Future<List<String>> windowsE2eSourceInventory(Directory source) async {

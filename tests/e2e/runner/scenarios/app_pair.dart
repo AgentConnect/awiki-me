@@ -247,14 +247,26 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
             artifact: artifacts.admin,
-            environment: productEnvironment,
+            environment: {
+              ...productEnvironment,
+              ..._writeArtifactInvocation(
+                artifacts.admin,
+                options.e2eCase.caseIds,
+              ),
+            },
             platform: pairConfig.platform,
             redactor: redactor,
           );
           joinerApp = await _RunningIsolatedApp.start(
             role: 'joiner',
             artifact: artifacts.joiner,
-            environment: productEnvironment,
+            environment: {
+              ...productEnvironment,
+              ..._writeArtifactInvocation(
+                artifacts.joiner,
+                options.e2eCase.caseIds,
+              ),
+            },
             platform: pairConfig.platform,
             redactor: redactor,
           );
@@ -356,8 +368,9 @@ extension DesktopE2eAppPairScenario on DesktopE2eRunner {
               );
             }
           }
-          if (!retainFailedWindows)
+          if (!retainFailedWindows) {
             await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
+          }
           if (!retainFailedWindows &&
               (pairConfig.functional || pairConfig.contentSync) &&
               (options.e2eCase != DesktopE2eCase.didMethodWeb ||
