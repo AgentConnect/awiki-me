@@ -35,8 +35,9 @@ class E2eFaultHookRegistry {
     },
   }) {
     if (!enabled) throw StateError('E2E fault hooks are disabled.');
-    if (_handler != null)
+    if (_handler != null) {
       throw StateError('E2E fault controller already installed.');
+    }
     _checkpoints = Set.unmodifiable(checkpoints);
     _handler = handler;
   }
