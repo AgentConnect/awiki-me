@@ -7,6 +7,7 @@ import '../../e2e/runtime_control/fault_controller.dart';
 import '../../e2e/app_artifact_spec.dart';
 import '../../../tool/isolated_e2e_app_builder.dart';
 import '../../e2e/host_platform.dart';
+import '../../e2e/runtime_control/shared_host_contract.dart';
 
 void main() {
   test(
@@ -27,7 +28,7 @@ void main() {
         jsonEncode({
           'schemaVersion': 1,
           'fingerprint': 'a' * 64,
-          'bundleId': 'ai.awiki.test.shared',
+          'bundleId': sharedHostBundleId('a'),
           'artifactSha256': digest,
         }),
       );
@@ -44,10 +45,10 @@ void main() {
             stateRoot: Directory('${root.path}/.e2e/state'),
             workRoot: Directory('${root.path}/.e2e/work/$name'),
             artifactRoot: Directory('${root.path}/.e2e/artifacts'),
-            bundleId: 'ai.awiki.test.shared',
+            bundleId: sharedHostBundleId('a'),
             platform: IsolatedE2eAppPlatform.windows,
             flutterBin: 'compiler-must-not-run',
-            dartDefines: [],
+            dartDefines: sharedHostDefines('a'),
             dryRun: false,
           ),
           precomputedIdentity: (

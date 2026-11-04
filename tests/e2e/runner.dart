@@ -1,4 +1,5 @@
 import 'runtime_control/invocation.dart';
+import 'runtime_control/shared_host_contract.dart';
 import 'remote_target.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -489,6 +490,13 @@ class DesktopE2eRunner {
   bool _resourceSideEffectsPossible = false;
 
   Future<void> run() async {
+    if (!options.dryRun && !commands.dryRun) {
+      try {
+        validateSharedHostExecutionEnvironment(Platform.environment);
+      } on FormatException catch (error) {
+        throw E2eFailure(error.message);
+      }
+    }
     if (options.e2eCase == DesktopE2eCase.full) {
       await runDesktopFull(root: root, options: options, commands: commands);
       return;
@@ -1082,6 +1090,24 @@ class DesktopE2eRunner {
   }
 
   Future<void> _executePreparedIntegration({
+    required _IsolatedAppArtifact artifact,
+    required List<String> caseIds,
+    required Directory stateRoot,
+    Map<String, String> environment = const {},
+    String interruption = '',
+  }) => _withFlutterExecutionLease(
+    platform,
+    runId,
+    () => _executePreparedIntegrationWithLease(
+      artifact: artifact,
+      caseIds: caseIds,
+      stateRoot: stateRoot,
+      environment: environment,
+      interruption: interruption,
+    ),
+  );
+
+  Future<void> _executePreparedIntegrationWithLease({
     required _IsolatedAppArtifact artifact,
     required List<String> caseIds,
     required Directory stateRoot,

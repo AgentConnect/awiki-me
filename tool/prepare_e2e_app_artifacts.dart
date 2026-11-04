@@ -9,6 +9,33 @@ import '../tests/e2e/app_artifact_spec.dart';
 import '../tests/e2e/host_platform.dart';
 import 'isolated_e2e_app_builder.dart';
 
+Future<List<IsolatedE2eAppBuildIdentity>> computePrepareBuildIdentities(
+  List<IsolatedE2eAppBuildRequest> requests,
+  Future<IsolatedE2eAppBuildIdentity> Function(IsolatedE2eAppBuildRequest)
+  compute,
+) async {
+  final cache = <String, IsolatedE2eAppBuildIdentity>{};
+  final identities = <IsolatedE2eAppBuildIdentity>[];
+  for (final request in requests) {
+    final recipe = jsonEncode([
+      request.projectRoot.absolute.path,
+      request.platform.name,
+      request.flutterBin,
+      request.macosDeploymentTarget,
+      request.target,
+      request.bundleId,
+      request.dartDefines,
+    ]);
+    var identity = cache[recipe];
+    if (identity == null) {
+      identity = await compute(request);
+      cache[recipe] = identity;
+    }
+    identities.add(identity);
+  }
+  return List.unmodifiable(identities);
+}
+
 Future<void> main(List<String> arguments) async {
   try {
     final options = _PrepareOptions.parse(arguments);
@@ -33,7 +60,6 @@ Future<void> main(List<String> arguments) async {
       processArchitecture: hostPlatform.processArchitecture,
     );
     final requests = <IsolatedE2eAppBuildRequest>[];
-    final identities = <IsolatedE2eAppBuildIdentity>[];
     for (final name in options.names) {
       final spec = manifest.requireSpec(name);
       if (!spec.supportedPlatforms.contains(options.platform.name)) {
@@ -59,13 +85,12 @@ Future<void> main(List<String> arguments) async {
         preserveScratch: true,
       );
       requests.add(request);
-      identities.add(
-        await isolatedBuildIdentity(
-          request: request,
-          hostPlatform: hostPlatform,
-        ),
-      );
     }
+    final identities = await computePrepareBuildIdentities(
+      requests,
+      (request) =>
+          isolatedBuildIdentity(request: request, hostPlatform: hostPlatform),
+    );
     final currentCompileKeys = identities
         .map((identity) => identity.compileKey)
         .toSet();
@@ -114,6 +139,8 @@ Future<void> main(List<String> arguments) async {
         'status': 'prepared',
         'platform': options.platform.name,
         'artifactCount': artifacts.length,
+        'logicalArtifactCount': artifacts.length,
+        'physicalHostCount': currentCompileKeys.length,
         'requestedArtifactCount': requests.length,
         'uniqueBuildSpecCount': currentCompileKeys.length,
         'cacheHits': artifacts

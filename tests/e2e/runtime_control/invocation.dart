@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import '../protected_files.dart';
+import 'shared_host_contract.dart';
 
 const invocationPathEnvironment = 'AWIKI_E2E_INVOCATION_PATH';
 const invocationDigestEnvironment = 'AWIKI_E2E_INVOCATION_DIGEST';
@@ -10,6 +11,7 @@ const invocationDigestEnvironment = 'AWIKI_E2E_INVOCATION_DIGEST';
 typedef ArtifactRuntimeMode = ({String family, String phase, String role});
 
 ArtifactRuntimeMode artifactRuntimeMode(String name) {
+  sharedHostEntry(name);
   const recovery = {
     'recovery-main': 'main',
     'recovery-crash-a': 'crash_a',

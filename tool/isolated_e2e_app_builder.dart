@@ -16,6 +16,7 @@ import 'ensure_windows_im_core.dart';
 import 'windows_e2e_workspace.dart';
 import 'windows_nuget_cache.dart';
 import 'streamed_build_process.dart';
+import '../tests/e2e/runtime_control/shared_host_contract.dart';
 
 enum IsolatedE2eAppPlatform {
   macos,
@@ -408,6 +409,16 @@ class IsolatedE2eAppBuilder {
     IsolatedE2eAppBuildRequest request, {
     IsolatedE2eAppBuildIdentity? precomputedIdentity,
   }) async {
+    try {
+      validateSharedHostBuild(
+        name: request.name,
+        target: request.target,
+        bundleId: request.bundleId,
+        defines: request.dartDefines,
+      );
+    } on FormatException catch (error) {
+      throw IsolatedE2eAppBuildException(error.message);
+    }
     final hostPlatform = await E2eHostPlatform.detect();
     if (!request.dryRun) {
       try {
@@ -503,7 +514,11 @@ class IsolatedE2eAppBuilder {
     recordPreparationStage('disk_budget');
     final cachePruneReport = await requireE2eBuildDiskBudget(
       request.projectRoot,
-      pinnedCompileKeys: <String>{...request.pinnedCompileKeys, fingerprint},
+      pinnedCompileKeys: <String>{
+        ...request.pinnedCompileKeys,
+        fingerprint,
+        ...companionSharedHostCompileKeys(identity.compileKeyPayload),
+      },
     );
 
     request.stateRoot.createSync(recursive: true);

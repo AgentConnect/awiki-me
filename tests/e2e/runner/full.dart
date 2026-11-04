@@ -14,6 +14,13 @@ Future<void> runDesktopFull({
   Map<String, String>? environment,
 }) async {
   final env = environment ?? Platform.environment;
+  if (!options.dryRun && !commands.dryRun) {
+    try {
+      validateSharedHostExecutionEnvironment(env);
+    } on FormatException catch (error) {
+      throw E2eFailure(error.message);
+    }
+  }
   final manifest = DesktopE2eSuiteManifest.load(root);
   final suites = manifest.fullSuites();
   final userExclusions = DesktopE2eUserExclusions.load(root);

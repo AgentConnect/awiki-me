@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-10-12.isolated-tenant-config-v1",
+  "sourceRevision": "2026-11-04.two-shared-hosts-v1",
   "targetTenantCatalogs": {
     "singapore-test-fix": "configs/singapore-test-fix-tenants.json",
     "singapore-mcp-adapt": "configs/singapore-mcp-adapt-tenants.json"
@@ -8,15 +8,16 @@
   "artifacts": [
     {
       "name": "registration-domain-discovery",
-      "target": "integration_test/registration_domain_discovery_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.regdiscovery",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
       "dartDefines": [
-        "AWIKI_E2E=true"
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
       ],
       "consumerSuites": [
         "registration-domain-discovery"
@@ -24,71 +25,84 @@
     },
     {
       "name": "agent-avatars",
-      "target": "integration_test/desktop_agent_avatar_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.agentavatars",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "agent-avatars"
-      ]
-    },
-    {
-      "name": "avatars",
-      "target": "integration_test/desktop_avatar_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.avatars",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "avatars"
-      ]
-    },
-    {
-      "name": "smoke-app",
-      "target": "integration_test/app_smoke_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.smoke.app",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "smoke"
-      ]
-    },
-    {
-      "name": "smoke-core",
-      "target": "integration_test/im_core_open_smoke_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.smoke.core",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "smoke"
-      ]
-    },
-    {
-      "name": "messaging",
-      "target": "integration_test/desktop_cli_peer_smoke_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.full",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
       "dartDefines": [
-        "AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true"
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "agent-avatars"
+      ]
+    },
+    {
+      "name": "avatars",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "avatars"
+      ]
+    },
+    {
+      "name": "smoke-app",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "smoke"
+      ]
+    },
+    {
+      "name": "smoke-core",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "smoke"
+      ]
+    },
+    {
+      "name": "messaging",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
       ],
       "consumerSuites": [
         "messaging"
@@ -96,154 +110,187 @@
     },
     {
       "name": "direct",
-      "target": "integration_test/desktop_cli_peer_direct_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.direct",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "direct"
       ]
     },
     {
       "name": "group",
-      "target": "integration_test/desktop_cli_peer_group_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.group",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "group"
       ]
     },
     {
       "name": "attachment",
-      "target": "integration_test/desktop_cli_peer_attachment_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.attachment",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "attachment"
       ]
     },
     {
       "name": "contacts",
-      "target": "integration_test/desktop_cli_peer_contacts_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.contacts",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "contacts"
       ]
     },
     {
       "name": "contact-first",
-      "target": "integration_test/desktop_cli_peer_contact_first_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.contact.first",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "contact-first"
       ]
     },
     {
       "name": "inbound",
-      "target": "integration_test/desktop_cli_peer_inbound_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.inbound",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "inbound"
       ]
     },
     {
       "name": "identity-switch",
-      "target": "integration_test/desktop_identity_switch_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.identity.switch",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "identity-switch"
       ]
     },
     {
       "name": "display-name-fallback",
-      "target": "integration_test/desktop_cli_peer_display_name_fallback_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.display.name.fallback",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "display-name-fallback"
       ]
     },
     {
       "name": "performance",
-      "target": "integration_test/desktop_cli_peer_performance_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.performance",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "performance"
       ]
     },
     {
       "name": "multi-device",
-      "target": "integration_test/multi_device_capability_gate_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.multi.device",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "multi-device"
       ]
     },
     {
       "name": "remote-join",
-      "target": "integration_test/multi_device_join_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.remote.join",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "multi-device-remote-join",
         "root-transfer",
@@ -252,14 +299,17 @@
     },
     {
       "name": "admin",
-      "target": "integration_test/multi_device_app_pair_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.pair.admin",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "multi-device-app-pair",
         "multi-device-app-pair-functional",
@@ -271,14 +321,17 @@
     },
     {
       "name": "joiner",
-      "target": "integration_test/multi_device_app_pair_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.pair.joiner",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.b",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=b"
+      ],
       "consumerSuites": [
         "multi-device-app-pair",
         "multi-device-app-pair-functional",
@@ -290,14 +343,17 @@
     },
     {
       "name": "recovery-main",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "multi-device-remote-recovery",
         "multi-device-remote-recovery-fresh",
@@ -308,14 +364,17 @@
     },
     {
       "name": "recovery-crash-a",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "multi-device-remote-recovery",
         "handle-recovery-local-data"
@@ -323,14 +382,17 @@
     },
     {
       "name": "recovery-crash-b",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
-      "dartDefines": [],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
       "consumerSuites": [
         "multi-device-remote-recovery",
         "handle-recovery-local-data"
@@ -338,141 +400,169 @@
     },
     {
       "name": "recovery-fresh-restart",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "multi-device-remote-recovery-fresh"
-      ]
-    },
-    {
-      "name": "recovery-registration-resume-a",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "multi-device-app-pair-recovery-registration-resume"
-      ]
-    },
-    {
-      "name": "recovery-registration-resume-b",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.recovery.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "multi-device-app-pair-recovery-registration-resume"
-      ]
-    },
-    {
-      "name": "identity-deletion-a",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "identity-deletion-recovery-guard"
-      ]
-    },
-    {
-      "name": "identity-deletion-b",
-      "target": "integration_test/handle_recovery_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.identity.deletion.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "identity-deletion-recovery-guard"
-      ]
-    },
-    {
-      "name": "restart-a",
-      "target": "integration_test/desktop_cli_peer_restart_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.restart.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "restart"
-      ]
-    },
-    {
-      "name": "restart-b",
-      "target": "integration_test/desktop_cli_peer_restart_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.restart.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "restart"
-      ]
-    },
-    {
-      "name": "restart-c",
-      "target": "integration_test/desktop_cli_peer_restart_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.restart.main",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "restart"
-      ]
-    },
-    {
-      "name": "personal-agent",
-      "target": "integration_test/personal_agent_real_backend_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.personal.agent",
-      "supportedPlatforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "dartDefines": [],
-      "consumerSuites": [
-        "personal-agent"
-      ]
-    },
-    {
-      "name": "registration-account-first",
-      "target": "integration_test/registration_account_first_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.registration",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "linux",
         "windows"
       ],
       "dartDefines": [
-        "AWIKI_E2E=true"
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "multi-device-remote-recovery-fresh"
+      ]
+    },
+    {
+      "name": "recovery-registration-resume-a",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "multi-device-app-pair-recovery-registration-resume"
+      ]
+    },
+    {
+      "name": "recovery-registration-resume-b",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "multi-device-app-pair-recovery-registration-resume"
+      ]
+    },
+    {
+      "name": "identity-deletion-a",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "identity-deletion-recovery-guard"
+      ]
+    },
+    {
+      "name": "identity-deletion-b",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "identity-deletion-recovery-guard"
+      ]
+    },
+    {
+      "name": "restart-a",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "restart"
+      ]
+    },
+    {
+      "name": "restart-b",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "restart"
+      ]
+    },
+    {
+      "name": "restart-c",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "restart"
+      ]
+    },
+    {
+      "name": "personal-agent",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
+      ],
+      "consumerSuites": [
+        "personal-agent"
+      ]
+    },
+    {
+      "name": "registration-account-first",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
+      "supportedPlatforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "dartDefines": [
+        "AWIKI_E2E=true",
+        "AWIKI_E2E_HOST_SLOT=a"
       ],
       "consumerSuites": [
         "registration-account-first"
@@ -480,15 +570,15 @@
     },
     {
       "name": "hosted-gateway-join",
-      "target": "integration_test/hosted_gateway_join_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.mcpadapt.joiner",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E=true",
-        "AWIKI_RELEASE=1015"
+        "AWIKI_E2E_HOST_SLOT=a"
       ],
       "consumerSuites": [
         "hosted-gateway-join",
@@ -497,19 +587,20 @@
     },
     {
       "name": "hosted-gateway-resume",
-      "target": "integration_test/hosted_gateway_resume_ui_test.dart",
-      "bundleId": "ai.awiki.awikime.dev.e2e.mcpadapt.joiner",
+      "target": "integration_test/shared_desktop_host_test.dart",
+      "bundleId": "ai.awiki.awikime.dev.e2e.host.a",
       "supportedPlatforms": [
         "macos",
         "windows"
       ],
       "dartDefines": [
         "AWIKI_E2E=true",
-        "AWIKI_RELEASE=1015"
+        "AWIKI_E2E_HOST_SLOT=a"
       ],
       "consumerSuites": [
         "hosted-gateway-resume"
       ]
     }
-  ]
+  ],
+  "sharedHostContractVersion": 1
 }

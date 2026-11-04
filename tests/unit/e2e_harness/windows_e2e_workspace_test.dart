@@ -41,7 +41,7 @@ void main() {
       final joiner = windowsE2eSecretService(bundles['joiner']!);
       expect(admin, isNot(joiner));
       expect(admin, isNot('ai.awiki.awikime.dev.scope-secrets'));
-      expect(admin, isNot(windowsE2eSecretService(bundles['restart-a']!)));
+      expect(admin, windowsE2eSecretService(bundles['restart-a']!));
     },
   );
   test(

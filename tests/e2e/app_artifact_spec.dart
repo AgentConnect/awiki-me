@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'runtime_control/shared_host_contract.dart';
 
 final class E2eAppArtifactSpec {
   const E2eAppArtifactSpec({
@@ -54,6 +55,10 @@ final class E2eAppArtifactSpecManifest {
       decoded,
       target ?? Platform.environment['AWIKI_SYSTEM_TEST_TARGET'] ?? '',
     );
+    final sharedContract = decoded['sharedHostContractVersion'];
+    if (sharedContract != 1) {
+      throw const FormatException('Unknown shared desktop host contract.');
+    }
     final specs = <String, E2eAppArtifactSpec>{};
     for (final entry in entries) {
       if (entry is! Map) {
@@ -84,6 +89,13 @@ final class E2eAppArtifactSpecManifest {
         );
       }
       final consumers = _uniqueStrings(entry, 'consumerSuites');
+      final defines = _uniqueStrings(entry, 'dartDefines');
+      validateSharedHostSpec(
+        name: name,
+        target: target,
+        bundleId: bundleId,
+        defines: defines,
+      );
       if (consumers.isEmpty) {
         throw FormatException('App artifact spec has no consumers: $name');
       }
@@ -93,7 +105,7 @@ final class E2eAppArtifactSpecManifest {
         bundleId: bundleId,
         supportedPlatforms: platforms,
         dartDefines: canonicalCompileTimeDartDefines([
-          ..._uniqueStrings(entry, 'dartDefines'),
+          ...defines,
           ...tenantDefines,
         ]),
         consumerSuites: consumers,
