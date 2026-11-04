@@ -1,3 +1,4 @@
+import 'e2e_build_metadata.dart';
 // [INPUT]: Tenant scope, environment gates, platform secret storage, and native IM Core.
 // [OUTPUT]: Fully composed AWiki Me adapters/services for one immutable storage scope.
 // [POS]: Production composition root; device secrets remain owned by Vault-backed IM Core.
@@ -105,10 +106,12 @@ enum AppBootstrapProgress {
   startingApplication,
 }
 
-const String awikiMeReleaseLine = String.fromEnvironment(
+const String _compiledAwikiMeReleaseLine = String.fromEnvironment(
   'AWIKI_RELEASE',
   defaultValue: '0815',
 );
+String get awikiMeReleaseLine =>
+    e2eBuildMetadata.releaseLine(_compiledAwikiMeReleaseLine);
 
 class AppBootstrap {
   AppBootstrap({
