@@ -21,6 +21,7 @@ import '../../desktop_subprocess_environment.dart';
 import '../../desktop_tool_executable.dart';
 import '../../protected_files.dart';
 import '../../closed_onboarding_diagnostics.dart';
+import '../../recovery_read_ack.dart';
 import '../../handle_recovery_epoch_observation.dart';
 
 import '../support/enter_existing_account.dart';
@@ -2434,12 +2435,16 @@ Future<void> _markRecoveryFixtureRead({
   if (threadSequence == null) {
     fail('A Local Data read fixture had no public thread sequence.');
   }
-  final result = await conversations.markConversationRead(
-    AppConversationReadRef.fromConversationId(conversationId),
+  final result = await awaitRecoveryFixtureReadAck(
     watermark: AppThreadReadWatermark(
       lastReadMessageId: messageId,
       lastReadThreadSeq: threadSequence,
       readAt: DateTime.now().toUtc(),
+    ),
+    timeout: _remoteTimeout,
+    markRead: (watermark) => conversations.markConversationRead(
+      AppConversationReadRef.fromConversationId(conversationId),
+      watermark: watermark,
     ),
   );
   final effective = result.effectiveWatermark;

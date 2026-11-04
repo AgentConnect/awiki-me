@@ -55,6 +55,7 @@ class _DesktopAppRobot {
     final activeSession = container.read(sessionProvider).session;
     if (runtime.activatedDid != session.did ||
         activeSession?.did != session.did) {
+      await _reportClosedFailure(expectedDid: session.did);
       fail('The App did not restore the expected authenticated identity.');
     }
     await pumpUntil(
@@ -1933,10 +1934,79 @@ class _DesktopAppRobot {
         lastError = error;
       }
     }
+    await _reportClosedFailure();
     fail(
       'Timed out waiting for $description.'
       '${lastError == null ? '' : ' Last error: $lastError'}',
     );
+  }
+
+  /// Fixed categories only: never print arbitrary UI text, IDs, URLs or errors.
+  Future<void> _reportClosedFailure({String? expectedDid}) async {
+    final observation = <String, Object?>{
+      'schemaVersion': 1,
+      'cropPresent': find.byType(Crop).evaluate().isNotEmpty,
+      'cropPreviewPresent': find
+          .byKey(const Key('avatar-new-preview'))
+          .evaluate()
+          .isNotEmpty,
+      'avatarErrorPresent': find
+          .byKey(const Key('avatar-error'))
+          .evaluate()
+          .isNotEmpty,
+      'avatarDialogPresent': find
+          .byType(AvatarEditDialog)
+          .evaluate()
+          .isNotEmpty,
+      'logicalWidth':
+          tester.view.physicalSize.width / tester.view.devicePixelRatio,
+      'logicalHeight':
+          tester.view.physicalSize.height / tester.view.devicePixelRatio,
+    };
+    for (final key in ['avatar-pick', 'avatar-save', 'avatar-close']) {
+      final buttons = find.byKey(Key(key)).evaluate();
+      observation['${key}Count'] = buttons.length;
+      observation['${key}Enabled'] =
+          buttons.length == 1 &&
+          buttons.single.widget is CupertinoButton &&
+          (buttons.single.widget as CupertinoButton).onPressed != null;
+    }
+    if (find.byType(AppShell, skipOffstage: false).evaluate().length == 1) {
+      final runtime = container.read(appRuntimeProvider);
+      final session = container.read(sessionProvider).session;
+      final feedback = container.read(uiFeedbackProvider);
+      observation.addAll({
+        'initialized': runtime.isInitialized,
+        'busy': runtime.isBusy,
+        'authRevoked': runtime.authRevoked,
+        'activatedDidPresent': runtime.activatedDid != null,
+        'sessionPresent': session != null,
+        'activatedDidMatchesExpected': expectedDid == null
+            ? null
+            : runtime.activatedDid == expectedDid,
+        'sessionMatchesExpected': expectedDid == null
+            ? null
+            : session?.did == expectedDid,
+        'feedbackId': closedOnboardingFeedbackId(feedback?.message.id),
+        'feedbackDanger': feedback?.danger,
+      });
+    }
+    try {
+      final records = await core.AwikiDesktopNetwork.diagnostics().timeout(
+        const Duration(seconds: 2),
+      );
+      observation['network'] = [
+        for (final record in records.skip(math.max(0, records.length - 6)))
+          {
+            'operation': record.operation,
+            'stage': record.stage,
+            'elapsedMs': record.elapsedMs,
+          },
+      ];
+    } on Object {
+      observation['networkDiagnosticAvailable'] = false;
+    }
+    stdout.writeln('[desktop-closed-failure] ${jsonEncode(observation)}');
   }
 
   Future<void> pumpUntilObservation({
