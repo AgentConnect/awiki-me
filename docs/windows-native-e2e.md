@@ -161,3 +161,7 @@ dart run tool/run_windows_unit.dart --sqlite-dll=<built-app-bundle>/sqlite3.dll 
 ### Onboarding 与恢复夹具的闭合失败诊断
 
 Join 选项超时时，测试只记录 Onboarding outcome、固定错误类别、busy／OTP consumed／continuation 是否存在，以及固定页面与本地数据错误提示的出现状态；不输出输入、消息正文、continuation ID 或反馈 detail。Recovery 读确认夹具失败只输出固定 warning 类别、已知 `READ_STATE_*` 枚举和 HTTP 状态，区分合法的前驱在途状态与远端／本地 ACK 错误。未知文本归为 `unrecognized`。这些诊断保留原断言、原超时和失败结果，不将 pending 当作远端确认。
+
+### 注册／Join 的 OTP 就绪条件
+
+重发倒计时可能在冷却边界落盘期间先出现，此时当前 Handle／手机号的 OTP 目标尚未发布，提交按钮仍禁用。真实 Join、DSH 互通和 App-pair 注册前置步骤继续使用各自原有超时，同时等待倒计时与精确 OTP 绑定都就绪：控制器空闲、目标未消费、Handle 与手机号都匹配；不以倒计时标记单独判定发送流程完成，不重复点击或跳过最终 Join 断言。延迟冷却落盘的所属单元回归覆盖该时序。

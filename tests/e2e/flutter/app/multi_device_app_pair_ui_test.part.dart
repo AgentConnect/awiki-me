@@ -596,7 +596,12 @@ void appPairJoinerMain() {
       );
       await _pumpUntil(
         tester,
-        () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().isNotEmpty,
+        () => _onboardingOtpReceiptReady(
+          tester,
+          handle: handle,
+          phone: account.phone,
+          domain: config.didDomain,
+        ),
         timeout: const Duration(seconds: 45),
         failure: 'The joining App onboarding OTP request did not complete.',
       );
@@ -1269,7 +1274,11 @@ Future<void> _requireRetiredIdentityOnboardingChoice({
   );
   await _pumpUntil(
     tester,
-    () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().length == 1,
+    () => _onboardingOtpReceiptReady(
+      tester,
+      handle: handle,
+      phone: account.phone,
+    ),
     timeout: const Duration(minutes: 2),
     failure: 'The retired identity registration OTP was not accepted.',
   );

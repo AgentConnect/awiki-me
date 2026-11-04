@@ -78,7 +78,12 @@ void _registerDshDeviceJoinInteropTest() {
       );
       await _pumpUntil(
         tester,
-        () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().isNotEmpty,
+        () => _onboardingOtpReceiptReady(
+          tester,
+          handle: handle,
+          phone: account.phone,
+          domain: config.didDomain,
+        ),
         timeout: const Duration(seconds: 45),
         failure: 'The App registration OTP was not accepted.',
       );

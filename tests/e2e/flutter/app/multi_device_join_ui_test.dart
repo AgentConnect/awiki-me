@@ -13,6 +13,7 @@ import '../../desktop_subprocess_environment.dart';
 import '../../delete_isolated_directory.dart';
 import '../../ready_observation.dart';
 import '../../closed_onboarding_diagnostics.dart';
+import '../../onboarding_otp_readiness.dart';
 
 import '../support/enter_existing_account.dart';
 import '../support/read_rendered_sas.dart';
@@ -281,7 +282,12 @@ void main() {
       );
       await _pumpUntil(
         tester,
-        () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().isNotEmpty,
+        () => _onboardingOtpReceiptReady(
+          tester,
+          handle: handle,
+          phone: account.phone,
+          domain: config.didDomain,
+        ),
         timeout: const Duration(seconds: 45),
         failure: 'The onboarding OTP request did not complete.',
       );
@@ -3837,6 +3843,30 @@ void _requireIndependentEmptyPaths(List<String> paths) {
 
 Future<void> _deleteDirectory(String path) async {
   await deleteIsolatedDirectory(Directory(path));
+}
+
+bool _onboardingOtpReceiptReady(
+  WidgetTester tester, {
+  required String handle,
+  required String phone,
+  String? domain,
+}) {
+  final page = find.byType(OnboardingPage);
+  if (page.evaluate().length != 1 ||
+      find.bySemanticsIdentifier('e2e-otp-sent').evaluate().length != 1) {
+    return false;
+  }
+  final container = ProviderScope.containerOf(
+    tester.element(page),
+    listen: false,
+  );
+  final didDomain = domain ?? container.read(activeAppTenantProvider).didHost;
+  return onboardingOtpReceiptReady(
+    onboarding: container.read(onboardingProvider),
+    coolingDown: container.read(smsOtpCooldownProvider).isCoolingDown,
+    expectedFullHandle: '$handle.$didDomain',
+    expectedPhone: phone,
+  );
 }
 
 void _recordExistingHandleChoiceDiagnostic(
