@@ -1,3 +1,4 @@
+import '../../app/e2e_fault_hooks.dart';
 // [INPUT]: Verified onboarding Handle/phone, a dedicated Recovery OTP, and UI intent.
 // [OUTPUT]: Risk-gated Recovery presentation that quiesces the old session and
 // opens Messages only after replacement-session activation.
@@ -558,9 +559,9 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     }
     if (shouldStopHandleRecoveryBeforeProductReset(
       e2eEnabled: awikiE2eEnabled,
-      crashCutEnabled: const bool.fromEnvironment(
-        'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET',
-      ),
+      crashCutEnabled: e2eFaultHooksEnabled &&
+          await e2eFaultHooks.hit(E2eFaultCheckpoint.recoveryBeforeProductReset) ==
+              E2eFaultAction.stopBeforeReset,
     )) {
       return;
     }

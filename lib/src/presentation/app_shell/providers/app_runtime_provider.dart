@@ -1,3 +1,4 @@
+import '../../../app/e2e_fault_hooks.dart';
 // [INPUT]: Session, lifecycle, realtime, reliable-sync, push, local-store, and projection providers.
 // [OUTPUT]: One fenced authenticated runtime, confirmed activation results,
 // navigation-ready App state, and exact-owner deletion.
@@ -58,10 +59,6 @@ import 'session_provider.dart';
 
 const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
-  defaultValue: false,
-);
-const bool _e2eCrashAfterIdentityProductDelete = bool.fromEnvironment(
-  'AWIKI_E2E_IDENTITY_DELETION_CRASH_AFTER_PRODUCT_DELETE',
   defaultValue: false,
 );
 const Set<SyncDomain> _accountStateRealtimeDomains = <SyncDomain>{
@@ -702,7 +699,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         ownerIdentityId: ticket.ownerIdentityId,
         currentDid: ticket.currentDid,
       );
-      if (_e2eCrashAfterIdentityProductDelete) {
+      if (e2eFaultHooksEnabled &&
+          await e2eFaultHooks.hit(E2eFaultCheckpoint.identityAfterProductDelete) ==
+              E2eFaultAction.throwError) {
         throw StateError('e2e_identity_deletion_crash_after_product_delete');
       }
       await deletionSessions.completeLocalIdentityDataDeletion(ticket);
