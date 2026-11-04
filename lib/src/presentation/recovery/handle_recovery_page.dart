@@ -559,9 +559,14 @@ class _HandleRecoveryViewState extends ConsumerState<_HandleRecoveryView> {
     }
     if (shouldStopHandleRecoveryBeforeProductReset(
       e2eEnabled: awikiE2eEnabled,
-      crashCutEnabled: e2eFaultHooksEnabled &&
-          e2eFaultHooks.handles(E2eFaultCheckpoint.recoveryBeforeProductReset) &&
-          await e2eFaultHooks.hit(E2eFaultCheckpoint.recoveryBeforeProductReset) ==
+      crashCutEnabled:
+          e2eFaultHooksEnabled &&
+          e2eFaultHooks.handles(
+            E2eFaultCheckpoint.recoveryBeforeProductReset,
+          ) &&
+          await e2eFaultHooks.hit(
+                E2eFaultCheckpoint.recoveryBeforeProductReset,
+              ) ==
               E2eFaultAction.stopBeforeReset,
     )) {
       return;
