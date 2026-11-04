@@ -700,6 +700,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         currentDid: ticket.currentDid,
       );
       if (e2eFaultHooksEnabled &&
+          e2eFaultHooks.handles(E2eFaultCheckpoint.identityAfterProductDelete) &&
           await e2eFaultHooks.hit(E2eFaultCheckpoint.identityAfterProductDelete) ==
               E2eFaultAction.throwError) {
         throw StateError('e2e_identity_deletion_crash_after_product_delete');

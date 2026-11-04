@@ -15,14 +15,17 @@ class E2eFaultHookRegistry {
   E2eFaultHookRegistry({required this.enabled});
   final bool enabled;
   E2eFaultHandler? _handler;
-  void install(E2eFaultHandler handler) {
+  Set<E2eFaultCheckpoint> _checkpoints = const {};
+  bool handles(E2eFaultCheckpoint checkpoint) => enabled && _handler != null && _checkpoints.contains(checkpoint);
+  void install(E2eFaultHandler handler, {Set<E2eFaultCheckpoint> checkpoints = const {E2eFaultCheckpoint.recoveryBeforeProductReset, E2eFaultCheckpoint.identityAfterProductDelete}}) {
     if (!enabled) throw StateError('E2E fault hooks are disabled.');
     if (_handler != null) throw StateError('E2E fault controller already installed.');
+    _checkpoints = Set.unmodifiable(checkpoints);
     _handler = handler;
   }
-  void clear() => _handler = null;
+  void clear() { _handler = null; _checkpoints = const {}; }
   Future<E2eFaultAction> hit(E2eFaultCheckpoint checkpoint) async {
-    if (!enabled) return E2eFaultAction.continueExecution;
+    if (!handles(checkpoint)) return E2eFaultAction.continueExecution;
     return await _handler?.call(checkpoint) ?? E2eFaultAction.continueExecution;
   }
 }
