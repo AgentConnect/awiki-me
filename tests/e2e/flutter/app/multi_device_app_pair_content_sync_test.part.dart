@@ -364,13 +364,15 @@ Future<void> _runAppPairAdminContentSync({
   );
   await container
       .read(messageSyncCoordinatorProvider.notifier)
-      .requestSync('e2e_content_final_exact_once', immediate: true);
+      .requestSync('e2e_content_final_exact_once', immediate: true)
+      .timeout(groupReadBudget.remaining());
   await _assertContentMessageCount(
     messaging: bootstrap.messagingService!,
     conversationId: groupId,
     messageId: incomingGroupId,
     expected: 1,
   );
+  groupReadBudget.remaining();
   await config.coordinator.publish('admin', 'content_group_read_converged');
 }
 
@@ -616,9 +618,6 @@ Future<void> _runAppPairJoinerContentSync({
       matches: (value) => value == 1,
       failure: 'Opening Direct incorrectly cleared Group unread state.',
     );
-    debugPrint(
-      '[content-read-commit] ${await _appPairUnreadDiagnostic(container, directId)}',
-    );
     readBudget.remaining();
     await config.coordinator.publish(
       'joiner',
@@ -786,10 +785,13 @@ Future<ChatMessage> _waitForContentMessage({
   final timeline = messaging as ConversationTimelineMessagingService;
   final deadline = (budget ?? ContentSyncReadBudget()).deadline;
   while (DateTime.now().isBefore(deadline)) {
-    final messages = await timeline.loadConversationTimeline(
+    final query = timeline.loadConversationTimeline(
       AppConversationReadRef.fromConversationId(conversationId),
       limit: 50,
     );
+    final messages = budget == null
+        ? await query
+        : await query.timeout(budget.remaining());
     final matches = messages
         .where((message) => message.remoteId == messageId)
         .toList(growable: false);

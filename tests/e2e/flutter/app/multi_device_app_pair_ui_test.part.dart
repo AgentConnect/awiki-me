@@ -4839,9 +4839,12 @@ Future<void> _waitForAppPairUnreadCount({
       while (true) {
         final owner = container.read(sessionProvider).session?.did;
         if (owner == null) fail('The read-commit check lost its active owner.');
-        final rows = await container
+        final query = container
             .read(conversationServiceProvider)
             .listConversationSummariesFast(ownerDid: owner);
+        final rows = budget == null
+            ? await query
+            : await query.timeout(budget.remaining());
         final exact = rows
             .where((row) => row.conversationId == conversationId)
             .toList();
