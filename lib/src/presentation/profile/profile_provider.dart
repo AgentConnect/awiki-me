@@ -371,8 +371,7 @@ class ProfileController extends StateNotifier<ProfileState> {
     final currentProfile = state.profile;
     final profile = incomingProfile.copyWith(
       avatarUploadEnabled: currentProfile?.avatarUploadEnabled ?? false,
-      avatarThumbnailUri:
-          currentProfile?.avatarUri == incomingProfile.avatarUri
+      avatarThumbnailUri: currentProfile?.avatarUri == incomingProfile.avatarUri
           ? currentProfile?.avatarThumbnailUri
           : null,
     );
