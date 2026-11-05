@@ -81,7 +81,6 @@ enum _RuntimeInitializationPhase {
   ready,
 }
 
-
 class AppRuntimeState {
   const AppRuntimeState({
     this.isInitialized = false,
