@@ -317,6 +317,7 @@ Future<void> _runAppPairAdminContentSync({
     directReadBudget,
   );
   await _waitForAppPairUnreadCount(
+    budget: directReadBudget,
     tester: tester,
     container: container,
     conversationId: directId,
@@ -325,6 +326,7 @@ Future<void> _runAppPairAdminContentSync({
     requireCoreCommit: true,
   );
   await _waitForAppPairUnreadCount(
+    budget: directReadBudget,
     tester: tester,
     container: container,
     conversationId: groupId,
@@ -344,6 +346,7 @@ Future<void> _runAppPairAdminContentSync({
     groupReadBudget,
   );
   await _waitForAppPairUnreadCount(
+    budget: groupReadBudget,
     tester: tester,
     container: container,
     conversationId: groupId,
@@ -352,6 +355,7 @@ Future<void> _runAppPairAdminContentSync({
     requireCoreCommit: true,
   );
   await _waitForAppPairUnreadCount(
+    budget: groupReadBudget,
     tester: tester,
     container: container,
     conversationId: directId,
@@ -636,6 +640,7 @@ Future<void> _runAppPairJoinerContentSync({
   final groupRead = await config.coordinator.waitFor(
     'admin',
     'content_direct_read_converged',
+    timeout: readBudget.remaining(),
   );
   readBudget = _contentReadBudget(groupRead);
 
@@ -684,7 +689,11 @@ Future<void> _runAppPairJoinerContentSync({
     );
     rethrow;
   }
-  await config.coordinator.waitFor('admin', 'content_group_read_converged');
+  await config.coordinator.waitFor(
+    'admin',
+    'content_group_read_converged',
+    timeout: readBudget.remaining(),
+  );
   await container
       .read(messageSyncCoordinatorProvider.notifier)
       .requestSync('e2e_content_joiner_final_exact_once', immediate: true);
