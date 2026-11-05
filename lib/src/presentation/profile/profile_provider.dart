@@ -341,7 +341,7 @@ class ProfileController extends StateNotifier<ProfileState> {
     final payload = snapshot.payloadJson == null
         ? const <String, Object?>{}
         : _readJsonObject(snapshot.payloadJson!);
-    final profile = UserProfile(
+    final incomingProfile = UserProfile(
       did: session.did,
       displayName: _optionalString(payload['nick_name']) ?? '',
       bio: _optionalString(payload['bio']) ?? '',
@@ -349,15 +349,10 @@ class ProfileController extends StateNotifier<ProfileState> {
       profileMarkdown: _optionalString(payload['profile_md']) ?? '',
       handle: session.handle,
       avatarUri: _optionalString(payload['avatar_url']),
-      avatarThumbnailUri:
-          state.profile?.avatarUri == _optionalString(payload['avatar_url'])
-          ? state.profile?.avatarThumbnailUri
-          : null,
-      avatarUploadEnabled: state.profile?.avatarUploadEnabled ?? false,
       profileVersion: snapshot.domainVersion,
     );
     await _synchronizeCurrentIdentityDisplayName(
-      profile.displayName,
+      incomingProfile.displayName,
       generation: generation,
       epoch: epoch,
       sessionBefore: sessionBefore,
@@ -370,6 +365,17 @@ class ProfileController extends StateNotifier<ProfileState> {
         )) {
       return;
     }
+    // Account snapshots do not refresh these supplemental fields. Read them
+    // after the asynchronous identity projection and the same-owner fence, so
+    // a delayed snapshot cannot undo a newer capability or thumbnail response.
+    final currentProfile = state.profile;
+    final profile = incomingProfile.copyWith(
+      avatarUploadEnabled: currentProfile?.avatarUploadEnabled ?? false,
+      avatarThumbnailUri:
+          currentProfile?.avatarUri == incomingProfile.avatarUri
+          ? currentProfile?.avatarThumbnailUri
+          : null,
+    );
     state = _profileStateAfterRefresh(
       profile,
       isLoading: false,

@@ -87,6 +87,8 @@ DID and Handle are not cache owners.
   ordinary Agent messages may accelerate visible feedback, but cannot clear
   the intent by themselves.
 - Profile UI reads the committed Profile cache.
+
+账户资料快照不刷新头像上传能力等补充元数据。ProfileController 在异步 Core 身份展示投影完成、再次核对 owner/epoch 后，才从当前同 owner 的最新 Profile 读取上传能力和与头像 URL 匹配的缩略图；不能用等待前捕获的旧值覆盖期间加载的新资料。该规则同时保留最新 true 和最新 false，不把能力永久设为开启；原资料单调版本与会话隔离检查不变。
 - Device UI may display the newer of the account cache and a fresh Core
   Registry read, comparing arbitrary-precision string versions.
 
