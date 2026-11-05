@@ -301,15 +301,21 @@ Future<void> _runAppPairAdminContentSync({
     matches: (value) => value == 1,
     failure: 'The existing App Group unread count did not advance to one.',
   );
+  final directReadBudget = ContentSyncReadBudget();
   await config.coordinator.publish(
     'admin',
     'content_incoming_sent',
     data: <String, Object?>{
       'directMessageId': incomingDirectId,
       'groupMessageId': incomingGroupId,
+      'readDeadlineMs': directReadBudget.deadline.millisecondsSinceEpoch,
     },
   );
-  await config.coordinator.waitFor('joiner', 'content_direct_read_committed');
+  await _waitForContentReadOutcome(
+    config,
+    'content_direct_read_committed',
+    directReadBudget,
+  );
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
@@ -325,9 +331,18 @@ Future<void> _runAppPairAdminContentSync({
     matches: (value) => value == 1,
     failure: 'Reading Direct incorrectly cleared Group unread state.',
   );
-  await config.coordinator.publish('admin', 'content_direct_read_converged');
+  final groupReadBudget = ContentSyncReadBudget();
+  await config.coordinator.publish(
+    'admin',
+    'content_direct_read_converged',
+    data: {'readDeadlineMs': groupReadBudget.deadline.millisecondsSinceEpoch},
+  );
 
-  await config.coordinator.waitFor('joiner', 'content_group_read_committed');
+  await _waitForContentReadOutcome(
+    config,
+    'content_group_read_committed',
+    groupReadBudget,
+  );
   await _waitForAppPairUnreadCount(
     tester: tester,
     container: container,
@@ -515,98 +530,160 @@ Future<void> _runAppPairJoinerContentSync({
     'admin',
     'content_incoming_sent',
   );
+  var readBudget = _contentReadBudget(incoming);
+  var readStage = 'incoming_direct';
   final incomingDirectText = _contentText(config.runId, 'peer-direct');
   final incomingGroupText = _contentText(config.runId, 'peer-group');
-  await _waitForContentMessage(
-    container: container,
-    messaging: bootstrap.messagingService!,
-    conversationId: directId,
-    content: incomingDirectText,
-    messageId: _required(incoming, 'directMessageId'),
-    senderDid: peerDid,
-    isMine: false,
-  );
-  await _waitForContentMessage(
-    container: container,
-    messaging: bootstrap.messagingService!,
-    conversationId: groupId,
-    content: incomingGroupText,
-    messageId: _required(incoming, 'groupMessageId'),
-    senderDid: peerDid,
-    isMine: false,
-    groupDid: groupDid,
-  );
-  await _waitForAppPairUnreadCount(
-    tester: tester,
-    container: container,
-    conversationId: directId,
-    matches: (value) => value == 1,
-    failure: 'The joining App Direct unread count did not advance to one.',
-  );
-  await _waitForAppPairUnreadCount(
-    tester: tester,
-    container: container,
-    conversationId: groupId,
-    matches: (value) => value == 1,
-    failure: 'The joining App Group unread count did not advance to one.',
-  );
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairGroupSyncCaseId,
-    phases: const <String>[
-      'admin_group_own_sync_projected_once',
-      'joiner_group_own_sync_projected_once',
-      'canonical_group_and_conversation_preserved',
-      'external_group_message_projected_incoming_once',
-    ],
-  );
+  try {
+    readStage = 'incoming_direct';
+    await _waitForContentMessage(
+      budget: readBudget,
+      container: container,
+      messaging: bootstrap.messagingService!,
+      conversationId: directId,
+      content: incomingDirectText,
+      messageId: _required(incoming, 'directMessageId'),
+      senderDid: peerDid,
+      isMine: false,
+    );
+    readStage = 'incoming_group';
+    await _waitForContentMessage(
+      budget: readBudget,
+      container: container,
+      messaging: bootstrap.messagingService!,
+      conversationId: groupId,
+      content: incomingGroupText,
+      messageId: _required(incoming, 'groupMessageId'),
+      senderDid: peerDid,
+      isMine: false,
+      groupDid: groupDid,
+    );
+    readStage = 'unread_direct';
+    await _waitForAppPairUnreadCount(
+      budget: readBudget,
+      tester: tester,
+      container: container,
+      conversationId: directId,
+      matches: (value) => value == 1,
+      failure: 'The joining App Direct unread count did not advance to one.',
+    );
+    readStage = 'unread_group';
+    await _waitForAppPairUnreadCount(
+      budget: readBudget,
+      tester: tester,
+      container: container,
+      conversationId: groupId,
+      matches: (value) => value == 1,
+      failure: 'The joining App Group unread count did not advance to one.',
+    );
+    await E2eCaseAttestationWriter.markPassed(
+      _appPairGroupSyncCaseId,
+      phases: const <String>[
+        'admin_group_own_sync_projected_once',
+        'joiner_group_own_sync_projected_once',
+        'canonical_group_and_conversation_preserved',
+        'external_group_message_projected_incoming_once',
+      ],
+    );
 
-  await _openAppPairConversation(
-    tester: tester,
-    conversationId: directId,
-    content: incomingDirectText,
+    readStage = 'open_direct';
+    await _openAppPairConversation(
+      budget: readBudget,
+      tester: tester,
+      conversationId: directId,
+      content: incomingDirectText,
+    );
+    readStage = 'commit_direct';
+    await _waitForAppPairUnreadCount(
+      budget: readBudget,
+      tester: tester,
+      container: container,
+      conversationId: directId,
+      matches: (value) => value == 0,
+      failure: 'Opening Direct did not commit its read state.',
+      requireCoreCommit: true,
+    );
+    readStage = 'preserve_group';
+    await _waitForAppPairUnreadCount(
+      budget: readBudget,
+      tester: tester,
+      container: container,
+      conversationId: groupId,
+      matches: (value) => value == 1,
+      failure: 'Opening Direct incorrectly cleared Group unread state.',
+    );
+    debugPrint(
+      '[content-read-commit] ${await _appPairUnreadDiagnostic(container, directId)}',
+    );
+    readBudget.remaining();
+    await config.coordinator.publish(
+      'joiner',
+      'content_direct_read_committed',
+      data: {'status': 'passed', 'stage': 'complete'},
+    );
+  } on Object {
+    await config.coordinator.publish(
+      'joiner',
+      'content_direct_read_committed',
+      data: {'status': 'failed', 'stage': readStage},
+    );
+    debugPrint(
+      '[content-read-failure] stage=$readStage '
+      '${await _appPairUnreadDiagnostic(container, directId)}',
+    );
+    rethrow;
+  }
+  final groupRead = await config.coordinator.waitFor(
+    'admin',
+    'content_direct_read_converged',
   );
-  await _waitForAppPairUnreadCount(
-    tester: tester,
-    container: container,
-    conversationId: directId,
-    matches: (value) => value == 0,
-    failure: 'Opening Direct did not commit its read state.',
-    requireCoreCommit: true,
-  );
-  await _waitForAppPairUnreadCount(
-    tester: tester,
-    container: container,
-    conversationId: groupId,
-    matches: (value) => value == 1,
-    failure: 'Opening Direct incorrectly cleared Group unread state.',
-  );
-  debugPrint(
-    '[content-read-commit] ${await _appPairUnreadDiagnostic(container, directId)}',
-  );
-  await config.coordinator.publish('joiner', 'content_direct_read_committed');
-  await config.coordinator.waitFor('admin', 'content_direct_read_converged');
+  readBudget = _contentReadBudget(groupRead);
 
-  await _openAppPairConversation(
-    tester: tester,
-    conversationId: groupId,
-    content: incomingGroupText,
-  );
-  await _waitForAppPairUnreadCount(
-    tester: tester,
-    container: container,
-    conversationId: groupId,
-    matches: (value) => value == 0,
-    failure: 'Opening Group did not commit its read state.',
-    requireCoreCommit: true,
-  );
-  await _waitForAppPairUnreadCount(
-    tester: tester,
-    container: container,
-    conversationId: directId,
-    matches: (value) => value == 0,
-    failure: 'Opening Group regressed the Direct read state.',
-  );
-  await config.coordinator.publish('joiner', 'content_group_read_committed');
+  try {
+    readStage = 'open_group';
+    await _openAppPairConversation(
+      budget: readBudget,
+      tester: tester,
+      conversationId: groupId,
+      content: incomingGroupText,
+    );
+    readStage = 'commit_group';
+    await _waitForAppPairUnreadCount(
+      budget: readBudget,
+      tester: tester,
+      container: container,
+      conversationId: groupId,
+      matches: (value) => value == 0,
+      failure: 'Opening Group did not commit its read state.',
+      requireCoreCommit: true,
+    );
+    readStage = 'preserve_direct';
+    await _waitForAppPairUnreadCount(
+      budget: readBudget,
+      tester: tester,
+      container: container,
+      conversationId: directId,
+      matches: (value) => value == 0,
+      failure: 'Opening Group regressed the Direct read state.',
+    );
+    readBudget.remaining();
+    await config.coordinator.publish(
+      'joiner',
+      'content_group_read_committed',
+      data: {'status': 'passed', 'stage': 'complete'},
+    );
+  } on Object {
+    await config.coordinator.publish(
+      'joiner',
+      'content_group_read_committed',
+      data: {'status': 'failed', 'stage': readStage},
+    );
+    debugPrint(
+      '[content-read-failure] stage=$readStage '
+      '${await _appPairUnreadDiagnostic(container, groupId)}',
+    );
+    rethrow;
+  }
   await config.coordinator.waitFor('admin', 'content_group_read_converged');
   await container
       .read(messageSyncCoordinatorProvider.notifier)
@@ -692,12 +769,13 @@ Future<ChatMessage> _waitForContentMessage({
   required bool isMine,
   String? groupDid,
   String? attachmentId,
+  ContentSyncReadBudget? budget,
 }) async {
   if (messaging is! ConversationTimelineMessagingService) {
     fail('The content-sync suite requires canonical timeline reads.');
   }
   final timeline = messaging as ConversationTimelineMessagingService;
-  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  final deadline = (budget ?? ContentSyncReadBudget()).deadline;
   while (DateTime.now().isBefore(deadline)) {
     final messages = await timeline.loadConversationTimeline(
       AppConversationReadRef.fromConversationId(conversationId),
@@ -820,5 +898,50 @@ Future<void> _assertContentMessageCount({
   if (messages.where((message) => message.remoteId == messageId).length !=
       expected) {
     fail('Repeated sync changed the canonical message count.');
+  }
+}
+
+ContentSyncReadBudget _contentReadBudget(Map<String, Object?> checkpoint) {
+  final value = checkpoint['readDeadlineMs'];
+  if (value is! int) fail('The content-read checkpoint omitted its deadline.');
+  return ContentSyncReadBudget(
+    deadline: DateTime.fromMillisecondsSinceEpoch(value),
+  );
+}
+
+Future<void> _waitForContentReadOutcome(
+  _AppPairRunConfig config,
+  String phase,
+  ContentSyncReadBudget budget,
+) async {
+  Map<String, Object?> outcome;
+  try {
+    outcome = await config.coordinator.waitFor(
+      'joiner',
+      phase,
+      timeout: budget.remaining(),
+    );
+    budget.remaining();
+  } on Object {
+    // Drain only the failure stage after the original business deadline. A late
+    // success can never pass this case or extend the read convergence budget.
+    try {
+      final diagnostic = await config.coordinator.waitFor(
+        'joiner',
+        phase,
+        timeout: const Duration(seconds: 3),
+      );
+      if (diagnostic['status'] == 'failed') {
+        fail('The content-read peer failed at ${diagnostic['stage']}.');
+      }
+    } on TestFailure {
+      rethrow;
+    } on Object {
+      /* retain the original timeout */
+    }
+    fail('The content-read peer exceeded its shared 90s budget.');
+  }
+  if (outcome['status'] != 'passed' || outcome['stage'] != 'complete') {
+    fail('The content-read peer failed at ${outcome['stage']}.');
   }
 }

@@ -79,10 +79,11 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'admin\u0000content_incoming_sent': <String>{
     'directMessageId',
     'groupMessageId',
+    'readDeadlineMs',
   },
-  'joiner\u0000content_direct_read_committed': <String>{},
-  'admin\u0000content_direct_read_converged': <String>{},
-  'joiner\u0000content_group_read_committed': <String>{},
+  'joiner\u0000content_direct_read_committed': <String>{'status', 'stage'},
+  'admin\u0000content_direct_read_converged': <String>{'readDeadlineMs'},
+  'joiner\u0000content_group_read_committed': <String>{'status', 'stage'},
   'admin\u0000content_group_read_converged': <String>{},
   'admin\u0000paging_peer_ready': <String>{'peerDid', 'conversationId'},
   'joiner\u0000paging_joiner_ready': <String>{},
@@ -737,6 +738,29 @@ void _validateCheckpointRoute(
   String phase,
   Map<String, Object?> data,
 ) {
+  if (phase == 'content_direct_read_committed' ||
+      phase == 'content_group_read_committed') {
+    if (!const {'passed', 'failed'}.contains(data['status']) ||
+        !const {
+          'incoming_direct',
+          'incoming_group',
+          'unread_direct',
+          'unread_group',
+          'open_direct',
+          'commit_direct',
+          'preserve_group',
+          'open_group',
+          'commit_group',
+          'preserve_direct',
+          'complete',
+        }.contains(data['stage']) ||
+        (data['status'] == 'passed' && data['stage'] != 'complete')) {
+      throw const AppPairProtocolException('Invalid content-read outcome.');
+    }
+  }
+  if (data.containsKey('readDeadlineMs') && data['readDeadlineMs'] is! int) {
+    throw const AppPairProtocolException('Invalid content-read deadline.');
+  }
   final allowed = _checkpointFieldsByRoute['$role\u0000$phase'];
   if (allowed == null ||
       data.length != allowed.length ||

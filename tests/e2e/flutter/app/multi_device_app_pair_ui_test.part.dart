@@ -4811,7 +4811,9 @@ Future<void> _waitForAppPairUnreadCount({
   required bool Function(int count) matches,
   required String failure,
   bool requireCoreCommit = false,
+  ContentSyncReadBudget? budget,
 }) async {
+  final shared = budget ?? ContentSyncReadBudget();
   try {
     await _pumpUntil(
       tester,
@@ -4827,12 +4829,13 @@ Future<void> _waitForAppPairUnreadCount({
         return conversations.length == 1 &&
             matches(conversations.single.unreadCount);
       },
-      timeout: const Duration(seconds: 90),
+      timeout: shared.remaining(),
       failure: failure,
     );
     if (requireCoreCommit) {
       // UI waterline 可先于持久提交清零；只通过 Core 公开投影确认提交。
-      final deadline = DateTime.now().add(const Duration(seconds: 90));
+      final deadline =
+          budget?.deadline ?? DateTime.now().add(const Duration(seconds: 90));
       while (true) {
         final owner = container.read(sessionProvider).session?.did;
         if (owner == null) fail('The read-commit check lost its active owner.');
@@ -4850,10 +4853,11 @@ Future<void> _waitForAppPairUnreadCount({
       }
     }
   } on TestFailure {
-    final diagnostic = await _appPairUnreadDiagnostic(
-      container,
-      conversationId,
-    );
+    final diagnostic = await _appPairUnreadDiagnostic(container, conversationId)
+        .timeout(
+          const Duration(seconds: 1),
+          onTimeout: () => 'diagnostic_timeout',
+        );
     fail('$failure ($diagnostic)');
   }
 }
@@ -5318,6 +5322,7 @@ Future<void> _openAppPairConversation({
   required WidgetTester tester,
   required String conversationId,
   required String content,
+  ContentSyncReadBudget? budget,
 }) async {
   await _tapOne(
     tester,
@@ -5329,7 +5334,9 @@ Future<void> _openAppPairConversation({
     () =>
         find.byKey(Key('conversation-row:$conversationId')).evaluate().length ==
         1,
-    timeout: const Duration(seconds: 30),
+    timeout:
+        budget?.remaining(cap: const Duration(seconds: 30)) ??
+        const Duration(seconds: 30),
     failure: 'The joining App exact conversation row was unavailable.',
   );
   await _tapOne(
@@ -5343,7 +5350,9 @@ Future<void> _openAppPairConversation({
         .bySemanticsIdentifier(e2eMessageIdentifier(content))
         .evaluate()
         .isNotEmpty,
-    timeout: const Duration(seconds: 60),
+    timeout:
+        budget?.remaining(cap: const Duration(seconds: 60)) ??
+        const Duration(seconds: 60),
     failure: 'The joining App did not render the exact own-sync message.',
   );
 }

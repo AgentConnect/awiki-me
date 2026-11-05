@@ -11,6 +11,42 @@ import '../../e2e/app_pair_protocol.dart';
 import '../../e2e/bounded_cli_process.dart';
 
 void main() {
+  test(
+    'content read checkpoint preserves only closed success/failure stages',
+    () async {
+      final server = await AppPairCoordinatorServer.start(token: 't' * 48);
+      addTearDown(server.close);
+      final client = AppPairCoordinatorClient(
+        endpoint: server.endpoint,
+        token: server.token,
+      );
+      await client.publish(
+        'joiner',
+        'content_direct_read_committed',
+        data: {'status': 'failed', 'stage': 'commit_direct'},
+      );
+      expect(await client.waitFor('joiner', 'content_direct_read_committed'), {
+        'status': 'failed',
+        'stage': 'commit_direct',
+      });
+      await expectLater(
+        client.publish(
+          'joiner',
+          'content_group_read_committed',
+          data: {'status': 'passed', 'stage': 'commit_group'},
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+      await expectLater(
+        client.publish(
+          'joiner',
+          'content_group_read_committed',
+          data: {'status': 'failed', 'stage': 'raw secret error'},
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+    },
+  );
   test('CLI timeout diagnostics use only closed stages and bounded metadata', () {
     final error = CliProcessTimeout(
       timeout: const Duration(seconds: 30),
