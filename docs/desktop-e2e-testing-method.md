@@ -1,6 +1,6 @@
 # 桌面测试：固定 A/B 客户端的构建与验收方法
 
-适用：当前 Windows x64、真实后端 `awiki.info` 的 owning AWiki Me E2E。本文描述可复用方法；每次实际结果、来源 SHA、时长和报告 URL 保存在独立运行记录，不能以方法说明代替验收。实现合同见 [运行时控制](e2e-runtime-control.md)，通用门槛见 [Verification Policy](../../awiki-harness/rules/verification-policy.md)。
+适用：当前 Windows x64、真实后端 `awiki.info` 的 owning AWiki Me E2E。本文描述可复用方法；实际结果由 owner 原生结果、最终报告和对话说明，不另建中间运行记录归档，不能以方法说明代替验收。实现合同见 [运行时控制](e2e-runtime-control.md)，通用门槛见 [Verification Policy](../../awiki-harness/rules/verification-policy.md)。
 
 ## 一、开发新的测试场景
 
@@ -13,7 +13,7 @@
 
 ## 二、冻结本轮来源与输入
 
-为每次验收创建唯一 `verification-runs/<run-id>/`，保存不公开的原始日志、脚本、私有 fixture 引用、源码/SDK 摘要、进程归属和恢复记录；不放进 `html-docs/`。
+用户于 2026-11-06 禁用并删除 `verification-runs/`。不创建、恢复或写入该目录，也不换目录额外归档中间日志、诊断快照、临时脚本或过程记录。只使用 owner runner 自带的必要结果；执行必需的私有临时输入与恢复材料使用受保护临时目录，恢复核验后清除。来源和结果在原生结果及最终报告中说明。
 
 - 记录 App/Core/ANP/Identity 的完整 SHA、分支与已有工作区差异。提交改动后再构建，验收期间不混入不同来源。
 - 核验 Windows PE x64、SDK DLL SHA-256、FRB binding hash、CLI/probe/Daemon 的嵌入源码 SHA。依赖继续走各 owner 的已审核入口，不为省时跳过来源检查。
