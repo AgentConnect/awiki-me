@@ -60,6 +60,8 @@
 
 恢复夹具要求远端已读确认时，复用 `tests/e2e/recovery_read_ack.dart`：固定消息、水位和 readAt，只对精确的 `predecessor_in_flight` 排队状态在原预算内等待最终 ACK。错误目标、fallback、其他 partial/服务错误和超时均终止，不把本地提交当远端成功。
 
+Root 送达接受不等于接收端本地管理权限已就绪。管理权限观察使用当前 Session 的精确 protocol device ID，先由公开 `localManagementReady` 确认本地状态，再读取 Registry，并保留原两分钟预算、会话归属检查和最终两端管理员断言。`permission_denied` 仍为终止错误，不能作为通用可重试类别，也不在测试中直接刷新凭据或重发 Root。
+
 桌面页面等待或身份恢复失败时，`desktop-closed-failure` 记录固定字段的会话匹配、运行状态、头像控件状态和 Core 网络阶段。它不输出 DID、任意页面文本、服务错误正文或凭据；先据此定位失败边界，再决定是否需要产品修复。组异常中断但没有逐条终态的 `not_run` 不能解释为完全未启动，更不能计为通过。
 
 ## 六、结果和方法的交付

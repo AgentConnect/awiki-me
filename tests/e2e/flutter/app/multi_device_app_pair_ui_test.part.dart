@@ -5455,6 +5455,7 @@ Future<void> _waitForLocalAndRegistryAdmins(
 }) async {
   final deadline = DateTime.now().add(const Duration(minutes: 2));
   var transientIdentityReads = 0;
+  var pendingLocalReads = 0;
   Map<String, Object?> lastRegistryState = const {};
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 200));
@@ -5462,9 +5463,23 @@ Future<void> _waitForLocalAndRegistryAdmins(
         container.read(appRuntimeProvider).authRevoked) {
       fail('The App lost its own session during root import.');
     }
-    final DeviceRegistrySnapshot registry;
+    final protocolDeviceId = container
+        .read(sessionProvider)
+        .session
+        ?.protocolDeviceId;
+    if (protocolDeviceId == null || protocolDeviceId.trim().isEmpty) {
+      fail('The App has no exact protocol device binding during root import.');
+    }
+    final DeviceRegistrySnapshot? registry;
     try {
-      registry = await port.identityDeviceRegistry(did);
+      registry =
+          await readRegistryWhenLocalManagementReady<DeviceRegistrySnapshot>(
+            localManagementReady: () => port.localManagementReady(
+              selector: did,
+              protocolDeviceId: protocolDeviceId,
+            ),
+            readRegistry: () => port.identityDeviceRegistry(did),
+          );
     } on core.AwikiImCoreException catch (error) {
       // Accepted delivery precedes receiver auth-generation convergence. Keep
       // observing with a fresh public Registry client, without auth or sync.
@@ -5476,6 +5491,17 @@ Future<void> _waitForLocalAndRegistryAdmins(
       }
       transientIdentityReads++;
       continue;
+    }
+    if (registry == null) {
+      pendingLocalReads++;
+      lastRegistryState = const {'localManagementReady': false};
+      continue;
+    }
+    if (container.read(sessionProvider).session?.did != did ||
+        container.read(sessionProvider).session?.protocolDeviceId !=
+            protocolDeviceId ||
+        container.read(appRuntimeProvider).authRevoked) {
+      fail('The App lost its exact device session during root import.');
     }
     lastRegistryState = <String, Object?>{
       'ownerMatches': registry.did == did,
@@ -5501,7 +5527,8 @@ Future<void> _waitForLocalAndRegistryAdmins(
               device.managementReady,
         )) {
       debugPrint(
-        '[two-app-root] ready=true transient_identity_reads=$transientIdentityReads',
+        '[two-app-root] ready=true transient_identity_reads=$transientIdentityReads '
+        'pending_local_reads=$pendingLocalReads',
       );
       return;
     }
