@@ -3581,9 +3581,30 @@ Future<String> _requestAppRegistrationOtp({
       fullHandle: '$handle.${config.didDomain}',
     );
   } on Object catch (error) {
+    final network = <String, Object?>{
+      'reason': closedNetworkFailureReason(
+        error is core.AwikiImCoreException ? error.message : null,
+      ),
+    };
+    try {
+      final records = await core.AwikiDesktopNetwork.diagnostics().timeout(
+        const Duration(seconds: 2),
+      );
+      network['stages'] = [
+        for (final record in records.skip(max(0, records.length - 6)))
+          {
+            'operation': record.operation,
+            'stage': record.stage,
+            'elapsedMs': record.elapsedMs,
+          },
+      ];
+    } on Object {
+      network['diagnosticAvailable'] = false;
+    }
     fail(
       'The production registration OTP request failed safely '
-      '(${_appPairClosedRegistrationError(error)}).',
+      '(${_appPairClosedRegistrationError(error)}, '
+      'network=${jsonEncode(network)}).',
     );
   }
   return account.fixedOtp;

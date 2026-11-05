@@ -3,6 +3,39 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/closed_onboarding_diagnostics.dart';
 
 void main() {
+  test('network diagnostics retain exact fixed native failure categories', () {
+    expect(closedNetworkFailureReason(null), 'none');
+    expect(
+      closedNetworkFailureReason('network_connect_timeout'),
+      'network_connect_timeout',
+    );
+    expect(
+      closedNetworkFailureReason(
+        'transport unavailable: transport unavailable: network_tls_handshake',
+      ),
+      'network_tls_handshake',
+    );
+    expect(
+      closedNetworkFailureReason('transport unavailable: direct_connect'),
+      'direct_connect',
+    );
+  });
+
+  test('network diagnostics reject appended private error detail', () {
+    const private = 'PRIVATE_PHONE_OTP_PIN_TOKEN';
+    for (final message in [
+      private,
+      'network_connect_timeout $private',
+      'transport unavailable: network_tls_handshake: $private',
+      'transport unavailable: https://test.example/$private',
+      'network_private_category',
+    ]) {
+      final reason = closedNetworkFailureReason(message);
+      expect(reason, 'unrecognized');
+      expect(reason, isNot(contains(private)));
+    }
+  });
+
   test(
     'read warning diagnostics distinguish a queued predecessor from failure',
     () {
