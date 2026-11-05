@@ -70,6 +70,18 @@ const Set<SyncDomain> _accountStateRealtimeDomains = <SyncDomain>{
 
 const Object _unsetActivatedDid = Object();
 
+enum _RuntimeInitializationPhase {
+  idle,
+  localIdentities,
+  localDeletions,
+  restoreSession,
+  sessionActivation,
+  conversationSeed,
+  notifications,
+  ready,
+}
+
+
 class AppRuntimeState {
   const AppRuntimeState({
     this.isInitialized = false,
@@ -173,6 +185,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   final Ref ref;
+  _RuntimeInitializationPhase _initializationPhase =
+      _RuntimeInitializationPhase.idle;
+
+  /// Closed, secret-free progress for startup failure diagnosis.
+  String get initializationPhaseForDiagnostics => _initializationPhase.name;
+
   final Duration _requestTimeout;
   final Duration _foregroundCatchUpInterval;
   final Duration _realtimeSyncRetryBaseDelay;
@@ -221,10 +239,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _beginBusyOperation();
     try {
       final sessions = ref.read(appSessionServiceProvider);
+      _initializationPhase = _RuntimeInitializationPhase.localIdentities;
       var localIdentities = await sessions.listLocalIdentities();
       if (sessions is LocalIdentityDataDeletionSessionService) {
         final deletionSessions =
             sessions as LocalIdentityDataDeletionSessionService;
+        _initializationPhase = _RuntimeInitializationPhase.localDeletions;
         final pending = await deletionSessions
             .pendingLocalIdentityDataDeletions();
         if (pending.isNotEmpty) {
@@ -242,16 +262,20 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref.read(sessionProvider.notifier).setCapabilities(_imCoreCapabilities);
       ref.read(sessionProvider.notifier).setLocalCredentials(localCredentials);
 
+      _initializationPhase = _RuntimeInitializationPhase.restoreSession;
       final session = await sessions.restoreSession();
       if (session != null) {
+        _initializationPhase = _RuntimeInitializationPhase.sessionActivation;
         await activateCommittedSession(session);
       }
+      _initializationPhase = _RuntimeInitializationPhase.notifications;
       final initialActivation = await ref
           .read(notificationFacadeProvider)
           .initialActivation();
       if (initialActivation != null) {
         await _handleNotificationActivation(initialActivation);
       }
+      _initializationPhase = _RuntimeInitializationPhase.ready;
       state = state.copyWith(isInitialized: true);
     } on TimeoutException {
       ref
@@ -314,6 +338,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       if (!_isSessionEpochActive(epoch)) {
         return;
       }
+      _initializationPhase = _RuntimeInitializationPhase.conversationSeed;
       await ref
           .read(conversationListProvider.notifier)
           .preparePatchGeneration()
@@ -330,6 +355,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         activatedDid: session.did,
         authRevoked: false,
       );
+      _initializationPhase = _RuntimeInitializationPhase.ready;
       // Capability setup has its own inline status and must not block login.
       unawaited(
         ref
