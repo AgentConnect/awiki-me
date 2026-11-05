@@ -1976,6 +1976,9 @@ class _DesktopAppRobot {
       final session = container.read(sessionProvider).session;
       final feedback = container.read(uiFeedbackProvider);
       observation.addAll({
+        'initializationPhase': container
+            .read(appRuntimeProvider.notifier)
+            .initializationPhaseForDiagnostics,
         'initialized': runtime.isInitialized,
         'busy': runtime.isBusy,
         'authRevoked': runtime.authRevoked,

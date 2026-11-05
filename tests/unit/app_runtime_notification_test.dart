@@ -593,6 +593,7 @@ void main() {
           runtime.activateCommittedSession(first),
           throwsA(isA<TimeoutException>()),
         );
+        expect(runtime.initializationPhaseForDiagnostics, 'conversationSeed');
         expect(await sessions.currentSessionLease(), isNull);
         expect(container.read(sessionProvider).session, isNull);
 
@@ -612,6 +613,7 @@ void main() {
           'did:test:first',
           'did:test:second',
         ]);
+        expect(runtime.initializationPhaseForDiagnostics, 'ready');
       },
     );
 
