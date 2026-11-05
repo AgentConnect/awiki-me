@@ -24,6 +24,7 @@ import 'dart:io';
 
 import '../../root_transfer_fixture_state.dart';
 import '../../root_transfer_registry_observer.dart';
+import '../../joined_device_registry.dart';
 import '../../runtime_message_sync_readiness.dart';
 import '../support/confirm_local_credential_deletion.dart';
 import 'dart:math';
@@ -1181,30 +1182,12 @@ Future<void> _continueStep4RevokeAndMls({
 
   final registryBeforeRepair = await bootstrap.deviceManagementCorePort!
       .identityDeviceRegistry(did);
-  final currentReadyAdmin = registryBeforeRepair.devices
-      .where(
-        (device) =>
-            device.protocolDeviceId == currentDeviceId &&
-            device.isCurrent &&
-            device.role == DeviceRole.admin &&
-            device.managementReady &&
-            device.status == DeviceStatus.active,
-      )
-      .toList(growable: false);
-  final targetMember = registryBeforeRepair.devices
-      .where(
-        (device) =>
-            device.protocolDeviceId == targetDeviceId &&
-            !device.isCurrent &&
-            device.role == DeviceRole.member &&
-            !device.managementReady &&
-            device.status == DeviceStatus.active,
-      )
-      .toList(growable: false);
-  if (registryBeforeRepair.devices.length != 2 ||
-      currentReadyAdmin.length != 1 ||
-      targetMember.length != 1) {
-    fail('Fresh Registry did not bind the admin and member device principals.');
+  if (!hasExactAdminAndJoinedDevice(
+    registryBeforeRepair,
+    currentAdminDeviceId: currentDeviceId,
+    joinedDeviceId: targetDeviceId,
+  )) {
+    fail('Fresh Registry did not bind the exact admin and joined device.');
   }
 
   final secure = container.read(groupEncryptionCorePortProvider);
@@ -3753,29 +3736,11 @@ void _requireAppAdminAndMember(
   required String bootstrapAdminDeviceId,
   required String joinedDeviceId,
 }) {
-  final currentAdmin = registry.devices
-      .where(
-        (device) =>
-            device.protocolDeviceId == bootstrapAdminDeviceId &&
-            device.isCurrent &&
-            device.role == DeviceRole.admin &&
-            device.managementReady &&
-            device.status == DeviceStatus.active,
-      )
-      .toList(growable: false);
-  final member = registry.devices
-      .where(
-        (device) =>
-            device.protocolDeviceId == joinedDeviceId &&
-            !device.isCurrent &&
-            ((device.role == DeviceRole.member && !device.managementReady) ||
-                (device.role == DeviceRole.admin && device.managementReady)) &&
-            device.status == DeviceStatus.active,
-      )
-      .toList(growable: false);
-  if (registry.devices.length != 2 ||
-      currentAdmin.length != 1 ||
-      member.length != 1) {
+  if (!hasExactAdminAndJoinedDevice(
+    registry,
+    currentAdminDeviceId: bootstrapAdminDeviceId,
+    joinedDeviceId: joinedDeviceId,
+  )) {
     fail('The App Registry did not contain the expected admin/member.');
   }
 }
