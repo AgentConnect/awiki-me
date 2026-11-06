@@ -154,6 +154,8 @@ Rust im-core
 | group display name / avatar | `awiki-me` group application/provider；Core committed conversation title 作回退 | group summary refresh、Core conversation projection | Widget 按相同 canonical `conversationId` 组合；Group provider 只提供 DID/Group ID 样式占位名时保留 Core 已提交的友好标题，不得回写 `ConversationSummary` |
 | 可见会话 read intent | `ChatThreadsController` 可见状态 + 单调串行 read-intent drain | `ChatPage` 只声明挂载/隐藏；当前可见 summary/timeline 更新、用户回到底部 | 可见且有未读时立即建立 intent；history/lifecycle 未就绪只延后 drain，不丢 intent。每个 canonical conversation 同时最多一个 `markConversationRead(AppConversationReadRef, watermark)`；更高 watermark 单调合并并只前进。以 Core `effectiveWatermark` 确认本地持久提交；`pendingRemoteAck` 表示 local-first 已成功 |
 
+已读排空任务运行期间收到的唤醒请求由 `ChatThreadsController` 按会话暂存。任务释放运行标记后消费该请求，并在当前 session epoch 下继续处理队列。历史加载完成的回调通过这条路径唤醒被延后的提交，覆盖回调早于旧任务收尾的时序。每次排空继续核验前台、可见性、历史加载状态和消息水位，身份切换同步清除暂存的唤醒请求。
+
 ## 5. API 与 DTO 约束
 
 Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 SDK public DTO 或 FRB generated DTO：

@@ -870,6 +870,7 @@ class ChatThreadsController
       <String, _PendingReadAck>{};
   final Map<String, Future<void>> _activeReadAckDrainsByThreadId =
       <String, Future<void>>{};
+  final Set<String> _requestedReadAckWakeups = <String>{};
   final Map<String, AppThreadReadWatermark> _committedReadWatermarksByThreadId =
       <String, AppThreadReadWatermark>{};
   int _trimmedMessageCount = 0;
@@ -2787,6 +2788,7 @@ class ChatThreadsController
       return;
     }
     if (_activeReadAckDrainsByThreadId.containsKey(threadId)) {
+      _requestedReadAckWakeups.add(threadId);
       return;
     }
     AwikiPerformanceLogger.log(
@@ -2804,7 +2806,10 @@ class ChatThreadsController
             return;
           }
           _activeReadAckDrainsByThreadId.remove(threadId);
-          if (shouldRestart &&
+          // History may finish before this drain releases its active marker.
+          // Replay the wakeup after release so its pending intent can progress.
+          final wakeupRequested = _requestedReadAckWakeups.remove(threadId);
+          if ((shouldRestart || wakeupRequested) &&
               _isCurrentSessionEpoch(pending.sessionEpoch) &&
               _pendingReadAcksByThreadId.containsKey(threadId)) {
             _flushPendingReadAck(threadId);
@@ -4128,6 +4133,7 @@ class ChatThreadsController
     _lastThreadPatchStreamEndAt.clear();
     _pendingReadAcksByThreadId.clear();
     _activeReadAckDrainsByThreadId.clear();
+    _requestedReadAckWakeups.clear();
     _committedReadWatermarksByThreadId.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();

@@ -3953,6 +3953,106 @@ void main() {
     );
   });
 
+  for (final visibleBeforeHydration in [false, true]) {
+    test(
+      '持久已读唤醒覆盖历史加载与显示顺序 visibleBeforeHydration=$visibleBeforeHydration',
+      () async {
+        final latest = ChatMessage(
+          localId: 'hydration-read',
+          remoteId: 'hydration-read',
+          conversationId: conversation.conversationId,
+          threadId: conversation.threadId,
+          senderDid: 'did:peer',
+          receiverDid: 'did:me',
+          content: 'visible local unread',
+          createdAt: DateTime(2026, 5, 8, 10, 7),
+          isMine: false,
+          serverSequence: 32,
+          sendState: MessageSendState.sent,
+        );
+        final unread = conversation.copyWith(
+          lastMessagePreview: latest.content,
+          lastMessageAt: latest.createdAt,
+          unreadCount: 1,
+          lastMessageSnapshot: latest,
+        );
+        final readGateway = FakeAwikiGateway()..conversations = [unread];
+        final readMessaging = FakeMessagingService(readGateway);
+        _seedConversationProjection(readMessaging, unread, [latest]);
+        final remoteCatchup = Completer<void>();
+        final readSync = _BlockingConversationAfterSyncService(
+          remoteCatchup,
+          Completer<void>(),
+        );
+        final readContainer = ProviderContainer(
+          overrides: <Override>[
+            notificationFacadeProvider.overrideWithValue(
+              FakeNotificationFacade(),
+            ),
+            ...fakeApplicationServiceOverrides(
+              readGateway,
+              messageSyncService: readSync,
+              messagingService: readMessaging,
+            ),
+          ],
+        );
+        addTearDown(readContainer.dispose);
+        readContainer
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+                handle: 'me',
+              ),
+            );
+        readContainer
+            .read(conversationListProvider.notifier)
+            .upsertConversation(unread);
+        final hydration = Completer<void>();
+        readMessaging.conversationTimelineCompleter = hydration;
+        final controller = readContainer.read(chatThreadsProvider.notifier);
+        try {
+          await controller.openConversation(unread);
+          await pumpEventQueue();
+          if (visibleBeforeHydration) {
+            controller.markConversationVisible(unread);
+            await pumpEventQueue();
+            expect(readGateway.markConversationReadCalls, 0);
+          }
+          hydration.complete();
+          await pumpEventQueue();
+          if (!visibleBeforeHydration) {
+            controller.markConversationVisible(unread);
+            await pumpEventQueue();
+          }
+
+          // No explicit read retry and no remote-catchup completion can rescue it.
+          expect(remoteCatchup.isCompleted, isFalse);
+          expect(readGateway.markConversationReadCalls, 1);
+          _expectLastConversationReadWatermark(
+            readGateway,
+            messageId: latest.remoteId,
+            sequence: '32',
+          );
+          expect(
+            readContainer
+                .read(conversationListProvider)
+                .conversations
+                .single
+                .unreadCount,
+            0,
+          );
+        } finally {
+          if (!hydration.isCompleted) hydration.complete();
+          remoteCatchup.complete();
+          await pumpEventQueue();
+        }
+      },
+    );
+  }
+
   test('可见会话在 timeline 水合后保留持久已读意图', () async {
     final latest = ChatMessage(
       localId: 'remote-visible-hydrated',
